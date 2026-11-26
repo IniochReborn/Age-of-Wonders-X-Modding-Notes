@@ -1,0 +1,150 @@
+OIL SPRING (372) GUSH v3 - hand-over skip fix + "classic" style (2026-10-17, fork; NOTHING applied live)
+=====================================================================================================
+User: "oil spring janky, like it's skipping frames at one point. it also looks just slightly too modern. but i don't
+want it to look as dated as before."
+
+THE SKIP (measured, not guessed): the RISE -> LOOP hand-over at tick 24.  The loop slot draws the STEADY fountain,
+which already holds the spray of earlier pulses (the full mushroom); the v2 rise drew only the first generation, with
+a different pulse period (P/2), ceiling and pool.  At tick 24 the rise frame had 4507 inked px, the loop frame 8680 -
+4290 px appeared in ONE tick (still 2994 px of difference at tick 29).  Everything else was clean: loop wrap 29 -> 0
+= a normal step, END collapse c0 == loop frame 0.  Minor second glitch: on a last strike pass in loop phase 0-2 the
+END was clamped to tick 0 and its collapse overlapped the dying loop for 1-3 ticks.
+
+FIX:
+ 1. ART - the rise IS the fountain's own transient: only particles emitted at fountain time 0 <= e <= T exist, with
+    the SAME pulse sin(2 pi e / P) as the loop, so once T >= 24 (oldest visible age) the frame is pixel-identical to
+    the steady loop.  The rise clock is time-warped (T = j/3 + 8(1 - (1 - j/48)^2) for j < 48, then j/3 + 8): an eager
+    2x-speed burst out of the ground easing to normal speed, fully developed at tick 48.  66 frames.
+    Checked: rise frames 48..65 == loop frames 12..29 RGBA-identical (0 px); loop wrap 29 -> 0 = 2303 px vs 1725-2565
+    for normal steps; END c0 == loop 0 RGBA-identical; collapse tail trimmed (3 empty frames dropped).
+ 2. STYLE "classic" (between the chunky v1 and the 1200-particle photoreal v2): 520 particles (v2 1200), blobs
+    2.6 / 3.4 / 4.4 px (v2 1.5 / 2.1 / 2.9) with a hard 1-px black outline and POSTERIZED shading - 3 tones (black rim,
+    dark-brown body, one hard highlight blob) instead of soft gradients; hard alpha (no dithering under ALPHA 258);
+    pool = hard black ellipse with one flat sheen band.  Same motion / physics / timing as v2.
+ 3. GATE v2 (patch_tc_oilgush_smooth_v1.py, upgraded in place): strikes refused until the rise's tick >= 48 (v1: 24
+    -> the first globs fly ~0.7 s later than now; the cost of a seamless hand-over), the loop spawns at tick 12; END
+    blank prefix = a full cycle (30) and END starts at tick ph (no -3 / clamp) -> collapse starts exactly as the loop
+    dies, never overlaps.
+New DualDF ids: rise 4100-4165, loop 4166-4195, end 4196-4217 (blank 4196 + 21 collapse) = 118 images.  4200-4217 runs
+past the allotted 4100-4199 but is free (DualDF max id 4084).  The v2 rows 4000-4084 can stay (unused) or be dropped.
+
+Previews (scratch): C:\Users\<user>\.claude\jobs\47241cad\tmp\oil3\contact_v3.png (rise / loop / collapse on grass,
+desert, dirt), oil_v3_timeline.gif (the full sequence exactly as the gate plays it, 1 tick = 29 ms), frames\*.png.
+
+---- 1. build_dual_sphere_fx_v1.py: add this block before def build() (uses the module's PULSE + _oil_fountain_parts) ----
+_BALLS3 = None
+def _oil_balls3():
+    """v3 'classic' stamps (2026-10-17, user: slightly too modern, not as dated as v2): bigger, more distinct oil blobs
+    with a hard dark outline and POSTERIZED shading - 3 tones (outline black / body near-black brown / one hard
+    highlight) instead of soft gradients; radii 2.6 / 3.4 / 4.4 px."""
+    global _BALLS3
+    if _BALLS3 is None:
+        out = []
+        for r in (2.6, 3.4, 4.4):
+            n = int(math.ceil(r)) * 2 + 3; c = n / 2.0
+            yy, xx = np.mgrid[0:n, 0:n].astype(np.float32) + 0.5
+            d = np.sqrt((xx - c) ** 2 + (yy - c) ** 2)
+            alpha = (d <= r).astype(np.float32)                               # hard edge
+            body = (d <= r - 1.0)                                             # 1-px black outline ring outside the body
+            hl = np.sqrt((xx - c + 0.38 * r) ** 2 + (yy - c + 0.38 * r) ** 2)
+            grey = np.where(body, 34.0, 0.0)                                  # tone 2: dark brown body
+            grey = np.where(body & (hl < 0.42 * r), 150.0, grey)              # tone 3: a hard highlight blob
+            out.append((alpha, grey.astype(np.float32)))
+        _BALLS3 = out
+    return _BALLS3
+
+
+def _stamp_hard(ink, grey, stamp, x, y):
+    a, g = stamp; h, w = a.shape; x0, y0 = int(round(x - w / 2.0)), int(round(y - h / 2.0))
+    H, W = ink.shape; xs0, ys0 = max(0, x0), max(0, y0); xs1, ys1 = min(W, x0 + w), min(H, y0 + h)
+    if xs1 <= xs0 or ys1 <= ys0: return
+    aa = a[ys0 - y0:ys1 - y0, xs0 - x0:xs1 - x0]; gg = g[ys0 - y0:ys1 - y0, xs0 - x0:xs1 - x0]
+    m = aa > 0
+    ink[ys0:ys1, xs0:xs1] = np.where(m, 1.0, ink[ys0:ys1, xs0:xs1])
+    grey[ys0:ys1, xs0:xs1] = np.where(m, gg, grey[ys0:ys1, xs0:xs1])        # painter's order: nearer ball overwrites
+
+
+def oil_frame3(parts, T, P, transient, cutoff=0.0, pool_R=30.0, ceil=None):
+    """One gush frame at fountain time T (old frame units).  transient=True: only emissions e = t0 + kP with 0 <= e <= T
+    exist (the fountain STARTED at T=0 - no spray from earlier cycles, the cause of the v2 hand-over pop); False: the
+    periodic steady state (identical to the transient once T >= 24 = the oldest visible age).  The emission speed
+    pulses with sin(2 pi e / P) in BOTH, so the two agree particle for particle.  Classic style: posterized blobs."""
+    SZ = 160; yy, xx = np.mgrid[0:SZ, 0:SZ].astype(np.float32); cx, base = 80.0, 140.0
+    ink = np.zeros((SZ, SZ), np.float32); grey = np.zeros((SZ, SZ), np.float32); balls = _oil_balls3()
+    R = max(pool_R, 0.5)
+    if pool_R >= 2.0:                                                         # pool: hard-edged black ellipse + one flat sheen band
+        e = ((xx - cx) / R) ** 2 + ((yy - base + 3) / (R * 0.40)) ** 2
+        pool = e <= 1.0; ink = np.where(pool, 1.0, ink)
+        sheen = (((xx - cx + 0.25 * R) / (R * 0.45)) ** 2 + ((yy - base + 5) / (R * 0.14)) ** 2) <= 1.0
+        grey = np.where(pool, np.where(sheen, 70.0, 14.0), grey)
+    drawn = []
+    for t0, vy0, vx, sz, spr in parts:
+        ems = []
+        if transient:
+            k = 0
+            while t0 + k * P <= T: ems.append(t0 + k * P); k += 1
+        else:
+            for k in range(3): ems.append(T - (((T - t0) % P) + k * P))
+        for e in ems:
+            age = T - e
+            if age < cutoff or age < 0: continue
+            vy = vy0 * (1.0 + PULSE * math.sin(2 * math.pi * e / P))
+            y = base - vy * age + 1.05 * age * age
+            if y > base + 2: continue
+            if ceil is not None and y < base - ceil: continue
+            apex_age = vy / 2.1; past = max(0.0, age - apex_age * 0.7)
+            x = cx + vx * age + math.copysign(1, vx) * (0.5 + 4.6 * spr) * (math.sqrt(past + 2.0) - math.sqrt(2.0))
+            if 6 <= x < SZ - 6 and 6 <= y < SZ - 6: drawn.append((y, x, int(sz * 3) % 3))
+    drawn.sort(key=lambda t: -t[0])
+    for y, x, b in drawn: _stamp_hard(ink, grey, balls[b], x, y)
+    o = np.clip(ink, 0, 1); rgb = (6 + grey) * o
+    return Image.fromarray(np.dstack([rgb, rgb * 0.9, rgb * 0.76, 255 * (o > 0.5)]).astype(np.uint8), "RGBA")
+
+
+N3 = 520                                                                      # fewer, bigger blobs (v2: 1200 small ones)
+
+def oil_gush_rise3(K=3, P=10, n=66, warp=48):
+    """RISE v3: the fountain from its very start (transient), on a time-warped clock - T = j/3 + 8(1 - (1 - j/48)^2)
+    for the first 48 ticks (an eager 2x-speed burst easing into normal speed) and j/3 + 8 after - so T reaches 24 (the
+    oldest visible particle age = fully developed = pixel-identical to the steady loop) at tick 48; the gate spawns the
+    loop at tick 48 with loop tick 12 (= (3 * 24) % 30) and the rise's last 18 frames equal the loop's frames 12-29.
+    The column climbs out of the ground under a ceiling that is full by T 8."""
+    parts = _oil_fountain_parts(P, N3); out = []
+    for j in range(n):
+        T = j / float(K) + (K * P * 8.0 / 30.0) * (1.0 - (1.0 - j / float(warp)) ** 2) if j < warp else j / float(K) + 8.0
+        u = min(1.0, T / 8.0)
+        out.append(oil_frame3(parts, T, P, True, pool_R=min(30.0, 4 + 2.6 * T), ceil=4 + 140 * (u * u * (3 - 2 * u))))
+    return out
+
+
+def oil_gush_loop3(K=3, P=10):
+    parts = _oil_fountain_parts(P, N3)
+    return [oil_frame3(parts, 30.0 + j / float(K), P, False) for j in range(K * P)]   # T = 30.. (phase j/K), = steady
+
+
+def oil_gush_end3(K=3, P=10, n_end=8):
+    parts = _oil_fountain_parts(P, N3); out = [Image.new("RGBA", (4, 4), (0, 0, 0, 0))]
+    for j in range(K * n_end):
+        c = j / float(K)
+        out.append(oil_frame3(parts, 40.0 + c, P, False, cutoff=2.4 * c, pool_R=30.0 * max(0.0, 1.0 - max(0.0, c - 1) / (n_end - 1.5)) ** 1.1))
+    while len(out) > 2 and out[-1].getbbox() is None: out.pop()                   # drop the empty tail (nothing left to draw)
+    return out
+
+---- group rows (in the same list as the v2 rows 4000/4030/4060) ----
+              (4100, oil_gush_rise3(), "EFgr3%02d.BMP", 258, 90, KEY),       # Oil Spring gush RISE v3: 66 frames x 1 tick (transient; == loop from 48)
+              (4166, oil_gush_loop3(), "EFgl3%02d.BMP", 258, 90, KEY),       # Oil Spring gush LOOP v3: 30 frames (slot plays it twice)
+              (4196, oil_gush_end3(), "EFge3%02d.BMP", 258, 90, KEY),        # Oil Spring gush END v3: 1 blank + 21 collapse frames
+
+---- 2. patch_dual_sphere_spells_v1.py, entry 372: replace gfx slots 4-6 ----
+              4: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(4100, 4166)), -80, -136, f20=1, f18=0),            # v3 RISE: 66 x 1 tick (transient fountain, == loop frame 12 at tick 48)
+              5: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(4166, 4196)) * 2, -80, -136, f20=1, f18=0),        # v3 LOOP: one cycle x2 (life 60; the gate wraps it by 30)
+              6: G.seq_entry("EFFECTS\\DUALDF.ILB", [4196] * 30 + list(range(4197, 4218)), -80, -136, f20=1, f18=0)},   # v3 END: 30 blank ticks + 21-frame collapse
+
+---- 3. apply order (all three TOGETHER - gate v2 on the old 30-frame rise would let the rise die before the loop) ----
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF.ILB += 4100-4217)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs slots 4-6 of 372)
+  py -3.10 patch_tc_oilgush_smooth_v1.py --apply       (v1 -> v2 in place; backup backup\AoWTCPCK.dll.bak_oilsmooth2 = the v1 state)
+  then the VEH-logger test cast.  Revert: patch_tc_oilgush_smooth_v1.py --revert (exact, back to pre-smooth gate),
+  slot lines back to 4000/4030/4060 + [4060]*27.
+Scratch tests (copies in tmp\oil3): live (v1) copy -> dry-run / upgrade / re-apply "already applied (v2)" / revert ==
+the v1 script's own revert, byte-identical; fresh apply on that == upgrade, byte-identical; fresh revert identical.

@@ -1,0 +1,292 @@
+MEND WALLS (216) v7 - ONE global debris queue (one piece in flight at a time, every piece from its own source hex)
++ an engine-played subtle crunch per hit (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+User: "I meant only one debris at a time from any hex, they should ALL launch one after the other, and only one debris
+from each source hex... when debris hits the wall I want a subtle crunch/hail noise, not too loud."
+
+Engine: patch scripts\patch_tc_mendwalls_v2.py upgraded IN PLACE v5 -> v7 (zone 0x448400, 1912 B of 2048; v5 script
+copy: C:\Users\<user>\.claude\jobs\47241cad\tmp\mend7\patch_tc_mendwalls_v2.v5.py).  Mend rules unchanged; afterwards
+Mp = min(mended, 10) walls get min(3, 10 // Mp) pieces each, round-robin; piece k: own source hex (rings 2-3 of its
+wall, deterministic search, in-level with a 1-hex margin, not a wall/gate hex, never reused), grows at min(2k, 10),
+flung at 20 + 6k for 5 ticks (=> exactly one in flight), hits at 25 + 6k; the NF cave drives every effect's frame
+from its own clock (byte 1 of the marker) and moves the pieces (item 0 = source -> target on the wall body), and
+plays sound cue 2 at each hit.  Each wall's glow starts at its first hit.  Effects per piece: slot 3 rock / 4 stick
+(alpha, moving), 5 halo + arrival burst (additive, moving), 7 hole (alpha, at the source); per wall: slot 1 glow.
+Slots 0 / 2 / 6 stay in the record (unused).  Sound cue 2 MUST exist (pipeline sfx list entry 3) before the engine
+patch is applied (a missing hail cue crashes - Steadfast lesson).
+
+Line endings: build_dual_sphere_fx_v1.py LF; build_dual_sphere_sfx_v1.py and patch_dual_sphere_spells_v1.py CRLF -
+detect the newline per file.  Insert ONLY the code between the ---- code ---- / ---- end ---- markers; ast.parse after.
+
+== 1. build_dual_sphere_fx_v1.py - functions before `def build():` (reuse _mend3_poly / _mend3_stamp / _mend5_stick /
+       _MEND3_BAY, which stay) ==
+---- code ----
+MEND7_POP, MEND7_TREM, MEND7_POST, MEND7_FLY = 8, 12, 15, 5     # = patch_tc_mendwalls_v2.py v7 POP / TREM / POST / FLY
+MEND7_E = [0, 19, 59, 113, 179, 256]                            # = the engine's flight ease ETAB (x256)
+MEND7_W, MEND7_H, MEND7_AX, MEND7_AY = 48, 56, 24, 40           # piece canvas; anchor = the engine's point (rock centre at rest)
+
+
+def _mend7_pose(i):
+    """Piece pose for frame i of a v7 piece sequence (0 = blank): -> None or (dx, dy, rot, scale, phase) relative to the
+    anchor.  Phase 1 grow (8 frames: 15 % -> full, lifting to 6 px, the tremble fading in over the last 3), 2 tremble
+    (12-frame LOOP, seamless: integer harmonics of the loop, bobbing 6 +- 0.8 px), 3 flight (5 frames: the engine moves
+    the point on its accelerating arc; the lift eases 6 -> 0 with the same ease so the piece lands exactly on the
+    target, spinning), 4 = sinking into the wall (2 frames, 0.7 / 0.4 scale), then blank."""
+    def jit(q):
+        a = 2 * math.pi * q / MEND7_TREM
+        return 1.1 * math.sin(3 * a) + 0.5 * math.sin(5 * a + 1.0), 0.6 * math.sin(4 * a + 0.5), 0.08 * math.sin(2 * a)
+    if i <= 0: return None
+    i -= 1
+    if i < MEND7_POP:
+        e = min(1.0, (i + 1) / 6.0); e = e * e * (3 - 2 * e)
+        lu = (i + 1) / float(MEND7_POP); lift = 6.0 * lu * lu * (3 - 2 * lu)
+        amp = max(0.0, (i - 4) / 4.0); jx, jy, jr = jit(i - MEND7_POP)
+        return jx * amp, -lift + jy * amp, jr * amp, 0.15 + 0.85 * e, 1
+    i -= MEND7_POP
+    if i < MEND7_TREM:
+        jx, jy, jr = jit(i)
+        return jx, -(6.0 + 0.8 * math.sin(2 * math.pi * i / MEND7_TREM)) + jy, jr, 1.0, 2
+    i -= MEND7_TREM
+    if i < MEND7_FLY:
+        e = MEND7_E[i] / 256.0
+        return 0.0, -6.0 * (1 - e), 3.6 * e, 1.0, 3
+    if i < MEND7_FLY + 2:
+        return 0.0, 0.0, 3.6, (0.7, 0.4)[i - MEND7_FLY], 4
+    return None
+
+
+def mend7_rocks(stick=False):
+    """Mend Walls (216) v7 slots 3 (grey rock) / 4 (brown stick) (2026-10-17 round 7, user: "only one debris at a time
+    from any hex, they should ALL launch one after the other, and only one debris from each source hex"): ONE piece per
+    sequence - the engine (patch_tc_mendwalls_v2.py v7) gives every piece its own source hex and launch time and moves
+    the drawn point itself, so this art only has to draw the piece about its anchor: blank + 8 grow + 12 tremble (looped
+    by the engine until the launch) + 15 post (5 flight, 2 sinking into the wall, blank).  The v5 look: hard 3-tone grey
+    rock / brown stick with a twig, a dithered ground shadow while it hovers.  ALPHA 258, 48x56, anchor (24, 40)."""
+    S = 4; W, H = MEND7_W, MEND7_H; rnd = random.Random(2270 + int(stick))
+    pts = _mend3_poly(rnd, 5.8); L_ = 13.0
+    rim, body, lit = (34, 33, 32), (112, 110, 106), (170, 168, 162)
+    out = [Image.new("RGBA", (W, H), (0, 0, 0, 0))]
+    n = 1 + MEND7_POP + MEND7_TREM + MEND7_POST
+    for i in range(1, n):
+        p = _mend7_pose(i)
+        if p is None: out.append(Image.new("RGBA", (W, H), (0, 0, 0, 0))); continue
+        dx, dy, rot, sc, ph = p; x, y = MEND7_AX + dx, MEND7_AY + dy
+        big = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); dr = ImageDraw.Draw(big)
+        shade = Image.new("L", (W, H), 0)
+        if ph in (1, 2):
+            e = sc if ph == 1 else 1.0
+            ImageDraw.Draw(shade).ellipse([MEND7_AX - 5.5 * e - 1, MEND7_AY + 5 - 1.4, MEND7_AX + 5.5 * e + 1, MEND7_AY + 5 + 1.7], fill=int(110 * e))
+        if stick:
+            _mend5_stick(dr, S, x, y, rot - 0.3, sc, L_)
+        else:
+            r0 = sum(rr for _a, rr in pts) / len(pts)
+
+            def P(grow_, shx_=0.0, shy_=0.0, kk=1.0):
+                return [((x + shx_ + math.cos(a + rot) * (rr * sc * kk + grow_)) * S, (y + shy_ + math.sin(a + rot) * (rr * sc * kk + grow_) * 0.9) * S) for a, rr in pts]
+            dr.polygon(P(1.0), fill=rim + (255,)); dr.polygon(P(0.0), fill=body + (255,))
+            dr.polygon(P(0.0, -0.3 * r0 * sc, -0.35 * r0 * sc, 0.5), fill=lit + (255,))
+        a = np.array(big.resize((W, H), Image.BOX)); sp_ = np.array(shade)
+        thr = np.tile(np.array(_MEND3_BAY, np.int32) * 16 + 8, (H // 4 + 1, W // 4 + 1))[:H, :W]
+        solid = a[..., 3] >= 120; a[~solid] = 0; a[solid, 3] = 255
+        sm = (~solid) & (sp_ > thr); a[sm] = (16, 14, 12, 255)
+        out.append(Image.fromarray(a, "RGBA"))
+    return out
+
+
+def mend7_halo():
+    """Mend Walls (216) v7 slot 5: the subtle green glow riding on each piece (same pose as mend7_rocks, ADDITIVE 770,
+    48x56, anchor (24, 40)): a faint emerald halo fading in as the piece grows, swelling and flickering with the tremble
+    (seamless 12-frame loop) with three tiny motes drifting up off it, held while it is flung; then the ARRIVAL = a small
+    subtle green burst on the wall (a soft flash + six fine sparks spraying 5-10 px, as v6's wall-glow bursts)."""
+    W, H = MEND7_W, MEND7_H; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); rnd = random.Random(2275)
+    motes = [(rnd.uniform(-4, 4), rnd.uniform(0, 1)) for _ in range(3)]
+    sparks = [(rnd.uniform(0, 6.28), rnd.uniform(5, 10), rnd.uniform(-0.25, 0.05)) for _ in range(6)]
+    out = [Image.new("RGB", (W, H), (0, 0, 0)).convert("RGBA")]
+    n = 1 + MEND7_POP + MEND7_TREM + MEND7_POST
+
+    def g(acc, x, y, s, a): acc += a * np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * s * s))
+    for i in range(1, n):
+        acc = np.zeros((H, W), np.float32); burst = np.zeros((H, W), np.float32)
+        p = _mend7_pose(i); k = i - 1
+        if p is not None and p[4] != 4:
+            dx, dy, rot, sc, ph = p; x, y = MEND7_AX + dx, MEND7_AY + dy
+            if ph == 1: lv = 0.20 * (k + 1) / MEND7_POP
+            elif ph == 2:
+                q = k - MEND7_POP; lv = 0.20 * (0.9 + 0.1 * math.sin(2 * math.pi * 2 * q / MEND7_TREM))
+            else: lv = 0.22
+            g(acc, x, y, 5.0 * max(0.5, sc), lv); g(acc, x, y, 2.4 * max(0.5, sc), lv * 0.6)
+            if ph == 2 or (ph == 1 and k >= 5):
+                q = (k - MEND7_POP) % MEND7_TREM; amp = 1.0 if ph == 2 else (k - 4) / 4.0
+                for mx, ph0 in motes:
+                    v = (ph0 + q / float(MEND7_TREM)) % 1.0
+                    g(acc, x + mx, y - 2 - v * 12, 0.9, math.sin(math.pi * v) * 0.3 * amp)
+        d = k - MEND7_POP - MEND7_TREM - MEND7_FLY                # ticks since the arrival
+        if 0 <= d < MEND7_POST - MEND7_FLY:
+            x, y = MEND7_AX, MEND7_AY; f = min(1.0, (d + 1) / 2.0) * math.exp(-d / 3.5)
+            g(burst, x, y, 2.0 + d * 0.25, f * 0.42)
+            for a, r, vy in sparks:
+                u = d / float(MEND7_POST - MEND7_FLY); e = 1 - (1 - u) ** 2
+                g(burst, x + math.cos(a) * r * e, y + math.sin(a) * r * 0.7 * e + vy * d * 2.0, 0.65, (1 - u) ** 1.3 * 0.55)
+        rgb = np.dstack([acc * 70 + burst * 150, acc * 235 + burst * 255, acc * 120 + burst * 175]).clip(0, 255).astype(np.uint8)
+        out.append(Image.fromarray(rgb, "RGB").convert("RGBA"))
+    return out
+
+
+def mend7_hole():
+    """Mend Walls (216) v7 slot 7: the torn ground at each piece's SOURCE hex (stationary, ALPHA 258, 48x56, anchor =
+    the piece's rest point): the hole opens over 3 frames under a small grey pebble spurt as the piece grows out, stays
+    open while it trembles (the tremble frames are identical - a seamless loop), then closes over 8 frames once the
+    piece is flung; blank after."""
+    S = 4; W, H = MEND7_W, MEND7_H; rnd = random.Random(2278)
+    spurt = [(rnd.uniform(-1, 1), rnd.uniform(5, 9), _mend3_poly(rnd, 1.3, 5)) for _ in range(3)]
+    gx, gy = MEND7_AX, MEND7_AY + 5
+    thr = np.tile(np.array(_MEND3_BAY, np.int32) * 16 + 8, (H // 4 + 1, W // 4 + 1))[:H, :W]
+    out = [Image.new("RGBA", (W, H), (0, 0, 0, 0))]
+    n = 1 + MEND7_POP + MEND7_TREM + MEND7_POST
+    for i in range(1, n):
+        k = i - 1; big = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); dr = ImageDraw.Draw(big)
+        hole = Image.new("L", (W, H), 0); hd = ImageDraw.Draw(hole)
+        if k < MEND7_POP + MEND7_TREM: o = min(1.0, (k + 1) / 3.0); a = 1.0
+        else: o = 1.0; a = max(0.0, 1.0 - (k - MEND7_POP - MEND7_TREM + 1) / 8.0)
+        if a > 0: hd.ellipse([gx - 5.0 * o, gy - 2.0 * o, gx + 5.0 * o, gy + 2.4 * o], fill=int(255 * a))
+        if k < 8:
+            u = k / 8.0
+            for vx, vy, pp in spurt:
+                _mend3_stamp(dr, S, pp, gx + vx * 6 * u, gy - vy * 4 * u * (1 - u) * 1.6, u * 6, 0.6 + 0.4 * min(1.0, u * 4), 0)
+        arr = np.array(big.resize((W, H), Image.BOX)); hp = np.array(hole)
+        solid = arr[..., 3] >= 120; arr[~solid] = 0; arr[solid, 3] = 255
+        hm = (~solid) & (hp > thr) & (hp > 40); arr[hm] = (30, 26, 22, 255)
+        out.append(Image.fromarray(arr, "RGBA"))
+    return out
+
+
+_MEND7_GLOW = []
+
+
+def mend7_glow(t_end=72):
+    """Mend Walls (216) v7 slot 1: the wall hex green circle thing UNCHANGED (mend6_glow's aura / rising band / ground
+    ellipse / motes, same timing from the wall's first impact) MINUS the six baked arrival bursts - each piece now brings
+    its own burst on its real impact point (mend7_halo).  The engine starts it at the wall's first impact (frame 1 =
+    that tick; byte 3 of the marker), so: one blank frame + 51 frames, 96x112, anchor (48, 92), additive."""
+    if _MEND7_GLOW: return _MEND7_GLOW
+    W, H, AX, AY = 96, 112, 48, 92
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); rnd = random.Random(2180)
+    _sparks4 = [[(rnd.uniform(0, 6.28), rnd.uniform(9, 16), rnd.uniform(-0.3, 0.1)) for _ in range(8)] for _ in range(6)]   # (v4's draws, kept so the motes match v4-v6)
+    motes = [(rnd.uniform(-16, 16), rnd.uniform(0, 1), rnd.uniform(0.6, 1.0), rnd.uniform(0, 6.28)) for _ in range(16)]
+    colx = np.exp(-((xx - AX) ** 2) / (2 * 13.0 ** 2)); coly = np.clip((AY + 6 - yy) / 8.0, 0, 1) * np.clip((yy - (AY - 66)) / 14.0, 0, 1)
+    _MEND7_GLOW.append(Image.new("RGB", (W, H), (0, 0, 0)).convert("RGBA"))
+    T0 = 21
+    for ti in range(T0, t_end):
+        t = float(ti); acc = np.zeros((H, W, 3), np.float32)
+
+        def add(g, col):
+            for c, cv in enumerate(col): acc[..., c] += g * cv
+        ramp = min(1.0, max(0.0, (t - T0 + 1) / 18.0))
+        fade = 1.0 if t < 52 else max(0.0, 1.0 - (t - 52) / 19.0)
+        env = ramp * fade; env = env * env * (3 - 2 * env)
+        add(colx * coly * (0.82 + 0.18 * np.sin(yy * 0.35 - t * 0.45 + xx * 0.12)) * 0.42 * env, (40, 210, 95))
+        u = (t - 48) / 16.0
+        if 0 <= u <= 1:
+            by = AY + 4 - u * 70
+            add(np.exp(-((yy - by) ** 2) / (2 * 1.6 ** 2)) * np.exp(-((xx - AX) ** 2) / (2 * 12.0 ** 2)) * math.sin(math.pi * u) * 0.7, (150, 255, 175))
+        add(np.exp(-((xx - AX) ** 2) / (2 * 16.0 ** 2) - ((yy - AY - 2) ** 2) / (2 * 2.4 ** 2)) * 0.4 * env, (60, 230, 110))
+        for x0, ph, sp, tw in motes:
+            if t < 34: continue
+            v = (ph + (t - 34) / 38.0 * sp * 1.3) % 1.0
+            y = AY - 2 - v * 72; x = AX + x0 + 2.5 * math.sin(tw + v * 7.0)
+            a = math.sin(math.pi * v) * (0.65 + 0.35 * math.sin(tw + t * 0.8)) * fade * min(1.0, (t - 34) / 4.0)
+            add(np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 1.3) * a, (190, 255, 205))
+        _MEND7_GLOW.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return _MEND7_GLOW
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - group rows: ADD these five rows right after the (4850, mend5_halo(1), ...) row
+       (the v5/v6 rows 4350/4500/4700/4800/4850/4900 can stay - unused - or be dropped) ==
+---- code ----
+              (5000, mend7_rocks(False), "ERm7r%02d.BMP", 258, 90, KEY),    # Mend Walls (216) v7 slot 3: ONE grey rock (blank + 8 grow + 12 tremble loop + 15 post; 48x56, engine-moved)
+              (5036, mend7_rocks(True), "ERm7s%02d.BMP", 258, 90, KEY),     # Mend Walls (216) v7 slot 4: ONE brown stick (same timeline)
+              (5072, mend7_halo(), "ERm7h%02d.BMP", 770, 60, 0x0000),       # Mend Walls (216) v7 slot 5: its subtle green halo + the small arrival burst (additive)
+              (5108, mend7_hole(), "ERm7g%02d.BMP", 258, 90, KEY),          # Mend Walls (216) v7 slot 7: the torn ground at the source hex (stationary)
+              (5144, mend7_glow(), "ERm7w%02d.BMP", 770, 90, 0x0000),       # Mend Walls (216) v7 slot 1: wall glow without baked bursts (blank + 51; 96x112)
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALER_MENDWALLS.WAV" entry AND its v6 comment lines above it
+       ("# Mend Walls v6 ...") with this block (adds the new "DUALER_MENDHIT.WAV" right after it).  FADE_OUT keeps
+       "DUALER_MENDWALLS.WAV": 0.5; NO DRIVE entry for either (the hit must stay quiet). ==
+---- code ----
+    # Mend Walls v7 (2026-10-17 round 7, user: "only one debris at a time ... all launch one after the other" / "when
+    # debris hits the wall I want a subtle crunch/hail noise, not too loud"): the cast bed only - the Earth cast, the
+    # gentle Tremors rumble carrying the whole queue (pieces are flung 0.58 s .. ~2.2 s), the ground cracking as the
+    # first pieces tear out (0-0.3 s), the green glow's shimmer + healing chime from the first impact (0.72 s) and two
+    # soft bells near the end.  The per-hit knocks are GONE from this file: every piece's impact now plays cue 2
+    # (DUALER_MENDHIT.WAV) from the engine at its real arrival tick (patch_tc_mendwalls_v2.py v7).
+    "DUALER_MENDWALLS.WAV":  [("Attack/m_Earth.wav", 0.40, 0.00, 1.6, 0.7, 0.9),                 # the Earth sphere's cast
+                              ("Attack/Earth.WAV", 0.50, 0.00, 2.5, 0.9, 0.82, 0.30),           # Tremors, gentled: slowed, swelling in, easing off
+                              ("synth:subswell:34:50:1.8", 0.26, 0.00, None, 0.6),              # a soft sub under the trembling
+                              ("Attack/Earth.WAV", 0.22, 0.00, 0.18, 0.10, 1.8),                # ground cracking open under the first debris
+                              ("Attack/Earth.WAV", 0.19, 0.12, 0.18, 0.10, 1.95, 0.0, 0.3),
+                              ("Attack/Earth.WAV", 0.17, 0.23, 0.18, 0.10, 1.7, 0.0, 0.6),
+                              ("synth:shimmer:2.0", 0.28, 0.72, None, 0.0),                     # the green glow (from the first impact)
+                              ("Attack/EnchP01.WAV", 0.34, 0.78, 1.2, 0.6, 0.95),               # a healing chime (Remedy's family)
+                              ("synth:bell:392:1.4", 0.16, 2.00, None, 0.6),                    # soft bells near the end of the queue
+                              ("synth:bell:587:1.0", 0.11, 2.22, None, 0.5),
+                              ("synth:drone:98:2.8", 0.15, 0.00, None, 0.8)],
+    # Mend Walls v7 cue 2 (played by the engine once per piece as it hits the wall, sound option honoured): a SUBTLE
+    # crunch / hail tick - Great Hail's A_Force crunch pitched up, short and quiet, a small stone tap and a faint pebble
+    # scatter.  Kept quiet on purpose (no DRIVE: peak ~0.35, not normalised up) - up to 10 of these play 0.17 s apart.
+    "DUALER_MENDHIT.WAV":    [("Attack/A_Force1.WAV", 0.30, 0.00, 0.26, 0.16, 1.45),
+                              ("Moves/SFStep2.WAV", 0.12, 0.00, None, 0.12, 1.35),
+                              ("Attack/A_Force2.WAV", 0.07, 0.03, 0.16, 0.10, 1.95)],
+---- end ----
+
+== 3. patch_dual_sphere_spells_v1.py, entry 216 - replace the slot 1 / 3 / 4 / 5 lines, add slot 7 right after the
+       slot 5 line, and replace the sfx line (slots 0 / 2 / 6 stay; slot 2's line keeps the dict's closing `},`) ==
+---- code ----
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5144, 5196)), -48, -92, f18=0),               # v7: wall glow, frame 1 = this wall's first hit (engine-clocked)
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5000, 5036)), -24, -40, f18=0),               # v7: ONE grey rock per effect (engine-clocked + engine-moved)
+              4: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5036, 5072)), -24, -40, f18=0),               # v7: ONE brown stick (piece k % 3 == 1)
+              5: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5072, 5108)), -24, -40, f18=0),               # v7: its additive halo + arrival burst
+              7: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5108, 5144)), -24, -40, f18=0),               # v7: the hole at the source hex (stationary)
+---- end ----
+---- code ----
+         sfx=["SFX\\ZSP\\DUALER_MENDWALLS.WAV", ["SFX\\ZSP\\DUALER_MENDSTONE1.WAV", "SFX\\ZSP\\DUALER_MENDSTONE2.WAV"], ["SFX\\ZSP\\DUALER_MENDHIT.WAV"]]),   # 0 = cast; 1 = kept (hail chassis); 2 = v7 per-hit crunch (engine, patch_tc_mendwalls_v2.py)
+---- end ----
+
+== 4. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF += 5000-5195)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (DUALER_MENDWALLS v7 + NEW DUALER_MENDHIT.WAV)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (216: slots 1/3/4/5/7 + sfx cue 2)   <- BEFORE the engine
+  py -3.10 patch_tc_mendwalls_v2.py                    (dry run: "zone older build (v5) ... in-place upgrade v5 -> v7")
+  py -3.10 patch_tc_mendwalls_v2.py --apply            (backup backup\AoWTCPCK.dll.bak_mendwalls7 = the v5 state)
+  VEH startup check.  Ship: Sfx\Zsp\DUALER_MENDHIT.WAV is a NEW file -> build_release_zip.py --add.
+  Revert: patch_tc_mendwalls_v2.py --revert (exact; byte-identical to the v5 script's revert).  Back to v5 visuals:
+  revert, run the v5 script copy --apply, restore the v6 slot lines (1: [4900]*21 + 4901-4951; 3/4/5/6 the 4500/4350/
+  4800/4850 50-frame lists at -112,-120).
+
+== 5. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\mend7\) ==
+  Script: live copy -> dry run "in-place upgrade v5 -> v7"; --apply; re-run "already applied (v7)"; --revert ==
+  the v5 script's own --revert (byte-identical); fresh --apply on that == the upgrade (byte-identical).  Live DLL md5
+  unchanged (d676d3fa1729c6bba33a04299494c152).
+  emu7.py (Unicorn, real v7 caves, engine stubbed, odd-q hex model with rings 0-3): mend rules as v5 (damaged / full /
+  destroyed / gate / 75 % image / far wall, RandInt draws, static redraw, breach flag, camera, cast cue 0); 3 walls ->
+  9 pieces round-robin, markers (slot / L / P), every source 2-3 hexes from its wall, inside the 1-hex margin, not a
+  wall hex, all distinct; 220 ticks of NF + Show: frame per clock exactly as designed for all 27 piece effects and 3
+  glows, mover positions == source + (target - source) * ease - arc every tick, hole stationary, at most ONE piece in
+  flight at any tick, one cue-2 hit per rock/stick at L + 5, none with sound off; other spells / unclaimed slots pass
+  to the previous caves with eax intact; 19 damaged walls -> 10 pieces (cap) with distinct sources, glows staggered
+  25 + 6w then 25; corner cast stays in bounds; no damaged wall -> no fx; second pass / other spell -> previous gate;
+  stack + callee-saved registers balanced in every call.
+  art7.py: frame counts 36/36/36/36/52; tremble loop seam (frame 20 -> 9) within the normal step range; hole frames
+  identical through the tremble; full-cast timeline simulated with the engine's exact clock/position math ->
+  mend7_timeline.gif, mend7_strip.png, mend7_sheet.png (rock / stick / halo / hole rows).
+  sfx7.py: DUALER_MENDWALLS_v7.WAV (3.40 s, peak 0.68), DUALER_MENDHIT_v7.WAV (0.26 s, peak 0.34 - deliberately quiet),
+  mend7_preview_9hits.WAV (bed + 9 hits at the engine's arrival ticks).
+
+== 6. Chain / risks ==
+  * Chain position unchanged (gate in front of the NextStrike chain, slot picks in front of Steadfast fx): the same
+    LIFO rules as v4-v6.
+  * The movers' drawn point (TXYZList item 0) is rewritten every NF; items 1/2 (source / target) are extra TXYZs freed
+    by TXYZList.Destroy with the effect.  Unverified in game: that the combat dynamic layer redraws a moved kind-0x26
+    effect cleanly (no trails) - vanilla Show reads item 0 fresh each draw.
+  * Target points still use v3's assumed wall height (TARGETS in the script = MEND3_TARGETS[0:3]).
+  * Up to 10 pieces: the last hit lands ~2.3 s after the cast, the last wall glow ends ~3.8 s after it (19-wall casts);
+    a typical 3-4 wall cast ends ~2.7 s.

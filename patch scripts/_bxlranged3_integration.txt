@@ -1,0 +1,89 @@
+BXL ranged abilities v3 (2026-10-19): Hurl Skull explosion lock fix + self-hit, Shoot Black Javelin dark glow/tail.
+Scratch: C:\Users\<user>\.claude\jobs\47241cad\tmp\bxlabil3\  (emu_bxl3.py, jav_preview.png = frames 0/3/../21 on
+grass / sand / grey through rec_for's alpha dither).
+
+ROOT CAUSE of the lock: TCAbRangedTE.Execute walks EVERY fx in the map's effect list [[0x469420]+0x11C] each tick
+(0x40B7A3) and runs the generic ability landing for any finished one.  v2's kind-0x26 explosion helper sits in that
+list ([fx+0x14] = 0xCC) -> when its 30-frame explosion finished, CS sent it down the landed path -> SA -> AOE again +
+a NEW explosion helper -> 30 frames later the same -> forever (the area also took damage every 30 frames).
+v3 CS: a 0xCC fx of kind 0x26 jumps to the next-fx point 0x40CAF2 (never lands).  HM: the thrower is no longer skipped.
+
+APPLY ORDER (game + editor closed):
+  1. paste the code block below into build_dual_sphere_fx_v1.py before `def build():` and the row right after the
+     (7410, hurl_skull(), ...) row; py -3.10 build_dual_sphere_fx_v1.py --apply      (DualDF 7430-7453, new)
+  2. py -3.10 patch_bxl_ranged_abilities_v3.py --apply      (upgrades v2 in place; backup .bak_bxlranged3)
+  3. py -3.10 patch_bxl_ranged_ability_pfs_v3.py --apply    (record 215 slots 0-23 -> DualDF 7430-7453)
+  4. VEH check.  Ship AoWTCPCK.dll, AoWEPACK.dll (1 byte: zone magic), Release\Ability.pfs, DualDF.ILB.
+REVERT: pfs v3 --revert (exact) ; engine v3 --revert (= v1/v2 --revert, i.e. pre-BXR).  v2's script refuses a v3 install.
+
+TEST: Hurl Skull at a group (incl. one adjacent to the thrower): one explosion, one round of hits, combat continues;
+the thrower is hit if inside the 7 hexes.  Black Javelin in several directions: dark halo + smoky tail behind it.
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` ----
+def black_javelin(n=24):
+    """Shoot Black Javelin (ability 0xCD) v3 (2026-10-19, user: 'add a slight black glow/tail'): the VANILLA black
+    javelin sprites (TCOMBAT\OBJECTS\ARROW.ILB 300-323, 64x64, frame k flies 15*k deg clockwise from north = the
+    engine's kind-1 direction index) kept pixel-for-pixel on top of (1) a soft near-black halo hugging the javelin
+    (2 px, alpha 215 -> 95, dithered by rec_for) and (2) a short smoky tail (~17 px) streaming back from the
+    fletching, tapering and fading out with a few drifting soot specks.  Same 64x64 canvas / anchor (-32 / -32) as
+    vanilla, so record 215's 24 direction slots only change their image ids.  Solid keyed sprite (256/0)."""
+    import sys as _s
+    _s.path.insert(0, os.path.join(HERE, "..", "modding tools"))
+    from aowxlib import ilb as _ilb
+    lib = _ilb.read(os.path.join(GAME, "Images", "TCombat", "Objects", "Arrow.ILB"))
+    src = {}
+    for img in lib.images:
+        if 300 <= img.id < 300 + n:
+            w, h, rows = _ilb.decode_record(lib, img.parts[0])
+            s = Image.new("RGBA", (w, h), (0, 0, 0, 0)); s.putdata([p for row in rows for p in row]); src[img.id] = s
+    out = []
+    SMOKE = (16, 10, 22)
+    for k in range(n):
+        s = src[300 + k]; W, H = s.size; sp = s.load()
+        th = math.radians(15 * k); dx, dy = math.sin(th), -math.cos(th)      # flight direction (screen, y down)
+        pts = [(x, y) for y in range(H) for x in range(W) if sp[x, y][3]]
+        cx = sum(p[0] for p in pts) / len(pts); cy = sum(p[1] for p in pts) / len(pts)
+        back = min(pts, key=lambda p: (p[0] - cx) * dx + (p[1] - cy) * dy)  # fletching end
+        bproj = (back[0] - cx) * dx + (back[1] - cy) * dy
+        acc = [[0.0] * W for _ in range(H)]
+        mask = set(pts)
+        for (x, y) in pts:                                                  # halo: distance-weighted dark glow
+            for oy in range(-2, 3):
+                for ox in range(-2, 3):
+                    X, Y = x + ox, y + oy
+                    if 0 <= X < W and 0 <= Y < H and (X, Y) not in mask:
+                        d = math.hypot(ox, oy)
+                        if d <= 2.3:
+                            acc[Y][X] = max(acc[Y][X], 215 if d <= 1.0 else 160 if d <= 1.5 else 95)
+        rnd = random.Random(5300 + k)
+        L = 17.0
+        for step in range(int(L * 3)):                                       # tail: tapering smoky ribbon
+            t = step / (L * 3.0)
+            px_, py_ = cx + dx * (bproj - t * L), cy + dy * (bproj - t * L)
+            wob = math.sin(t * 7.0 + k) * 1.2 * t
+            px_ += -dy * wob; py_ += dx * wob
+            rad = 1.8 + 1.6 * t
+            a0 = 235 * (1.0 - t) ** 1.1
+            for oy in range(-3, 4):
+                for ox in range(-3, 4):
+                    X, Y = int(round(px_ + ox)), int(round(py_ + oy))
+                    if 0 <= X < W and 0 <= Y < H and (X, Y) not in mask:
+                        d = math.hypot(X - px_, Y - py_)
+                        if d <= rad:
+                            acc[Y][X] = max(acc[Y][X], a0 * (1.0 - 0.55 * d / rad))
+        for _ in range(4):                                                   # soot specks drifting off the tail
+            t = rnd.uniform(0.45, 1.05)
+            X = int(round(cx + dx * (bproj - t * L) + rnd.uniform(-3, 3))); Y = int(round(cy + dy * (bproj - t * L) + rnd.uniform(-3, 3)))
+            if 0 <= X < W and 0 <= Y < H and (X, Y) not in mask: acc[Y][X] = max(acc[Y][X], 110 * (1.1 - t))
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); px = im.load()
+        for Y in range(H):
+            for X in range(W):
+                if acc[Y][X] > 8: px[X, Y] = SMOKE + (int(min(255, acc[Y][X])),)
+        im.alpha_composite(s)
+        out.append(im)
+    return out
+
+---- end ----
+---- rows: build_dual_sphere_fx_v1.py build() - add right after the (7410, hurl_skull(), ...) row ----
+              (7430, black_javelin(), "BJav%02d.BMP", 256, 0, KEY),         # Shoot Black Javelin (0xCD) v3 slots 0-23: vanilla javelin + dark halo + smoky tail (64x64, frame k = 15*k deg cw from north)
+---- end ----

@@ -1,0 +1,86 @@
+GUST (spell 212, Air tier 1) - integration snippets (2026-10-16, fork; nothing below is applied live)
+=================================================================================================
+
+IDS / ROOM CLAIMED:
+  spell 212 (pfs key 222, SpellIcn id 212) . DualDF 3034-3041 (8 frames; 3042-3099 left free) . AoWTCPCK zone
+  0x442800-0x442C00 (1020 B used) . TCPCK BSS slack 0x46C640-0x46C6D0 (victim table + dist array) . AoWEPACK: none.
+  Sound Sfx\Zsp\DUALAI_GUST.WAV (new prefix DUALAI_ -> add to the ship list).  Icon mask patch scripts\gust_user_mask.png
+  (NEW: the user's art import export\gust.jpg - a swirling cloud gust - traced; only <key>.png overrides, so gust.jpg is no trap).
+
+ENGINE: patch_tc_gust_v1.py (see its docstring).  Damage = the donor's own class-5 breath (20 strikes over the 12-hex
+fan, vanilla landings/CA); the patch records every object a 212 strike lands on (REC 0x40C339) and, when the token ends
+(END 0x40CB46, once, after every hit resolved), pushes each still-living unit one hex AWAY from the caster (the ring-1
+neighbour farthest in pixels from the caster hex), far-to-near, only if that hex is on the map, empty and valid for
+THAT unit by the engine's own movement rules (TMoveControl.ValidLocation with settings built for the unit - Void
+Step v4's recipe); the move = Void Step's one-step warp (CreateCombatMoveTE + ExecuteDefaultMove, cost 0 = no MP).
+Deterministic (inside the broadcast token, no RNG).  Fast combat (auto-resolve) does the damage only - no positions.
+
+---- 1. patch_dual_sphere_spells_v1.py: SPELLS entry (single-sphere block; DONOR "TColdBreath" already exists) ----
+    dict(id=212, name="Gust", sphere=4, tier=1, mana=3, research=50,
+         donor="TColdBreath", pfs_donor=118, tc_type=5, icon=212,          # class 5 breath cone (as Holy Water 324); patch_tc_gust_v1.py: pushback
+         pokes=[(0x34, 1, 8), (0x35, 1, 3), (0x36, 2, 0x80), (0x3A, 1, 3)], # ATK 8 / DMG 3 / Physical; fast-combat 3 targets; range 4 inherited
+         desc="A violent gust bursts from the caster in a cone: every unit caught in it is struck (attack 8, damage 3, physical) and blown one hex away from the caster, if there is room to land.",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(3034, 3042)), -32, -33, f18=1, f20=5)},
+         sfx=["SFX\ZSP\DUALAI_GUST.WAV"]),
+
+---- 2. build_dual_sphere_icons_v1.py ----
+  ICONS[212] = "gust"      CLOUDS["gust"] = 0 (the Air cloud, as the Air halves of the pair icons use)      GLYPHS["gust"] = glyph_gust
+def glyph_gust():
+    """Gust (212, Air tier 1, 2026-10-16): the user's reference art import export/gust.jpg - a swirling cloud blowing a
+    curling gust - TRACED (ink < 128, fit 97 %, centred, Gaussian 1.2 + threshold) -> gust_user_mask.png."""
+    return _user_mask_glyph("gust_user_mask.png")
+
+---- 3. build_dual_sphere_fx_v1.py: function (before def build()) + group-table row ----
+              (3034, gust_wisp(), "AIgust%d.BMP", 770, 80, 0x0000),          # Gust (212) slot 0: per-strike wind wisp along the breath fan (64x64, Cold Breath's role)
+def gust_wisp(n=8):
+    """Gust (212) slot 0 (2026-10-16): the per-strike puff drawn along the breath fan (Cold Breath's BOLTS 90-97 role,
+    64x64, centre (32, 33), ADDITIVE) - direction-neutral (the fan can point any way): five pale grey-white wind wisps
+    curling round the centre and flung outward as they spin, over a faint dust haze; thinning and fading."""
+    W = H = 64; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    out = []
+    for i in range(n):
+        t = i / (n - 1.0); fade = (1 - t) ** 1.1
+        acc = np.zeros((H, W, 3), np.float32)
+        haze = np.exp(-((xx - cx) ** 2 + ((yy - cy) / 0.75) ** 2) / (40 + 260 * t)) * 0.22 * fade
+        for c, cv in enumerate((205, 200, 185)): acc[..., c] += haze * cv
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"); dr = ImageDraw.Draw(im)
+        R = 5 + 20 * t
+        for k in range(5):
+            a0 = 2 * math.pi * k / 5 + 2.2 * t
+            pts = []
+            for m in range(10):
+                a = a0 + math.radians(80) * m / 9.0; r = R * (0.75 + 0.35 * m / 9.0)
+                pts.append((cx + r * math.cos(a), cy + 0.75 * r * math.sin(a)))
+            c = int(240 * fade); dr.line(pts, fill=(c, c, int(c * 0.96), 255), width=2 if t < 0.5 else 1)
+        out.append(im)
+    return out
+
+---- 4. build_dual_sphere_sfx_v1.py: MIXES entry + DRIVE["DUALAI_GUST.WAV"] = 1.8 ----
+    # Gust (212, Air T1 2026-10-16): a PUNCHY gust - a sharp air thump (A_Force2 slowed + a sub kick), a fast synthetic
+    # wind swell rushing through and away (not the stock Wind/Windloop as the lead), a short whoosh tail.
+    "DUALAI_GUST.WAV":      [("synth:subswell:60:38:0.45", 0.6, 0.00, None, 0.3),
+                             ("Attack/A_Force2.WAV", 0.55, 0.00, None, 0.3, 0.75),
+                             ("synth:wind:1.3", 0.9, 0.02, None, 0.7, 1.0, 0.08),
+                             ("Moves/Air2.WAV", 0.35, 0.05, 0.9, 0.5, 1.15),
+                             ("Attack/Wind.WAV", 0.25, 0.10, 0.9, 0.6, 1.35, 0.15)],
+  (tested through mix(): 1.32 s, peak 0.95 before normalise; render tmp\gust\DUALAI_GUST.WAV)
+
+---- APPLY ORDER (game + editor closed) ----
+  a. fx -> sfx -> icons builders --apply, then patch_dual_sphere_spells_v1.py --apply (registers 212 = TColdBreath
+     clone, SpellTypes[212] = 5, Spells.pfs key 222)
+  b. patch_tc_gust_v1.py --apply     (AoWTCPCK; backup .bak_gust)
+  c. VEH startup check
+  REVERT: b (exact; restores vanilla or the stored previous chain targets).
+
+---- CHAIN CONSEQUENCES ----
+  * Both sites (0x40C339 landing, 0x40CB46 token end) were vanilla and no script owns them; nothing else reports.
+    If another script later hooks either site with `call x; nop`, this one chains in front at apply time (tested).
+  * The TCPCK zone 0x442800-0x442C00 is FULL (1020/1024 B) - any v2 growth needs a new zone.
+
+---- IN-GAME TESTS ----
+  1. Research: Gust under Air tier 1 (50 research, cast 3).  Breath cone like Cold Breath with grey wind wisps + gust sound.
+  2. Units in the cone take attack 8 / damage 3 physical rolls, then each living one slides one hex directly away from
+     the caster; a unit with no room behind it (map edge, another unit, rock/water/wall it can't stand on) stays put.
+  3. Two units in a line: the far one moves first, so both move.  Flyers can be pushed over water; walkers can't.
+  4. Friendly units in the cone are pushed too.  Pushed units keep their movement points.
+  5. Cold Breath / Holy Water / other breaths unaffected.  LAN + replay: same positions on both machines.

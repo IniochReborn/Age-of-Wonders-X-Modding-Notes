@@ -1,0 +1,132 @@
+Tame Animal v3 gfx (2026-10-19, fork; NOTHING applied live, no shared builder edited).
+User (taming works): "needs a smoother fade out for its gfx, and needs a gfx that stays above the unit's head during
+combat (like the heart for Seduced / eyeball for Dominated) - maybe a green bear-paw print."
+
+FINDINGS
+  * Overhead status icons: one routine, AoWEPACK 0x557812EC (TAbstractUnit VMT slot +0x1A4 = the unit draw; TUnit
+    +0x1A4 0x557826C8 calls it).  Combat units draw through it from TCombatUnit 0x5572597F / 0x55725A01 with the
+    draw-flags byte 7 (bit 4 = status icons), so v2's hook ICO @0x5578175B -> cave 0x55818400 IS on the combat path
+    (no TCPCK-side table exists: 0x96 only appears in TCPCK in the AI value code @0x42DB2B).  Each block is
+    HasAbility(id) -> TImageSequenceList.ShowLooped(GetAbility(id)+0x1C) = the Ability.pfs record's gfx slot.
+    Vanilla icons are SOLID sprites: Dominated = COMBAT.ILB 130 (eye, 258/80 + 1026/60 glow), Charmed = COMBAT
+    140-146 (pendulum, 256).  v2's Tamed overlay (record 212 -> DualDF 7230-7241) is a small, dim ADDITIVE (770/80)
+    green glow at xs/ys -31/-50: on grass it is green-on-green, on sand it washes to a pale blob - effectively
+    invisible.  That is the most likely reason the user saw nothing.  (Not verifiable statically: the
+    HasAbility(0xCA) result for a tamed unit runs through a long chain of id-specific GetAbilityEnabled caves -
+    none of them gates 0xCA, and Tamed is the same class/path as Dominated.)  No engine change in v3.
+  * Abrupt cast end: Dominate's chain (record 211, 5 elements f8 1/2/5/6/8) never uses tame_twinkle's fade tail
+    (DualDF 7217-7226 were built but unreferenced).  The success 'mark' element (f8 6) played the overlay loop
+    7230-7237 at FULL brightness for 8 frames and then cut; element f8 8 re-plays the bright twinkle-in frames.
+
+FIX = new art + Ability.pfs tag-8 frame ids only (frame counts / f8 / f18 / f20 unchanged -> Dominate's timing).
+  * tame_mark (DualDF 7242-7249, additive 770/80): the paw pops in, rises 3 px, swells and fades out
+    (envelope 0.60 1.00 0.92 0.76 0.56 0.36 0.19 0.07), leaves drifting out -> record 211 element f8 6.
+  * record 211 element f8 8 -> the unused dispersal tail 7219-7226 (fades to nothing).
+  * tame_badge (DualDF 7260-7271, SOLID 256 keyed, hard alpha): green bear-paw print - broad main pad + 5 separate
+    toes, each with its own 1-px dark-green outline (dark seams between toes), tiny claw points, top-left light;
+    12-frame loop pulses the highlight + a glint slides across the pad (no position jitter) -> record 212,
+    xs/ys -32/-44 = exactly where the Dominated eye sits (eye = 30x28 px, paw = ~27x24 px).
+  Previews: tmp	ame5\preview_badge_mark.png (rows 1-3: eye | badge loop on grass/sand/grey; rows 4-6: old v2 paw
+  | new mark fade), preview_context_2x.png (eye | badge | old v2 overlay).
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` (after tame_paw; uses _tame_paw_field / _tame_leaf / KEY) ----
+def tame_mark(n=8):
+    """Tame Animal (0xC9) v3 success mark (2026-10-19; user: 'needs a smoother fade out'): replaces the v2 mark, which
+    re-used the overlay loop at FULL brightness for all 8 frames of Dominate's 'mark' slot (f8 6) and then vanished.
+    Same canvas / anchor as the overlay (64x64, paw centred at (32, 32), xs -32 / ys -44 = Dominate's eye spot):
+    the glowing green paw pops in, then rises 3 px, swells a little and fades out smoothly over the 8 frames while
+    its two leaves drift outward and fade.  Additive 770/80."""
+    SZ = 64; yy, xx = np.mgrid[0:SZ, 0:SZ].astype(np.float32); out = []
+    env = [0.60, 1.00, 0.92, 0.76, 0.56, 0.36, 0.19, 0.07]
+    for i in range(n):
+        t = i / float(n - 1); e = env[i] if i < len(env) else 0.0
+        cx, cy = 32.0, 32.0 - 3.0 * t; sc = 0.70 + 0.12 * t
+        pf = _tame_paw_field(xx, yy, cx, cy, sc)
+        rim = np.clip(_tame_paw_field(xx, yy, cx, cy, sc + 0.13) - pf, 0, 1)
+        halo = (0.30 + 0.25 * t) * np.exp(-((xx - cx) ** 2 + (yy - cy) ** 2) / (60.0 + 90.0 * t))
+        g = np.clip(e * (0.95 * pf + 0.7 * rim + halo), 0, 1); amb = np.clip(rim * 1.4, 0, 1)
+        r = (80 + 175 * amb) * g; gg = (215 - 20 * amb) * g; b = (70 - 40 * amb) * g
+        im = Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(gg, 0, 255), np.clip(b, 0, 255), np.where(g > 0.03, 255, 0)]).astype(np.uint8), "RGBA")
+        dr = ImageDraw.Draw(im)
+        for k in range(2):
+            a = 2 * math.pi * (0.15 * i / n + 0.5 * k) + 0.4; R = 11.0 + 9.0 * t
+            x = cx + R * math.cos(a); y = cy + 0.45 * R * math.sin(a) - 4.0 * t; c = e * 1.05
+            if c > 0.06: _tame_leaf(dr, x, y, a + 1.57, 4.2, (int(50 * c), int(185 * c), int(45 * c), 255))
+        out.append(im)
+    return out
+
+
+def tame_badge(n=12):
+    """Tamed (status 0xCA) v3 overhead badge (2026-10-19; user: 'needs a gfx that stays above the unit's head during
+    combat, like the Charmed pendulum / Dominated eye - maybe a green bear-paw print'): a SOLID green bear paw (the
+    v2 overlay was a faint additive glow that washed out on grass and sand).  Drawn like COMBAT.ILB 130 (the
+    Dominated eye): 64x64 canvas, glyph centred at (32, 32) -> record 212 xs -32 / ys -44 puts it where the eye sits.
+    Opaque keyed sprite (256): a broad main pad and five separate toes with small claw points, each element with its
+    own 1-px dark-green outline (so the toes read as separate), top-left light / bottom-right shade; the 12-frame
+    loop pulses the highlight and sends a small glint across the pad - no positional jitter.  Hard alpha."""
+    S = 8; SZ = 64; out = []
+    def mask(draw):
+        m = Image.new("L", (SZ * S, SZ * S), 0); draw(ImageDraw.Draw(m), lambda x, y: ((32 + x) * S, (32 + y) * S))
+        return np.asarray(m.resize((SZ, SZ), Image.BOX), np.float32) / 255.0 > 0.5
+    def dil(m):
+        o = m.copy(); o[1:, :] |= m[:-1, :]; o[:-1, :] |= m[1:, :]; o[:, 1:] |= m[:, :-1]; o[:, :-1] |= m[:, 1:]
+        o[1:, 1:] |= m[:-1, :-1]; o[:-1, :-1] |= m[1:, 1:]; o[1:, :-1] |= m[:-1, 1:]; o[:-1, 1:] |= m[1:, :-1]
+        return o
+    def pad(d, P):
+        d.ellipse([P(-8.0, -1.5), P(8.0, 9.5)], fill=255)
+        d.ellipse([P(-2.2, 7.4), P(2.2, 11.0)], fill=0)                                           # heel dimple
+    elems = [mask(pad)]
+    TOES = ((-9.6, -4.0, 2.4, 2.7), (-5.4, -8.6, 2.6, 2.9), (0.0, -10.2, 2.7, 3.0), (5.4, -8.6, 2.6, 2.9), (9.6, -4.0, 2.4, 2.7))
+    claws = []
+    for dx, dy, rx, ry in TOES:
+        elems.append(mask(lambda d, P, dx=dx, dy=dy, rx=rx, ry=ry: d.ellipse([P(dx - rx, dy - ry), P(dx + rx, dy + ry)], fill=255)))
+        L = math.hypot(dx, dy - 2.0); ux, uy = dx / L, (dy - 2.0) / L
+        claws.append((int(round(32 + dx + ux * (ry + 1.2))), int(round(32 + dy + uy * (ry + 1.2)))))
+    fill = np.zeros((SZ, SZ), bool)
+    for m in elems: fill |= m
+    edge = np.zeros((SZ, SZ), bool)
+    for m in elems: edge |= dil(m) & ~m
+    for k, a in enumerate(elems):                       # touching elements: keep a dark seam between them
+        for b in elems[k + 1:]: edge |= dil(a) & b
+    fill &= ~edge
+    yy, xx = np.mgrid[0:SZ, 0:SZ].astype(np.float32)
+    light = np.clip(0.5 + ((32 - xx) * 0.6 + (28 - yy) * 0.8) / 16.0, 0, 1)
+    base = np.array([60, 176, 52], np.float32); hi = np.array([160, 240, 118], np.float32); lo = np.array([26, 108, 28], np.float32)
+    pady = [(int(x), int(y)) for y, x in zip(*np.nonzero(elems[0] & fill)) if 31 <= y <= 34]
+    pady.sort()
+    for i in range(n):
+        t = i / float(n); pulse = 0.5 + 0.5 * math.sin(2 * math.pi * t)
+        L = np.clip(light * (0.80 + 0.30 * pulse), 0, 1)[..., None]
+        col = np.where(L > 0.5, base + (hi - base) * (L - 0.5) * 2, lo + (base - lo) * L * 2)
+        rgb = np.zeros((SZ, SZ, 3), np.uint8); a = np.zeros((SZ, SZ), np.uint8)
+        rgb[fill] = np.clip(col[fill], 0, 255).astype(np.uint8); a[fill] = 255
+        rgb[edge] = (14, 52, 16); a[edge] = 255
+        for cx_, cy_ in claws:
+            if 0 <= cx_ < SZ and 0 <= cy_ < SZ: rgb[cy_, cx_] = (14, 52, 16); a[cy_, cx_] = 255
+        if pady:
+            gx, gy = pady[int(t * len(pady)) % len(pady)]
+            for ox, oy, c in ((0, 0, 255), (1, 0, 210), (-1, 0, 210), (0, 1, 210), (0, -1, 210)):
+                X, Y = gx + ox, gy + oy
+                if 0 <= X < SZ and 0 <= Y < SZ and fill[Y, X]: rgb[Y, X] = (c, 255, c)
+        out.append(Image.fromarray(np.dstack([rgb, a]), "RGBA"))
+    return out
+---- end ----
+---- rows: build_dual_sphere_fx_v1.py build() - add right after the (7230, tame_paw(), ...) row ----
+              (7242, tame_mark(), "TAmark%d.BMP", 770, 80, 0x0000),             # Tame Animal (0xC9) v3: success mark = paw that rises + fades out smoothly (8 frames 64x64; Ability.pfs 211 slot f8 6)
+              (7260, tame_badge(), "TAbadge%02d.BMP", 256, 0, KEY),              # Tamed (0xCA) v3: SOLID green bear-paw overhead badge (12-frame loop 64x64, Dominated-eye spot; Ability.pfs 212)
+---- end ----
+
+APPLY ORDER (game + editor closed)
+  1. integrate the two blocks above into build_dual_sphere_fx_v1.py (LF file), ast.parse
+  2. py -3.10 build_dual_sphere_fx_v1.py --apply                 (DualDF.ILB +20 images: 7242-7249, 7260-7271)
+  3. copy tmp	ame5\patch_tame_ability_pfs_v3.py -> patch scripts\ ; py -3.10 patch_tame_ability_pfs_v3.py --apply
+     (dry run: '211 ...: v2 | 212 ...: v2' -> v3; tag 8 of 211/212 only, same file size)
+  4. VEH check.  Ship Release\Ability.pfs + Images\Effects\DualDF.ILB.
+  Revert: patch_tame_ability_pfs_v3.py --revert (exact v2 bytes; tested md5-identical) BEFORE patch_tame_ability_pfs_v2.py.
+  Keep 7230-7241 in the builder (v2 revert target).
+
+IN-GAME CHECK
+  * Tame a creature: the cast ends with a paw that rises and fades out (no hard cut); a failed attempt fades out too.
+  * The tamed unit carries a solid green bear paw above its head for the rest of the combat, where a dominated unit
+    shows the eye.  If it STILL shows nothing, the cause is HasAbility(0xCA) (not the art) - then probe 0x5581840F
+    (al after the VMT+0x148 call in cave 0x55818400) with the fixed diag_tame_probe.py.

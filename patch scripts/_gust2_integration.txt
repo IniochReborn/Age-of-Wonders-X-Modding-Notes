@@ -1,0 +1,61 @@
+GUST v3 (spell 212) - integration snippets (2026-10-16, fork; nothing applied live)
+=================================================================================
+Engine: patch_tc_gust_v1.py upgraded in place to v3 (see its docstring).  Forward-only Shockwave-style particle spray
+(kind-0x1F particles per breath strike, drawn with 212's gfx SLOT 1), the breath strikes themselves made invisible
+(SLOT 0 = blank), and every pushed unit shakes then hops (a Winds-of-Fury kind-0x2F carrier effect, visual only - the
+logical push is v2's warp, unchanged).  New room: AoWTCPCK zone 3 0x444800..0x445000 (1179 B used; the 0x444800..0x444C00
+range in the brief was too small - 0x444C00..0x445000 verified zero, reloc-free, unclaimed), BSS slack 0x46C700..0x46C788.
+DualDF: 3042-3044 (new particle art).  3034-3036 (the v2 WoF-orb wisps) become unused.
+
+---- 1. build_dual_sphere_fx_v1.py: function (before def build()) ----
+def gust_shock():
+    """Gust (212) slot 1 v3 (2026-10-16, user: make it like SHOCKWAVE's particles but only going forward): vanilla
+    Shockwave's own particle sprite (PARTICLE.ILB 0-2, the 19x19 blue-white glow orbs its kind-0x1F swarm draws) with
+    most of the blue drained into a pale silver-white wind mote (a breath of cyan kept).  Drawn by kind-0x1F particles
+    through GFXE's intensity table (the image's drawMode is ignored there), fading over each particle's path."""
+    lib = ilbcodec.read(PARTICLE); out = []
+    for src in (0, 1, 2):
+        im, r = raw_pixels(lib, src); a = np.asarray(im.convert("RGB")).astype(np.float32)
+        g = a.mean(axis=2, keepdims=True)
+        a = a * 0.4 + g * 0.6
+        a = a * np.array([0.97, 1.0, 1.06], np.float32)
+        out.append(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+    group-table row (e.g. right after Gust's 3034 row; keep 3034 or drop it - nothing references it any more):
+              (3042, gust_shock(), "AIgshk%d.BMP", 770, 50, 0x0000),           # Gust (212) slot 1 v3: pale Shockwave particle (19x19, kind-0x1F spray)
+
+---- 2. patch_dual_sphere_spells_v1.py: entry 212 gfx (replace the whole gfx dict) ----
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [340], -2, -2, f20=0),                     # v3: the breath strikes draw NOTHING (blank, like Sanctify's slot 0)
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [3042, 3043, 3044, 3043], -9, -9, f20=1)},   # v3: the forward Shockwave spray (patch_tc_gust_v1 SPR/SLT) - Shockwave's own anchor/timing
+         sfx=["SFX\\ZSP\\DUALAI_GUST.WAV"]),                                                   # unchanged; do NOT add a cue 1 (kind-5 strikes would play it 20x)
+
+---- APPLY ORDER (game + editor closed) ----
+  1. build_dual_sphere_fx_v1.py --apply            (DualDF 3042-3044)
+  2. patch_dual_sphere_spells_v1.py --apply        (212 gfx slots 0 + 1)
+  3. py -3.10 patch_tc_gust_v1.py --apply          (live dry-run: "v2 build found -> upgrading to v3"; backup .bak_gust kept from v1)
+  4. VEH startup check
+  REVERT: patch_tc_gust_v1.py --revert removes v1+v2+v3 (all three zones + 6 sites); verified byte-identical to the v2
+  script's own revert of the live DLL.  The v2 script is kept as tmp\gust3\patch_tc_gust_v1_v2.py.
+
+---- CHAIN CONSEQUENCES (while v3 is applied) ----
+  * SLT 0x42E4C4 (kind-0x1F sprite slot pick) now heads the chain: Gust v3 -> soulsiphon 0x43F1A0 -> Ashes -> Hellfire.
+    !! patch_tc_soulsiphon_fx_v1.py's dry-run now says "Dry run OK" - NEVER --apply it while Gust v3 is on: it decodes the
+    site's target (our cave) as its 'prev' -> our cave jumps to its cave, its cave jumps to ours = an endless loop in the
+    sprite slot pick.  Revert Gust first, re-apply Gust after.  (patch_tc_ashes_v1 / patch_tc_hellfire_portal_v1 already
+    ASSERT / ABORT on the live DLL - unchanged.)
+  * SPR 0x40F0A8, SPN 0x42BF4D, LND 0x42BD1E were vanilla (no other script owns them).  END 0x40CB46 -> END3 -> v2 END.
+  * Side finding (not mine): patch_heal_ai_tcpck_v1's log ring REC 0x46C800 + 0x10 + 60*32 = ..0x46CF90 overlaps the Oil
+    Spring VMT clone 0x46CDC0..0x46CF10 (only matters if that heal-AI log is active).
+
+---- IN-GAME TESTS ----
+  1. Cast Gust: no breath stream; instead pale glowing motes burst out of the caster and fly forward through the cone,
+     fading as they go (a forward-only Shockwave), spreading sideways, several speeds.
+  2. After the motes: every pushed unit shakes left-right for ~0.5 s on its old hex, then makes a small hop (~24 px high,
+     well under 3/4 of a unit) onto its new hex - no spinning, no flash at the new hex first.
+  3. Units that cannot be pushed (blocked) do not shake.  Damage numbers / misses unchanged; pushes still only once.
+  4. The spell's turn ends only after the hops finish (no next action starting mid-hop); LAN / replay identical.
+  5. Winds of Fury, Banshee Gale (their own kind-0x2F flights still spin / land normally), Shockwave, Cold Breath / Holy
+     Water, Soul Siphon / Harvest / Ashes motes unchanged.
+  6. Tuning (patch_tc_gust_v1.py constants, then --apply again): N_PART (motes per strike, 4), SPREAD (14 px sideways),
+     HOP_H (24 px), HOP_PTS (12 arc points), SHAKE (14 shake ticks).

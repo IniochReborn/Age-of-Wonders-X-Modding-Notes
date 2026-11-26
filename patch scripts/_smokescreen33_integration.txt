@@ -1,0 +1,28 @@
+SMOKESCREEN (225) v3.3 - 2026-10-17 (fork; NOTHING applied live).  Engine only - no builder / pipeline / Spells.pfs change.
+
+Fixes
+ 1. GREEN half-smoke edges: the v3.2 blend used RGB565 masks; the combat surface here is 555 (every Gfxepack lock fills
+    descriptor +0x28 = pixel-format id, +0x2C/+0x30/+0x34 = R/G/B masks: 0x55509310 / 0x7C00 = 555, 0x56509310 / 0xF800 =
+    565).  565 math on 555 pixels saturates green (verified: G=31 artefacts).  cshow now picks the blend mask from the R
+    mask (565 -> 0x07E0F81F, 555 -> 0x03E07C1F) and falls back to the hard cut for any other format.
+ 2. Earth walls still smoked: the underground 'Wall' resource (TCOMBAT\BASE_HEX\H_EARTH.ILB, 44x68 images) draws through
+    the resource's SEQUENCE LIST ([res+0x24] != 0); v3.2's iltall skipped every sequence tile.  iltall now measures
+    sequence tiles too (seqlist +4 items / +8 count, item [obj+0x14] -> part +0x10 library -> image 0 height > 44), and
+    TCombatFixedILTerrain (VMT 0x404644) is tested like TCombatILTerrain (0x404378).
+
+Apply (game + editor closed):
+  py -3.10 patch_tc_smokescreen_v1.py            (dry run: "older build ... v3.3 upgrade")
+  py -3.10 patch_tc_smokescreen_v1.py --apply    (backup backup\AoWTCPCK.dll.bak_smokescreen33 = the v3.2 state)
+  VEH startup check.
+
+If earth walls are STILL covered after v3.3 (the static identification could not be checked live):
+  1. start an underground battle with earth walls on screen;
+  2. py -3.10 combat_objects_probe.py            (summary + every tall tile it can measure)
+     py -3.10 combat_objects_probe.py X Y 2      (all objects within 2 hexes of hex X,Y - pick an earth-wall hex)
+  3. send combat_objects_probe.log back - it names the class / list / resource / image size of what draws the walls.
+
+Tests (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\smoke6\): live copy -> in-place upgrade -> "already applied
+(v3.3)"; v3.3 --revert == v3.2 script's own --revert (4dbbf03d); fresh apply == upgrade (65e523e2).  emu33.py (Unicorn,
+real zone 2 at 0x400000 and 0xA00000): every pixel exact for BOTH 565 and 555 surfaces at 5 ticks, unknown format ->
+hard cut, all v3.2 cases; iltall: direct heights 32/44/45/56/68 -> 0/0/1/1/1, sequence tile 68 -> 1, 32 -> 0, nil item /
+out-of-range index -> 0.  ALL OK.

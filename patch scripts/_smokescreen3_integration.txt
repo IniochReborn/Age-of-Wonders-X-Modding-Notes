@@ -1,0 +1,114 @@
+SMOKESCREEN (225) v3 - smooth start + layering (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+Line endings: both builders are LF right now (the pipeline was CRLF earlier today) - detect per file before inserting.
+
+WHAT THE HEXAGON WAS: the 19 per-hex cast puffs (slot 1, kind-0x26 effects at each hex centre, 1026 multiply): 19 dark
+gaussians on the 2-ring hex lattice add up to a hard-edged HEXAGON of darkness lying over the fresh bank for ~1 s.  v3
+spawns no puffs; the bank itself grows in (slot 4 intro, seamless hand-over into the slot-3 loop).
+
+LAYERING (engine, patch_tc_smokescreen_v1.py upgraded IN PLACE to v3 - see its docstring): the bank is drawn AFTER the
+whole dynamic scene (over units, rocks, trees, corpses), then walls / gates / houses / workshops / townhalls / main
+structures near the bank are re-drawn on top, units standing on an intact wall/gate are re-drawn whole (raised), and
+finally every unit's race orb + HP bar (the overlay block of TTacticalCombatUnitHS.Show, deferred during the normal
+pass) is replayed on top of everything.  No bank on screen -> the exact vanilla path (one list scan per frame).
+
+== 1. build_dual_sphere_fx_v1.py - add this block before `def build():` (smoke_bank / _ash / _sample / _smk2_rgb stay) ==
+---- code ----
+SMK3_IN = 20                                                                # v3 intro frames (x 3 ticks, ~1.8 s)
+
+
+def _smk3_dens(t, n=SMK2_BN):
+    """smoke_bank's darkness density of loop frame t (identical maths) - shared by the v3 intro."""
+    grain, env = _ash(); W, H, CX, CY = SMK2_BW, SMK2_BH, SMK2_BCX, SMK2_BCY
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    eh, ew = env.shape; sc = 1.35
+    a = 2 * math.pi * t / n
+    wx = 3.0 * np.sin(yy / 23.0 + a) + 2.0 * np.sin(xx / 31.0 - a)
+    wy = 2.5 * np.sin(xx / 27.0 + a + 1.1) + 1.5 * np.sin(yy / 19.0 - a)
+    ex = (xx - CX + wx) / sc + ew / 2.0; ey = (yy - CY + wy) / sc + eh / 2.0 + 4
+    inside = (ex >= 0) & (ex < ew - 1) & (ey >= 0) & (ey < eh - 1)
+    E = np.where(inside, _sample(env, np.clip(ex, 0, ew - 1.001), np.clip(ey, 0, eh - 1.001)), 0.0)
+    ox, oy = int(round(10 * math.cos(a))), int(round(7 * math.sin(a)))
+    G = _sample(grain, xx + 37 + ox, yy + 21 + oy)
+    return 1.25 * E ** 1.2 * (0.35 + 0.65 * G)
+
+
+def smoke_bank_intro(n=SMK3_IN):
+    """Smokescreen (225) slot 4 v3 (user: "a distinct hex-shaped gfx at the beginning looks janky" = the 19 per-hex
+    cast puffs, which summed into a hard hexagon - they are gone): the bank GROWS IN instead.  Frame t = loop frame t's
+    density under a round, wobbly mask that swells out from the centre hex (lobed radius, soft 30-px edge, the lobes
+    turning so it billows rather than scales) and an overall density ramp; over the last quarter the mask relaxes to 1,
+    so frame n-1 == loop frame n-1 and the patch's hand-over to slot 3 frame n is seamless.  1026 multiply, 272x208, the
+    centre hex at (136, 104), drawn only by patch_tc_smokescreen_v1.py v3's frame picker (k < n -> this, else slot 3)."""
+    W, H, CX, CY = SMK2_BW, SMK2_BH, SMK2_BCX, SMK2_BCY
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    dx, dy = xx - CX, (yy - CY) / 0.72
+    r = np.sqrt(dx * dx + dy * dy); th = np.arctan2(dy, dx)
+    out = []
+    for t in range(n):
+        u = (t + 1) / float(n)
+        e = 1 - (1 - u) ** 2.2                                                  # ease-out growth
+        R = 10 + 210 * e
+        lobes = 1 + 0.16 * np.sin(3 * th + 1.3 + 2.0 * u) + 0.10 * np.sin(5 * th - 0.4 - 3.0 * u) + 0.06 * np.sin(8 * th + 2.0 + 4.0 * u)
+        m = np.clip((R * lobes - r) / 30.0, 0, 1); m = m * m * (3 - 2 * m)     # soft, smoothstepped edge
+        relax = min(1.0, max(0.0, (u - 0.75) / 0.25)) ** 2                     # -> 1 over the last quarter
+        m = 1 - (1 - m) * (1 - relax)
+        amp = min(1.0, 0.25 + 0.75 * u ** 0.7)
+        out.append(_smk2_rgb(_smk3_dens(t) * m * amp))
+    return out
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - group row: add right AFTER the (5670, smoke_bank(), ...) row (DualDF 5718-5737 free) ==
+---- code ----
+              (5718, smoke_bank_intro(), "FRsmki%02d.BMP", 1026, 100, KEY),       # Smokescreen (225) v3 slot 4: the bank GROWS IN (272x208, 20 frames; frame 19 == loop frame 19)
+---- end ----
+
+== 2. patch_dual_sphere_spells_v1.py, entry 225 - the gfx dict: the slot-3 line loses its closing `},` and a
+       slot-4 line follows it (slots 0-3 unchanged; slot 1 (the per-hex puff) is no longer spawned but stays harmless) ==
+---- code ----
+              3: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5670, 5718)), -120, -88, f18=2),   # v2: the whole-area bank (loop; v3 frame picker: k mod 48)
+              4: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5718, 5738)), -120, -88, f18=2)},  # v3: the bank's grow-in (k < 20), then slot 3 takes over seamlessly
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF += 5718-5737)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 225 slot 4)
+  py -3.10 patch_tc_smokescreen_v1.py                   (dry run on the live file: "gate ours (prev 0x448460) | zone ours(old)" +
+                                                         "dds vanilla | ovl vanilla | end vanilla | zone2 zero (1129 B)")
+  py -3.10 patch_tc_smokescreen_v1.py --apply           (in-place v2 -> v3; backup backup\AoWTCPCK.dll.bak_smokescreen3 = the v2 state)
+  VEH startup check.  No Wall of Flames / Mend Walls revert needed: the NextStrike gate sites still point at Smokescreen
+  (v3 keeps them byte-identical); v3 only rewrites its own zone + claims zone 2 and three vanilla sites.
+
+== 4. Chain / revert ==
+  * New sites (all vanilla before v3, reloc-free): 0x41BFCA `call THSMap.DrawDynamicScene` (in TAoWCombatMap.DrawDynamicScene)
+    -> dds; 0x4228A8 and 0x422B00 (TTacticalCombatUnitHS.Show overlay block start / end) -> jmp ovl / end.  Zone 2 =
+    AoWTCPCK 0x449400..0x449C00 (1129 B used; header +0 prev DDS target, +4/+0x10 original bytes).
+  * Writable state: AoWEPACK .idata RW page slack 0x5590B600..0x5590BB60 (beyond raw data; 0x5590B200-B350 = the smoke
+    clone, 0x5590B400-B414 = Wall of Flames' counters - no overlap, asserted).
+  * --revert (from v3) restores the gate sites, the DDS call, the two overlay sites and zeroes both zones; md5-identical
+    to the v2 script's own --revert.  Any later patch that chains in front of 0x41BFCA must be reverted first.
+
+== 5. Tests (scratch copies in C:\Users\<user>\.claude\jobs\47241cad\tmp\smoke3\) ==
+  * script: live copy -> dry run (in-place upgrade) -> --apply -> re-run "already applied (v3)"; v3 --revert md5 ==
+    v2 script --revert md5 (808159b3...); fresh v3 apply on that == the in-place upgrade (aa52fa71...).
+  * emu3.py (Unicorn on the REAL patched AoWTCPCK, relocated to 0x00A00000; AoWEPACK delta +0x01000000; the REAL
+    overlay block 0x4228A8..0x422B00 run with stubbed imports; mock Show prologue = the real frame layout): 23/23 PASS -
+    no bank -> vanilla (overlay inline, frame intact, regs/stack preserved); bank -> normal pass: bank Show returns,
+    4 unit bodies, NO overlay draws, 4 records (self/x/y/race/target); post: bank (post=1) -> near wall + house
+    re-shown (far wall not, rock not) -> unit on intact wall re-shown whole (broken-wall unit not) -> 5 HP bars (4
+    replays + 1 inline) all after the walls, replay x/y = record values; every Show tail reached with the intact
+    frame; flags clear; 70-unit overflow (64 recorded, 6 inline, 70 HP bars); zone-1 Show: post=0 no draw, first
+    draw = intro frame 0 at hex-view+offset, intro 0..19 then loop k mod 48 (frames 19/20/47/48/70 checked), a
+    non-centre tile never draws, regs preserved.
+  * art: intro frame 19 == loop frame 19 (max pixel diff 0); mean step across the hand-over 4.5 vs 4.1 in the loop.
+  * previews: intro_sheet.png (top: intro t=0,3,6,10,14; bottom: 19,20,30,40,47 over a mock field), intro.gif,
+    layering_mock.png (left = v2: units/rock on top of the smoke; right = v3: units + rock covered, wall above the
+    smoke, orbs + HP bars on top).
+
+== 6. Open (not seen in game) ==
+  * A wall/house re-drawn above the smoke is also drawn over units standing just SOUTH of it inside the bank (they are
+    under smoke anyway); units on walls/gates are re-drawn whole above the walls (as raised as vanilla shows them).
+  * Overlays are drawn after all sprites while a bank is on screen (vanilla draws them per unit), so an orb can sit
+    above a neighbouring unit/wall instead of being hidden by it - intended (easy to find).
+  * Perf: while a bank is on screen, one extra pass over the static + dynamic lists (pointer compares only) per frame.
+  * The bank is still culled with its centre hex (v2 caveat) and the intro restarts only on NEW creation (a re-cast on
+    the same centre keeps the running loop).

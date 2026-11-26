@@ -1,0 +1,148 @@
+STATIC SHIELD (spell 215, Air tier 4) - integration snippets (2026-10-16, fork; nothing below is applied live)
+==================================================================================================================
+
+IDS / ROOM CLAIMED:
+  spell 215 (pfs key 225, SpellIcn id 215) . ability 0xC4 'Static Shield' (combat-only TDurationAbility, Ability.pfs
+  record 206 - record 205 (Suspend 0xC3) must already be present) . DualDF 3200-3229 (aura, 30 frames) -> 3230-3249 free .
+  AoWEPACK zone 0x5586C800-0x5586D000 (367 B used) . AoWTCPCK zone 0x443400-0x443500 (248 B used) .
+  sound Sfx\Zsp\DUALAI_STATICSHIELD.WAV (prefix DUALAI_ -> ship list).
+
+ENGINE (RE summary):
+  Lightning Immunity = 0x09, Lightning Strike = 0x10 (ability-id-map).  Both are queried LIVE through the implied-ability
+  paths: the immunity-mask builder (0x5574FAxx, owner VMT+0x88 -> 'not present' tail 0x5574FD98) and the melee
+  damage-type builder 0x55766DFE (unit VMT+0x148 for 0x0E..0x14 -> tail 0x5577F612; TCombatUnit.GetAbilityEnabled
+  0x55725004 forwards there), so answering 0x09/0x10 for a 0xC4 holder in those tails really adds lightning to the
+  unit's melee and makes lightning damage harmless - no extra hook needed.
+  patch_staticshield_v1.py (AoWEPACK): reg = chained call-hook on 0x557BCF6E (current target decoded at apply time,
+  kept in the zone header) registering 0xC4; ex/vt on TRemedy 0x557E736C / 0x557E7434 in front of Second Wind
+  (215 -> ValidTarget + ExpandAbility 0xC4 / base check AND not already shielded); t1/t2 in front of Undying's tails.
+  patch_tc_staticshield_target_v1.py (AoWTCPCK): cursor (0x41FA1C) + click (0x41DCF0) refuse a unit already holding
+  0xC4, chained in front of Miracle target's caves (decoded at apply time).
+  AI: TRemedy's AI valuers are empty -> the AI never casts it (like Second Wind / Martyr).
+
+---- 1. patch_dual_sphere_spells_v1.py: SPELLS entry (single-sphere block; Air = sphere 4) ----
+    dict(id=215, name="Static Shield", sphere=4, tier=4, mana=6, research=250,
+         donor="TRemedy", pfs_donor=45, tc_type=7, icon=215,           # patch_staticshield_v1.py: ability 0xC4 implies Lightning Immunity 0x09 + Lightning Strike 0x10 until the battle ends
+         pokes=[(0x22, 1, 0), (0x0C, 1, 2), (0x38, 4, 0xFFFFFFFF)],     # COMBAT spell type + combat-only cast context (as Second Wind) + range -1 = unlimited
+         desc="Wraps a friendly unit in crackling static until the end of the battle: it becomes immune to lightning and its attacks strike with lightning.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(3200, 3230)), -48, -86, f20=11, f18=1)},   # crackling static shell (96x96, Second Wind's canvas)
+         sfx=["SFX\\ZSP\\DUALAI_STATICSHIELD.WAV"]),
+
+---- 2. ceilings: append 0xC4 to LADDER in patch_tcablist_ceiling_v1.py and patch_aowx_banner_ceilings_v1.py
+        (after 0xC2/0xC3; bound -> 0xC5), re-run both after the Ability.pfs record is in.
+
+---- 3. build_dual_sphere_icons_v1.py ----
+  ICONS[215] = "staticshield"     CLOUDS["staticshield"] = 0 (Air = Haste's cloud)     GLYPHS["staticshield"] = glyph_staticshield
+  (no art import export reference image exists; no staticshield.png override)
+def glyph_staticshield():
+    """Static Shield (215, Air tier 4, 2026-10-16): a heater shield whose face is split by a bold lightning bolt (cut out
+    in black so the bolt reads as the shield's emblem), with jagged static arcs crackling off its rim (small zig-zag
+    sparks at the shoulders and flanks, kept clear of the rim by a dark gap)."""
+    im = canvas(); dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    cx = 20.0
+    def shield(inset):
+        top, sh = 5.0 + inset, 9.0 + inset
+        pts = [(cx - 11.0 + inset, top), (cx + 11.0 - inset, top), (cx + 11.0 - inset, 15.0)]
+        for k in range(1, 13):                                                                   # curved flank to the point
+            u = k / 12.0; pts.append((cx + (11.0 - inset) * (1 - u) ** 1.25, 15.0 + (16.5 - inset * 1.2) * math.sin(u * math.pi / 2)))
+        pts = pts + [(2 * cx - x, y) for x, y in reversed(pts[2:-1])] + [(cx - 11.0 + inset, 15.0)]
+        return pts
+    for k, (x0, y0, ang, ln) in enumerate(((cx - 12.6, 7.0, 200, 6.5), (cx + 12.6, 7.0, -20, 6.5), (cx - 12.4, 18.0, 160, 5.5),
+                                            (cx + 12.4, 18.0, 20, 5.5), (cx - 4.5, 3.6, 250, 4.2), (cx + 4.5, 3.6, 290, 4.2))):
+        a = math.radians(ang); ux, uy = math.cos(a), -math.sin(a); px, py = -uy, ux
+        zz = [(x0 + ux * ln * t + px * (1.3 if j % 2 else -1.3) * (0 < j < 4), y0 + uy * ln * t + py * (1.3 if j % 2 else -1.3) * (0 < j < 4))
+              for j, t in enumerate((0.0, 0.3, 0.55, 0.8, 1.0))]
+        dr.line(P(zz), fill=255, width=int(0.9 * S), joint="curve")                              # static arcs off the rim
+    dr.polygon(P(shield(-1.0)), fill=0)                                                          # dark gap round the shield
+    dr.polygon(P(shield(0.0)), fill=255)                                                         # the shield
+    bolt = [(cx + 2.6, 7.4), (cx - 4.6, 18.4), (cx - 0.6, 18.4), (cx - 3.0, 28.6), (cx + 5.0, 15.6), (cx + 0.9, 15.6), (cx + 4.2, 7.4)]
+    dr.polygon(P(bolt), fill=0)                                                                  # the lightning bolt emblem (cut out)
+    return im
+
+
+---- 4. build_dual_sphere_fx_v1.py: function (before def build()) + group-table row ----
+              (3200, staticshield_aura(), "AIsshld%02d.BMP", 770, 100, 0x0000),   # Static Shield (215) slot 0: crackling static shell (96x96, additive)
+def staticshield_aura(n=30):
+    """Static Shield (215) slot 0 (2026-10-16): 96x96, feet at (48, 86) (anchor -48/-86, Second Wind's canvas), ADDITIVE,
+    30 frames: a crackling electric SHELL wraps the unit - a pale-blue egg-shaped glow (centre (48, 58)) builds up while
+    jagged white-violet arcs crawl over its surface and snap out to short sparks, peaks with a bright flash, then the
+    shell settles and fades with a last few flickering arcs.  Arcs are re-randomised per frame (seeded -> stable art)."""
+    W = H = 96; SS = 3; cx, cy, rx, ry = 48.0, 58.0, 21.0, 27.0; rnd = random.Random(2150); out = []
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rr = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
+    for i in range(n):
+        t = i / (n - 1.0)
+        env = min(1.0, t / 0.3) if t < 0.3 else (1.0 if t < 0.6 else max(0.0, 1 - (t - 0.6) / 0.4))
+        shell = np.exp(-((rr - 1.0) / 0.10) ** 2) * 0.55 + np.exp(-(rr / 0.95) ** 6) * 0.12
+        flash = math.exp(-((t - 0.32) / 0.06) ** 2)
+        acc = np.zeros((H, W, 3), np.float32)
+        for c, cv in enumerate((120, 170, 255)): acc[..., c] += shell * env * cv
+        for c, cv in enumerate((220, 230, 255)): acc[..., c] += np.exp(-(rr / 0.7) ** 2) * flash * 0.6 * cv
+        big = Image.new("L", (W * SS, H * SS), 0); d = ImageDraw.Draw(big)
+        narcs = int(round((3 + 5 * env) * (0.6 + 0.4 * rnd.random())))
+        for _ in range(narcs if env > 0.05 else 0):
+            a0 = rnd.uniform(0, 2 * math.pi); span = rnd.uniform(0.5, 1.3); seg = 7
+            pts = []
+            for k in range(seg + 1):
+                a = a0 + span * k / seg; j = 1.0 + rnd.uniform(-0.12, 0.12)
+                pts.append(((cx + rx * j * math.cos(a)) * SS, (cy + ry * j * math.sin(a)) * SS))
+            d.line(pts, fill=255, width=SS, joint="curve")
+            if rnd.random() < 0.6:                                                        # a short spark snapping outward
+                a = a0 + span * rnd.random(); x0, y0 = cx + rx * math.cos(a), cy + ry * math.sin(a)
+                L = rnd.uniform(5, 10); px_, py_ = x0, y0; sp = [(px_ * SS, py_ * SS)]
+                for k in range(3):
+                    px_ += math.cos(a) * L / 3 + rnd.uniform(-2, 2); py_ += math.sin(a) * L / 3 + rnd.uniform(-2, 2); sp.append((px_ * SS, py_ * SS))
+                d.line(sp, fill=200, width=max(1, SS - 1))
+        arc = np.asarray(big.filter(ImageFilter.GaussianBlur(0.6 * SS)).resize((W, H), Image.BOX), np.float32) / 255.0
+        glow = np.asarray(Image.fromarray((arc * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2.0)), np.float32) / 255.0
+        lv = max(env, 0.25 if env > 0.05 else 0.0)
+        for c, (cv, gv) in enumerate(((235, 140), (240, 110), (255, 255))): acc[..., c] += (arc * cv * 1.3 + glow * gv * 0.9) * lv
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+
+---- 5. build_dual_sphere_sfx_v1.py: MIXES entry + DRIVE["DUALAI_STATICSHIELD.WAV"] = 1.6 + FADE_OUT["DUALAI_STATICSHIELD.WAV"] = 0.6 ----
+    # Static Shield (215, Air T4 2026-10-16): an electric shell snapping shut - the air elemental's hit slowed, a low
+    # vibrato hum building under it, a crackle train, the shock loop sped up, a beholder zap as the shell flashes, and
+    # a faint static glitter as it settles (no plain Lightning Bolt sample).
+    "DUALAI_STATICSHIELD.WAV": [("Zu/AIRelehit.wav", 0.6, 0.00, None, 0.3, 0.85),
+                             ("synth:beam:98:2.2", 0.5, 0.05, None, 0.9, 1.0, 0.3),
+                             ("synth:rattle:30:18:1.6", 0.3, 0.20, None, 0.6),
+                             ("Attack/Shockc.wav", 0.3, 0.10, 2.0, 0.8, 1.2, 0.2),
+                             ("Zu/Beholderzap.wav", 0.45, 0.55, None, 0.4, 0.9),
+                             ("synth:shimmer:1.6", 0.2, 0.60, None, 0.8)],
+  (tested through mix(): 2.25 s, peak 0.92 before normalise, no clipping; scratch render tmp\sshield\DUALAI_STATICSHIELD.WAV.
+   Zu/ZAPWeapon.WAV is IMA-ADPCM (fmt 17) - the builder cannot load it.)
+
+---- APPLY ORDER (game + editor closed) ----
+  a. fx -> sfx -> icons builders --apply, then patch_dual_sphere_spells_v1.py --apply (registers 215: TRemedy clone,
+     Air tier 4, mana 6, research 250; Spells.pfs key 225)
+  b. Ability.pfs records in order: 204 (Crosswind), 205 (Suspend), THEN patch_staticshield_ability_pfs_v1.py --apply
+     (record 206; it refuses while 205 is absent)
+  c. ceilings (LADDER += 0xC2, 0xC3, 0xC4) -> patch_tcablist_ceiling_v1.py --apply, patch_aowx_banner_ceilings_v1.py --apply
+  d. patch_staticshield_v1.py --apply             (AoWEPACK; after Suspend's script if it also chains 0x557BCF6E / the
+     t1/t2 tails - previous targets are decoded at apply time, so order only matters for revert)
+  e. patch_tc_staticshield_target_v1.py --apply   (AoWTCPCK; after any other script chained on 0x41DCF0 / 0x41FA1C)
+  f. VEH startup check
+REVERT ORDER: e, d (then b / pipeline as needed) - always the exact reverse of apply among scripts sharing a chain.
+
+---- CHAIN CONSEQUENCES (while applied) ----
+  * patch_secondwind_v1.py dry-run -> ex/vt OTHER -> ABORT (we sit in front of its TRemedy caves).  Expected.
+  * patch_undying_v1.py dry-run -> t1/t2 OTHER -> ABORT (verified on the scratch copy).  Expected.
+  * The 0x557BCF6E owner (Suspend's / Sanctify's reg script) reports its site as OTHER.  Expected.
+  * patch_tc_miracle_target_v1.py dry-run -> 'ABORT (zone not free)' (verified on the scratch copy).  Expected.
+  * If Suspend chains in front of t1/t2 or 0x557BCF6E AFTER Static Shield, Static Shield's dry run then reports OTHER -
+    same reverse-order rule.
+
+---- IN-GAME TESTS ----
+  1. Research list: Static Shield under Air tier 4 (250 research), cast cost 6, castable only in combat.
+  2. Cast on any friendly unit anywhere on the field (unlimited range): crackling shell + sound; the unit panel lists
+     "Static Shield (combat only)", Lightning Immunity and Lightning Strike.
+  3. Its melee hits now carry lightning; lightning attacks / spells (Lightning Bolt, Lightning Bolts, storms) do nothing to it.
+  4. Hovering the shielded unit again with the spell selected shows the invalid cursor; clicking does nothing and
+     spends no mana.  Enemy units are not valid targets.
+  5. After the battle 0xC4 and both granted abilities are gone; next battle it can be cast again.
+  6. Second Wind (heal + MP, its own re-cast block), Borrow Time, Martyr, Cleansing Flame, Undying, Angel Wings,
+     Swampwalk and Miracle targeting still behave as before.
+  7. Unverified: whether the TC-side range reads [spell+0x38] (if the cursor still limits the range, the TC range lives
+     elsewhere - report and poke that instead).

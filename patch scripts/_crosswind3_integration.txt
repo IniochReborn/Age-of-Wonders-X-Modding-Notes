@@ -1,0 +1,77 @@
+CROSSWIND (213) field wash v2 - integration (2026-10-16, fork; nothing below is applied live)
+=========================================================================================
+
+USER: "the GFX is absolutely awful. Make it the clouds EXACTLY like Air Mastery, and add particles IDENTICAL to Winds
+of Fury, except have them go across the map the way similar to World Healer except a different pattern."
+
+HOW THE VANILLA EFFECTS DRAW (RE)
+  Air Mastery (strategic, AoWEPACK): TAirMastery.ExecuteTE starts an animation object; draw callback 0x557F050C runs
+  90 ticks and EVERY tick draws N = 5 / 20 / 10 (detail setting [[0x558E945C]+0x6D] = 0 / 1 / other) sprites from the
+  spell's gfx slots 0..2 = pfs 70: MAGIC.ILB 160 / 161 / 162 (Cloud01-03.BMP, 201x118, drawMode 770 blend 30;
+  xs/ys -100/-53, -95/-53, -97/-56; kind 4, one frame) at x = Random(screenW) + 2d, y = Random(screenH) - d with
+  d = (tick - 45) * (Random(15) + 5), slot = Random(3).  Fresh random positions every tick -> flickering clouds whose
+  distribution streaks up-right across the screen over the 90 ticks.
+  World Healer (327) / Overgrowth / Ice Age = the same callback drawing their own slots 0..2 (same scatter pattern).
+  Winds of Fury (combat, kind 0x2F): its particles are kind-0x1F effects spawned @0x42BFE8 carrying the parent's
+  [fx+0x14]/[fx+0x18] (= spell 0x7E) on a swirl path (0x402E0C).  A kind-0x1F draws slot 0 of [fx+0x18] = pfs 136
+  slot 0 = PARTICLE.ILB [18,19,20,19] (19x19 blue-white glow orbs, 770/50, -9/-10), frame = frames[fx_ptr mod 3],
+  through GFXE's Intensity table at L = 100 - 100*tick/pathLen (fades along its path).
+  => a kind-0x1F effect with [fx+0x18] = 0x7E IS a Winds of Fury particle (identical image, blend, fade, flicker).
+  Ilpack GetTotalSequenceFrames (kind 4) = frames * (f18 + 1); a kind-0x26 driver expires when that many ticks ran.
+
+NEW DESIGN (patch_tc_crosswind_fx_v1.py v2, AoWTCPCK, upgrades the live v1 in place)
+  * the v1 static grid wash (re-rendered clouds/motes, DualDF 3300-3389) is GONE.
+  * TK hook @0x42DC19 (the kind-0x25 NewFrame entry; currently `jmp 0x43C480` = patch_tc_bloodbath_aura_v1's tick
+    dispatcher - we chain in front, prev kept in the zone header) -> for 213, every tick 0..89:
+      CLOUDS: 4 kind-0x26 drivers per tick at x = R(W+400)-200 + 2d, y = R(H+240)-120 - d, d = (tick-45)*(R(15)+5),
+      marker R(3)+2 -> slot 2/3/4 = the VANILLA MAGIC.ILB 160/161/162 at Air Mastery's own xs/ys and draw mode, one
+      frame, f18 = 2 (lives 3 ticks) = Air Mastery's flicker-streak, in combat world pixels over the whole field.
+      PARTICLES: every 4th tick up to 64 (17 waves) one wave of 8 Winds of Fury particles (kind 0x1F, spell 0x7E) on a
+      straight MakeLinePath from just left of the field (x0 = -60..-180) to just right (x1 = W+80), particle j starting
+      in height band j (+ jitter + a 3-step phase per wave), drifting DOWN ~30 %% of the field height while crossing
+      at 9..13 px/tick -> coherent diagonal streams sweeping across (not World Healer's random flicker-scatter).
+    W/H = HXtoHP(cols-1, rows-1) of combat map level 0 (+64), measured at tick 0.  Randomness = own LCG in BSS
+    0x46C6E4 seeded from the fx pointer (never the game's synced RNG) - visual only.
+  * S1/S2 (enemy-side sparkles + aura) and NF/SHOW (marker 2..4 -> slot 2..4) unchanged in behaviour.
+  * Zone 0x443C00-0x444000: 991 of 1024 B used (header: prev nf / prev show / prev tk / 'XXW2').  BSS 0x46C6E4 LCG,
+    0x46C6E8 W, 0x46C6EC H (0x46C6E0 = v1 latch, unused now).  No extra cave needed.  Tuning constants at the top of
+    the script: CLOUD_TICKS 90, N_CLOUDS 4 (Air Mastery's default detail = 10 per screen per tick; raise if the clouds
+    feel sparse on a big field), CX_PAD/CY_PAD, WAVE_EVERY 4, WAVE_LAST 64, N_WAVE 8.
+
+---- 1. patch_dual_sphere_spells_v1.py: entry 213 - REPLACE slots 2, 3, 4 (keep 0 and 1) with the vanilla clouds ----
+              2: G.seq_entry("EFFECTS\\MAGIC.ILB", [160], -100, -53, f18=2, f20=0),   # field wash: Air Mastery Cloud01 (driver marker 2, patch_tc_crosswind_fx_v1 v2)
+              3: G.seq_entry("EFFECTS\\MAGIC.ILB", [161], -95, -53, f18=2, f20=0),    # Air Mastery Cloud02 (marker 3)
+              4: G.seq_entry("EFFECTS\\MAGIC.ILB", [162], -97, -56, f18=2, f20=0)},   # Air Mastery Cloud03 (marker 4)
+   (the vanilla images are referenced directly - same ILB, same frames, same xs/ys and the images' own 770/30 draw
+    mode as Air Mastery's record; only f18 = 2 is ours, so each one-frame driver lives 3 ticks.)
+
+---- 2. build_dual_sphere_fx_v1.py ----
+   The three v1 group rows (3300 xwind_cloud(160), 3330 xwind_motes(), 3360 xwind_cloud(162)) are no longer
+   referenced - remove them (and the two functions) to keep DualDF.ILB smaller, or leave them (harmless).
+   No new art: the particles are Winds of Fury's own (kind 0x1F tagged spell 0x7E draws pfs 136 slot 0).
+
+---- APPLY ORDER (game + editor closed) ----
+  1. patch_dual_sphere_spells_v1.py --apply   (213 slots 2-4 -> MAGIC.ILB 160/161/162)
+  2. (optional) fx builder without the 3300/3330/3360 rows
+  3. py -3.10 patch_tc_crosswind_fx_v1.py --apply   ("v1 build found (grid wash) -> upgrading to v2")
+  4. VEH startup check
+  REVERT: patch_tc_crosswind_fx_v1.py --revert restores S1/S2/NF/SHOW/TK and zeroes the zone - byte-identical to the
+  v1 script's own --revert of the live DLL (verified on scratch).
+
+---- CHAIN CONSEQUENCES ----
+  * TK 0x42DC19 is now ours, in front of patch_tc_bloodbath_aura_v1's 0x43C480 -> that script's dry-run will see its
+    site as foreign: revert this script first before touching Bloodbath's aura / Heavenly Chorus halo timing.
+  * NF/SHOW as v1 (in front of the oil-gush caves 0x43B700 / 0x43B740).
+
+---- SCRATCH TESTS (tmp\xwind3\, copies of the live AoWTCPCK.dll) ----
+  dry-run: v1 detected -> upgrade OK; --apply written; re-run "already applied"; --revert written, second revert
+  "already reverted"; v2 --revert == v1 script's --revert of the live DLL (cmp identical); a fresh --apply on the
+  reverted copy == the upgrade (cmp identical); caves disassembled and read through (--dis).
+
+---- IN-GAME TESTS ----
+  1. Cast Crosswind: Air Mastery's clouds flicker-streak up-right across the whole battlefield for ~90 ticks, looking
+     like the strategic Air Mastery cast; glowing Winds-of-Fury orbs stream across the field left -> right in sweeping
+     diagonal bands, fading as they go.
+  2. The enemy-side sparkles / aura still play on the enemies; High Prayer / Heavenly Chorus / Bloodbath unchanged.
+  3. Winds of Fury itself unchanged; Oil Spring gush / Ashes / Call of the Dead spiral unchanged.
+  4. Frame rate on a big field (lower N_CLOUDS / N_WAVE if needed); cloud density feel (raise N_CLOUDS if sparse).

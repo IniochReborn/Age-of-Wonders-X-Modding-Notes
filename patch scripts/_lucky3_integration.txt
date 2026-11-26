@@ -1,0 +1,88 @@
+LUCKY (232) v3 - smoother emblem fade + polished sound (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+Builders: detect the newline per file (sfx + pipeline CRLF, fx + icons LF at the time of writing); ast.parse after editing.
+
+WHY THE FADE LOOKED ABRUPT: the vanilla pfs-49 chain's ENCHANT element plays [0,1,2,3,4,4..4,3,2,1,0] at f18=2 (3 ticks per
+frame) - only 5 strengths, so the fade-out is 4 visible 20 % steps over 12 ticks and the last frame (still 20 %) cuts to
+nothing, before the twinkles end.  v3: 12 emblem strengths (perceptual gamma 1.35) and a smoothstep timeline at 2 ticks per
+frame: 7-frame ease-in, 9-frame hold, 12-frame ease-out ending at ~3 % (invisible) = 28 frames / 56 ticks, so it now fades
+out together with the twinkles' end (~48-54 ticks).  Previews: tmp\lucky3\emblem_curve_old_vs_v3.png (grey = old, gold =
+new, brightness per tick) and emblem_seq_v3.png (the frames).
+
+== 1. build_dual_sphere_fx_v1.py (LF) - add this function right after `def _icon_emblem(...)` ==
+---- code ----
+def _icon_emblem_levels(glyph_name, n=12, gamma=1.35, tint=(255, 245, 210)):
+    """2026-10-18 (Lucky v3, user: smoother fade-out): _icon_emblem with N strengths instead of 5 - level k = (k/N)^gamma
+    so equal steps LOOK equal; the pipeline's _emblem_slot_seq timeline eases through them."""
+    import build_dual_sphere_icons_v1 as _ic
+    g = getattr(_ic, glyph_name)().resize((40, 35), Image.BOX)
+    m = Image.new("L", (64, 64), 0); m.paste(g, (12, 14))
+    a = np.asarray(m).astype(np.float32) / 255.0
+    glow = np.asarray(m.filter(ImageFilter.GaussianBlur(3))).astype(np.float32) / 255.0
+    out = []
+    for k in range(1, n + 1):
+        v = (a + 1.2 * glow) * (k / float(n)) ** gamma
+        out.append(Image.fromarray(np.clip(np.dstack([tint[0] * v, tint[1] * v, tint[2] * v]), 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+---- end ----
+1b. group row - right AFTER the (6520, _icon_emblem("glyph_lucky"), ...) row (DualDF 6525-6536 free; 6520-6524 stay, unused):
+---- code ----
+              (6525, _icon_emblem_levels("glyph_lucky"), "SElukem2_%02d.BMP", 770, 100, 0x0000),   # Lucky (232) v3 EMBLEM: 12 strengths (gamma 1.35) for a smooth eased fade
+---- end ----
+
+== 2. patch_dual_sphere_spells_v1.py (CRLF) ==
+2a. add this helper right after `def _emblem_slot(...)` (before the first `SPELLS += [`):
+---- code ----
+def _emblem_slot_seq(key, slot, ids, f18=None, path=None):
+    """2026-10-18 (Lucky v3): like _emblem_slot, but the ENCHANT.ILB emblem element gets an explicit DualDF id TIMELINE
+    (e.g. an eased ramp through 12 strengths) and optionally its own ticks-per-frame (f18); the twinkle chain is untouched."""
+    import copy
+    e = copy.deepcopy(_pfs_slot(key, slot, path)); x = e
+    while x:
+        if "ENCHANT.ILB" in x["name"].upper():
+            x["name"] = "EFFECTS\\DUALDF.ILB"; x["frames"] = list(ids)
+            if f18 is not None: x["f18"] = f18
+        x = x.get("chain")
+    return e
+---- end ----
+2b. entry 232 (Lucky) - replace its gfx line with:
+---- code ----
+         gfx={0: _emblem_slot_seq(49, 0, [6526, 6527, 6529, 6532, 6534, 6535] + [6536] * 9 + [6535, 6535, 6534, 6533, 6532, 6530, 6529, 6528, 6527, 6526, 6526, 6525, 6525], f18=1, path=VANILLA_PFS)},   # v3 10/18 (user: smoother fade-out): 12 emblem strengths, eased in / hold / out at 2 ticks per frame (56 ticks, ends ~3 %) on the vanilla green-twinkle chain
+---- end ----
+
+WHY THE SOUND FELT JANKY: four Karplus plucks 60 ms apart with a ~3 ms attack (each note a sharp click), every voice cut by a
+50 ms end-fade after 1.2 s, the coin ting loud and abrupt, DRIVE 1.3 squashing the onsets, and no whole-mix tail - so it
+stopped rather than rang out.  v3 (same notes and idea): 22 ms soft pluck attacks, notes 85 ms apart each ringing 2.2 s
+with slow curved fades (legato overlap), a gentle top-note taper (0.44 / 0.42 / 0.40 / 0.37), two soft echoes of the
+arpeggio (190 ms at 22 %, 380 ms at 9 %) as a reverb-like tail, a quieter coin ting with a 12 ms fade-in, long shimmer +
+the EnchP01 chime with slow fades, DRIVE 1.2, whole-mix FADE_OUT 1.0.  2.83 s, RMS 0.255 (live 0.242); largest 20 ms
+envelope step in the tail 0.002 (live 0.005), onsets softer (max step 0.151 vs 0.186).
+Renders: tmp\lucky3\DUALSE_LUCKY_v3.wav (new) and DUALSE_LUCKY_old.wav (live).
+
+== 3. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALSE_LUCKY.WAV" entry AND its 3 comment lines above it with ==
+---- code ----
+    # Lucky v3 (2026-10-18, user: "not bad but needs polish, smoothed out - feels janky"): the same rising plucked-harp
+    # arpeggio (E5 G5 B5 E6) now LEGATO - soft 22 ms pluck attacks, notes 85 ms apart each ringing 2.2 s with slow fades -
+    # with two soft echoes (190 / 380 ms) as a reverb tail, a quieter coin ting, a long shimmer and the EnchP01 chime.
+    "DUALSE_LUCKY.WAV":     [("synth:harp:659:2.2", 0.44, 0.000, None, 1.4, 1.0, 0.022, 0.0, 0.55),
+                             ("synth:harp:784:2.2", 0.42, 0.085, None, 1.4, 1.0, 0.022, 0.0, 0.55),
+                             ("synth:harp:988:2.2", 0.40, 0.170, None, 1.4, 1.0, 0.022, 0.0, 0.55),
+                             ("synth:harp:1319:2.2", 0.37, 0.255, None, 1.4, 1.0, 0.022, 0.0, 0.55),
+                             ("synth:harp:659:2.2", 0.097, 0.190, None, 1.4, 1.0, 0.02, 0.0, 0.55),
+                             ("synth:harp:784:2.2", 0.092, 0.275, None, 1.4, 1.0, 0.02, 0.0, 0.55),
+                             ("synth:harp:988:2.2", 0.088, 0.360, None, 1.4, 1.0, 0.02, 0.0, 0.55),
+                             ("synth:harp:1319:2.2", 0.081, 0.445, None, 1.4, 1.0, 0.02, 0.0, 0.55),
+                             ("synth:harp:659:2.2", 0.040, 0.380, None, 1.4, 1.0, 0.03, 0.0, 0.55),
+                             ("synth:harp:784:2.2", 0.038, 0.465, None, 1.4, 1.0, 0.03, 0.0, 0.55),
+                             ("synth:harp:988:2.2", 0.036, 0.550, None, 1.4, 1.0, 0.03, 0.0, 0.55),
+                             ("synth:harp:1319:2.2", 0.033, 0.635, None, 1.4, 1.0, 0.03, 0.0, 0.55),
+                             ("Events/Gold.WAV", 0.12, 0.30, 0.40, 0.30, 1.2, 0.012, 0.05, 0.6),
+                             ("synth:shimmer:1.8", 0.16, 0.08, None, 1.1, 1.0, 0.25, 0.0, 0.6),
+                             ("Attack/EnchP01.WAV", 0.22, 0.02, 1.4, 0.9, 1.1, 0.03, 0.0, 0.6)],
+---- end ----
+3b. DRIVE dict: "DUALSE_LUCKY.WAV": 1.3 -> 1.2        FADE_OUT dict: "DUALSE_LUCKY.WAV": 0.6 -> 1.0
+
+== 4. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply           (DualDF += 6525-6536)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply          (DUALSE_LUCKY.WAV v3)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply       (Spells.pfs 232 gfx timeline)
+  No engine change.  Trial-integrated in memory: all three builders parse; the fx row yields exactly 12 images (6525-6536).

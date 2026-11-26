@@ -1,0 +1,193 @@
+HURL SKULL v8 (2026-10-19, fork; NOTHING applied live, no shared builder edited).
+User on art v7: (1) "make the explosion about 20 % smaller"; (2) "the projectile needs a bit more glow (but don't make it
+fat) that stretches to meet its tail, which is currently separated from the projectile"; (3) "the hit sfx is good, just
+layer in an added crunch to make it sound more heavy".
+
+(1) ExplBig.ILB is shared with Self Destruct and stays untouched: explbig80() COPIES its 30 frames into DualDF scaled to
+    80 % (274x258 -> 219x206, linear-light Lanczos on black, drawMode 514 + the vanilla per-frame blends kept by the
+    rows: 100 x21 then 95..20); skull_death_burst80() = the v7 death layer at the same 80 % (on white, Lanczos).
+    patch_bxl_ranged_ability_pfs_v7.py points record 214 slot 2 at the two (anchor -105/-113 = vanilla -131/-142 x 0.8,
+    vanilla kind/timing).  Old frames 7680-7709 stay (revert target).
+(2) patch_bxl_ranged_abilities_v6.py: the trail puff is spawned ONE path point behind the skull (was two) from index 2
+    (was 3) - two immediates in the NF cave, same layout; plus art: the young puff is bigger / brighter / longer-lived
+    (fire r 6 px, 55 %, gone by frame 10; smoke r 5 px, gone by frame 12) and the head's fire rim brighter (ring 0.5 ->
+    0.8 + a soft hot inner halo at r 6.5-9 px) - no wider reach (~11 px), death aura a touch deeper/softer.
+(3) SKULL_HIT: three heavy crunch layers added right after the existing crunch block (A_Punch1 pitched 0.62 at +25 ms,
+    stones pitched 0.68 at +30 ms, D_WoodLG splinter 0.72 at +20 ms); everything else unchanged (DRIVE 2.6 / FADE 0.7).
+
+---- code: build_dual_sphere_fx_v1.py - REPLACE the defs skull_death_aura / skull_fire_aura / deathfire_puff_smoke /
+     deathfire_puff_fire by name, and INSERT the SK8_* constants + _sk8_size / explbig80 / skull_death_burst80 before
+     `def build():` (int_skull8.py does both) ----
+def skull_death_aura(n=12):
+    """Hurl Skull slot 0 layer 1 of 3 (under the bone) - v8 (2026-10-19 user: 'a bit more glow, but don't make it
+    fat'): v7's tight black death aura, a touch DEEPER and SOFTER near the skull (92 % dark core to r 6.5 px, fall-off
+    3.0 px instead of 2.6) - same footprint (gone by ~10.5 px).  MULTIPLY (1026), 64x64, centre 31/33, 12 frames."""
+    W = H = 64; cx, cy = 31.0, 33.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    out = []
+    for i in range(n):
+        ph = 2 * math.pi * i / n
+        R = 3.0 + 0.3 * math.sin(ph)
+        r = np.sqrt((xx - cx) ** 2 + ((yy - cy) * 1.05) ** 2)
+        core = 0.92 * np.exp(-(np.maximum(r - 6.5, 0) / R) ** 2)
+        wisp = np.zeros_like(r)
+        for k, (ox, sp) in enumerate(((-2.5, 1.0), (2.5, 1.3))):
+            t = ((i / n) * sp + k / 2.0) % 1.0
+            wx = cx + ox + 1.0 * math.sin(ph + k * 2.1); wy = cy - 6 - 5 * t; wr = 1.8 + 1.4 * t
+            wisp = np.maximum(wisp, 0.40 * (1 - t) * np.exp(-((xx - wx) ** 2 + (yy - wy) ** 2) / (wr * wr)))
+        out.append(_sk5_mul(np.maximum(core, wisp)))
+    return out
+
+
+def skull_fire_aura(n=12):
+    """Hurl Skull slot 0 layer 3 of 3 (over the bone) - v8 (user: 'a bit more glow, but don't make it fat'): v7's thin
+    fire rim, BRIGHTER: the ring at ~8 px goes 0.5 -> 0.8 and a soft hot inner halo (r 6.5-9 px) glows right against the
+    black shroud; tongues unchanged (~4 px).  Same reach (~11 px).  ADDITIVE (770), vanilla fire ramp, hollow inside
+    r < 6.3 so the bone stays white.  64x64, centre 31/33, 12 frames."""
+    W = H = 64; cx, cy = 31.0, 33.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rnd = random.Random(5712)
+    tongues = [(rnd.uniform(0, 2 * math.pi), rnd.uniform(0.7, 1.3), rnd.uniform(0, 6.28)) for _ in range(10)]
+    stops = np.array([s[0] for s in SK5_FIRE], np.float32)
+    out = []
+    for i in range(n):
+        ph = 2 * math.pi * i / n
+        ang = np.arctan2(yy - cy, xx - cx); r = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        ring = np.exp(-((r - 8.0) / 1.4) ** 2) * (0.6 + 0.4 * np.sin(ang * 3 + ph * 2) ** 2)
+        halo = (0.42 + 0.08 * math.sin(ph * 2)) * np.exp(-((r - 7.2) / 1.9) ** 2)
+        heat = np.maximum(0.8 * ring, halo)
+        for (a0, ln, p0) in tongues:
+            fl = 0.65 + 0.35 * math.sin(ph * 2 + p0)
+            bx, by = cx + 7.5 * math.cos(a0), cy + 7.2 * math.sin(a0)
+            for s in np.linspace(0, 1, 8):
+                L = 4.2 * ln * fl * s
+                px_ = bx + math.cos(a0) * L * 0.3 + 0.4 * math.sin(ph + p0 + 3 * s); py_ = by + math.sin(a0) * L * 0.15 - L
+                w = 1.3 * (1 - s) ** 0.7 + 0.35
+                heat = np.maximum(heat, (1 - s) ** 1.2 * 0.75 * np.exp(-((xx - px_) ** 2 + (yy - py_) ** 2) / (w * w)))
+        heat = heat * np.clip((r - 6.3) / 1.6, 0, 1)
+        t = 1.0 - np.clip(heat, 0, 1)
+        rgb = np.zeros((H, W, 3), np.float32)
+        for c in range(3):
+            vals = np.array([s[1][c] for s in SK5_FIRE], np.float32)
+            rgb[:, :, c] = np.interp(t, stops, vals) * np.clip(heat * 1.25, 0, 1)
+        out.append(_sk5_add(rgb))
+    return out
+
+
+def deathfire_puff_smoke(n=16):
+    """Hurl Skull slot 3 layer 1 (the TRAIL) - v8 (user: 'the tail is separated from the projectile'): engine v6 now
+    drops each puff ONE path point behind the skull (was two), and the young dab is a little bigger and lasts longer so
+    the streak reaches into the skull's own aura: ~40 % dark at the centre, r 5 px at birth shrinking to ~3 px, gone by
+    frame 12 of 16.  MULTIPLY (1026), 48x48, centre 23/23 (unchanged canvas/anchor/ids)."""
+    W = H = 48; cx, cy = 23.0, 23.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rr2 = (xx - cx) ** 2 + (yy - cy) ** 2
+    out = []
+    for i in range(n):
+        life = max(0.0, 1.0 - i / 12.0)
+        R = 3.2 + 1.8 * life
+        amt = 0.40 * life ** 1.1 * np.exp(-rr2 / (R * R))
+        out.append(_sk5_mul(amt))
+    return out
+
+
+def deathfire_puff_fire(n=16):
+    """Hurl Skull slot 3 layer 2 (the TRAIL) - v8: the hot leading glow of the streak, brighter and longer-lived at
+    birth so it bridges to the skull's fire rim: a soft Gaussian r 6 px at birth shrinking to ~3, ~55 % at birth, the
+    vanilla fire ramp cooling orange -> deep red, gone by frame 10.  ADDITIVE (770), 48x48."""
+    W = H = 48; cx, cy = 23.0, 23.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rr2 = (xx - cx) ** 2 + (yy - cy) ** 2
+    out = []
+    for i in range(n):
+        life = max(0.0, 1.0 - i / 10.0)
+        rgb = np.zeros((H, W, 3), np.float32)
+        if life > 0:
+            R = 3.0 + 3.0 * life
+            heat = 0.55 * life ** 1.15 * np.exp(-rr2 / (R * R))
+            col = np.array(_sk5_firecol(0.30 + 0.60 * (1 - life)), np.float32)
+            rgb = heat[:, :, None] * col[None, None, :]
+        out.append(_sk5_add(rgb))
+    return out
+
+
+SK8_SCALE = 0.8
+SK8_EXPL_BLEND = [100] * 21 + [95, 90, 80, 70, 60, 50, 40, 30, 20]   # vanilla ExplBig 0-29 blend values (all drawMode 514)
+_SK8_EXPL, _SK8_BURST = [], []
+
+
+def _sk8_size():
+    return int(round(274 * SK8_SCALE)), int(round(258 * SK8_SCALE))   # 219 x 206; impact 131/142 -> 105/113
+
+
+def explbig80():
+    """Hurl Skull v8 impact (record 214 slot 2, pfs v7) - user: 'make the explosion about 20 % smaller'.  Self
+    Destruct's own ExplBig.ILB 0-29, untouched in ExplBig.ILB (shared with Self Destruct), COPIED here scaled to 80 %
+    (274x258 -> 219x206): each frame composited onto black (its BRIGHTEN mode 514 adds light, so black = nothing),
+    Lanczos-downscaled in linear-ish space, re-keyed where the light drops below 4/255.  drawMode 514 and the vanilla
+    per-frame blend values (100 x21, then 95..20) are kept by the rows."""
+    if _SK8_EXPL: return _SK8_EXPL
+    src = _aowx_ilb_frames(os.path.join("Effects", "ExplBig.ILB"), list(range(30)))
+    W, H = _sk8_size()
+    for s in src:
+        a = np.array(s).astype(np.float32)
+        rgb = a[:, :, :3] * (a[:, :, 3:4] / 255.0)
+        lin = (rgb / 255.0) ** 2.2
+        ch = []
+        for c in range(3):
+            plane = Image.fromarray((lin[:, :, c] * 65535).astype(np.float32), "F").resize((W, H), Image.LANCZOS)
+            ch.append(np.clip(np.array(plane) / 65535.0, 0, 1) ** (1 / 2.2) * 255)
+        o = np.dstack(ch)
+        al = np.where(o.max(2) >= 4, 255, 0)
+        _SK8_EXPL.append(Image.fromarray(np.dstack([np.clip(o, 0, 255), al]).astype(np.uint8), "RGBA"))
+    return _SK8_EXPL
+
+
+def skull_death_burst80():
+    """Hurl Skull v8 slot 2 layer 1 - v7's death layer (no ring: dark pall, black shards, two thin wisps, MULTIPLY 1026)
+    scaled to 80 % with the explosion it sits under (219x206, impact 105/113): composited onto white (multiply's no-op),
+    Lanczos-downscaled, re-keyed where it darkens > 1.5 %."""
+    if _SK8_BURST: return _SK8_BURST
+    W, H = _sk8_size()
+    for s in skull_death_burst():
+        a = np.array(s).astype(np.float32)
+        k = a[:, :, 3:4] / 255.0
+        rgb = a[:, :, :3] * k + 255.0 * (1 - k)
+        ch = [np.array(Image.fromarray(rgb[:, :, c], "F").resize((W, H), Image.LANCZOS)) for c in range(3)]
+        o = np.clip(np.dstack(ch), 0, 255)
+        al = np.where(o.min(2) <= 251, 255, 0)
+        _SK8_BURST.append(Image.fromarray(np.dstack([o, al]).astype(np.uint8), "RGBA"))
+    return _SK8_BURST
+---- end ----
+---- rows: build_dual_sphere_fx_v1.py build() - add right after the (7680, skull_death_burst(), ...) row ----
+              (7710, skull_death_burst80(), "HSbu8%02d.BMP", 1026, 100, KEY),      # Hurl Skull v8 slot 2 layer 1 (pfs v7): v7 death layer at 80 % (219x206)
+              (7740, explbig80()[:21], "HSx8%02d.BMP", 514, 100, KEY),              # Hurl Skull v8 slot 2 layer 2 (pfs v7): Self Destruct ExplBig 0-20 at 80 %, vanilla mode/blend
+              (7761, explbig80()[21:22], "HSx8_21_%d.BMP", 514, 95, KEY),
+              (7762, explbig80()[22:23], "HSx8_22_%d.BMP", 514, 90, KEY),
+              (7763, explbig80()[23:24], "HSx8_23_%d.BMP", 514, 80, KEY),
+              (7764, explbig80()[24:25], "HSx8_24_%d.BMP", 514, 70, KEY),
+              (7765, explbig80()[25:26], "HSx8_25_%d.BMP", 514, 60, KEY),
+              (7766, explbig80()[26:27], "HSx8_26_%d.BMP", 514, 50, KEY),
+              (7767, explbig80()[27:28], "HSx8_27_%d.BMP", 514, 40, KEY),
+              (7768, explbig80()[28:29], "HSx8_28_%d.BMP", 514, 30, KEY),
+              (7769, explbig80()[29:30], "HSx8_29_%d.BMP", 514, 20, KEY),
+---- end ----
+---- MIX: build_dual_sphere_sfx_v1.py - in "SKULL_HIT.WAV", insert after the ("Attack/A_Force1.WAV", ...) line ----
+                        ("Attack/A_Punch1.WAV", 1.10, 0.025, None, 0.08, 0.62),        # v8 (user: 'layer in an added CRUNCH, more heavy'): a second, deeper punch 25 ms after the first
+                        ("xSFX/stones.wav", 0.95, 0.030, 0.55, 0.25, 0.68),            # v8: low gravel / bone grind, pitched well down
+                        ("Hit_Death/D_WoodLG.WAV", 0.55, 0.020, 0.45, 0.20, 0.72),     # v8: a splintering crack under it
+---- end ----
+
+APPLY ORDER (game + editor closed):
+  1. py -3.10 int_skull8.py                     (pastes the code / rows / mix into the two builders; idempotent)
+  2. py -3.10 build_dual_sphere_fx_v1.py --apply   (DualDF: 7624-7679 redrawn, NEW 7710-7769)
+  3. py -3.10 build_dual_sphere_sfx_v1.py --apply  (Sfx\Zsp\SKULL_HIT.WAV)
+  4. py -3.10 patch_bxl_ranged_abilities_v6.py --apply   ("upgrading v5 -> v6 in place")
+  5. py -3.10 patch_bxl_ranged_ability_pfs_v7.py --apply (record 214 slot 2 -> 80 % explosion)
+  6. VEH startup check.
+  Ship AoWTCPCK.dll, AoWEPACK.dll, Release\Ability.pfs, Images\Effects\DualDF.ILB, --add Sfx\Zsp\SKULL_HIT.WAV.
+REVERT: pfs v7 --revert (exact pre-v7 record) -> engine v6 --revert (== v5 --revert, pre-BXL state; or re-apply v5);
+  art: put the v7 defs back from tmpxlabil7rt7.py (ids unchanged), drop the 7710/7740.. rows; mix: delete the 3 lines.
+  WARNING: do not run patch_bxl_ranged_ability_pfs_v6.py --apply while v7 is applied - v6 does not recognise v7 and
+  would rebuild v6 over it (and overwrite its pre-v6 side copy).  Its --revert path is harmless ("not applied").
+TEST: throw at a group - smaller blast (same look); the glowing tail runs right into the skull; heavier impact crunch.

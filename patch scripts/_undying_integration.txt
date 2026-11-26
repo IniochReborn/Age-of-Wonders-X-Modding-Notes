@@ -1,0 +1,79 @@
+UNDYING (spell 210, Death tier 2) - integration snippets (2026-10-16, fork; nothing below is applied live)
+=====================================================================================================
+
+IDS / ROOM CLAIMED:
+  spell 210 (pfs key 220, SpellIcn id 210) . ability 0xC1 'Undying' (Ability.pfs record 203; 202 Sanctified Ground must
+  be present) . DualDF 2964-2968 (emblem x5 strengths) -> next free 2969 . AoWEPACK zone 0x55869000-0x55869800 (387 B
+  used; verified zero, no relocs) . RegisterAbility site 0x557BCDFB (the 0x8A site, same body as Angel Wings' 0x557BCECF;
+  was vanilla/free - 0x557BCE30 is still free).  Sound file Sfx\Zsp\DUALDE_UNDYING.WAV (new prefix: add DUALDE_* to the
+  ship list).  Icon mask patch scripts\undying_user_mask.png (NEW file: the user's art import export\undying.jpg - an
+  infinity serpent - traced, 1 px thickened; only <key>.png overrides, so undying.jpg is no trap).
+
+ENGINE (RE summary):
+  Death Immunity = 0x0B, Regeneration = 0x31.  Regeneration in this build is ONLY the strategic new-turn heal
+  TAbstractUnit @0x55780D4C: `GetAbilityEnabled(0x31)` via unit VMT+0x148 @0x55780D9D picks the FULL heal over the
+  normal partial one (and Cursed 0x5D blocks healing first).  No tactical per-round regeneration exists anywhere (no other
+  code asks for 0x31).  So an implied 0x31 answered by the VMT+0x148 tail really heals.  Death Immunity reaches the
+  immunity-mask builder through the VMT+0x88 owner tail (same path Angel Wings' weaknesses use).
+  patch_undying_v1.py = Angel Wings' mechanism with ability 0xC1 / spell 210 / IMPLIED (0x0B, 0x31), chained IN FRONT of
+  Angel Wings' caves on ex 0x557E7D90 / vt 0x557E7E00 / t1 0x5574FD98 / t2 0x5577F612, reg splice 0x557BCDFB.
+  Enchantment upkeep / dispel / expiry = vanilla TUnitEnchantment path (Water Walking clone), as Angel Wings.
+
+---- 1. patch_dual_sphere_spells_v1.py: SPELLS entry (single-sphere block, after dict(id=209 ...) Miracle) ----
+    dict(id=210, name="Undying", sphere=2, tier=2, mana=4, research=80, upkeep=2,
+         donor="TWaterWalking", pfs_donor=52, tc_type=7, icon=210,        # patch_undying_v1.py: ability 0xC1 implies Death Immunity 0x0B + Regeneration 0x31
+         desc="Enchants a unit with unnatural endurance: it becomes immune to death damage and regenerates its wounds.",
+         gfx={0: _emblem_slot(52, 0, 2964, VANILLA_PFS)},                   # Water Walking's twinkle chain with OUR emblem (the icon glowing, DualDF 2964-2968)
+         sfx=["SFX\\ZSP\\DUALDE_UNDYING.WAV"]),
+
+---- 2. ceilings: append 0xC1 to LADDER in patch_tcablist_ceiling_v1.py and patch_aowx_banner_ceilings_v1.py
+        (bound 0xC1 -> 0xC2), re-run both after the Ability.pfs record is in.
+
+---- 3. build_dual_sphere_icons_v1.py ----
+  ICONS[210] = "undying"      CLOUDS["undying"] = 20 (Death cloud)      GLYPHS["undying"] = glyph_undying
+def glyph_undying():
+    """Undying (210, Death tier 2, 2026-10-16): the user's reference art import export/undying.jpg - a serpent coiled
+    into an infinity sign, eating round to its own tail - TRACED (ink < 128, fit 38x33 px, centred, MaxFilter(7) at 8x
+    = ~1 px thicker) -> undying_user_mask.png."""
+    return _user_mask_glyph("undying_user_mask.png")
+
+---- 4. build_dual_sphere_fx_v1.py: group-table row (next to the Angel Wings / Swampwalk emblem rows) ----
+              (2964, _icon_emblem("glyph_undying"), "DEundemb%d.BMP", 770, 100, 0x0000),   # Undying (210) emblem: its icon glowing x5 strengths (replaces Water Walking's ENCHANT emblem)
+
+---- 5. build_dual_sphere_sfx_v1.py: MIXES + DRIVE ----
+    # Undying (210, Death T2 2026-10-16): the Death sphere's cast, two slow heavy heartbeats (life that will not stop),
+    # a dark minor choir swelling in and a low sub swell.
+    "DUALDE_UNDYING.WAV":   [("Attack/m_Death.wav", 1.0, 0.00, 2.6, 0.9),
+                             ("Kain/HEARTB.wav", 0.8, 0.35, 0.45, 0.15, 0.8),
+                             ("Kain/HEARTB.wav", 0.7, 1.15, 0.45, 0.15, 0.8),
+                             ("synth:choir:110:2.2:minor", 0.5, 0.30, None, 0.8, 1.0, 0.5),
+                             ("synth:subswell:30:50:2.2", 0.4, 0.00, None, 0.9)],
+  DRIVE += {"DUALDE_UNDYING.WAV": 1.5}
+  (tested through mix(): 2.6 s, peak before normalise 0.91; scratch render tmp\undy\DUALDE_UNDYING.WAV)
+
+---- APPLY ORDER (game + editor closed) ----
+  a. icons -> fx -> sfx builders --apply, then patch_dual_sphere_spells_v1.py --apply (registers 210 as a TWaterWalking
+     clone: sphere 2 / tier 2 / mana 4 / research 80 / upkeep 2; Spells.pfs key 220)
+  b. patch_undying_ability_pfs_v1.py --apply   (record 203)
+  c. ceilings (LADDER += 0xC1) -> patch_tcablist_ceiling_v1.py --apply, patch_aowx_banner_ceilings_v1.py --apply
+  d. patch_undying_v1.py --apply               (needs patch_angelwings_v1.py applied - it chains its 4 jmp sites)
+  e. VEH startup check (an "Ability already registered" / runtime 216 at startup = the reg site collided)
+REVERT ORDER: d, then b (and the pipeline entry as needed).
+
+---- CHAIN CONSEQUENCES (while applied) ----
+  * patch_angelwings_v1.py dry-run -> ex/vt/t1/t2 'OTHER' -> ABORT (verified on the scratch copy).  Expected.  To touch
+    Angel Wings or Swampwalk (both behind it), revert Undying (d) first, re-apply after.
+  * Nothing else is in front of / behind the reg site 0x557BCDFB.  Sanctify's fl prologue hook (0x5577F5E0) sits earlier
+    in the same GetAbilityEnabled and is unaffected (it falls through to the body, whose not-present tail reaches us).
+
+---- IN-GAME TESTS ----
+  1. Research list: Undying under Death tier 2 (80 research), cast 4, upkeep 2 shown and charged each turn.
+  2. Cast on a unit (strategic map and in combat): glowing infinity-serpent emblem + sound; the unit panel lists
+     "Undying", Death Immunity and Regeneration.
+  3. Death damage (e.g. Death Ray / death strike) does nothing to it.
+  4. Damaged enchanted unit heals FULLY at the start of the owner's next turn (Regeneration's strategic heal; a Cursed
+     unit still does not heal - vanilla rule).
+  5. Can't re-cast on a unit already Undying.  Dispel / unpaid upkeep removes Undying and both granted abilities.
+  6. Angel Wings + Swampwalk still work (same chain).
+  7. Note: like vanilla Regeneration there is NO per-round healing in combat (this build has none) - if wanted, that is
+     new tactical work.

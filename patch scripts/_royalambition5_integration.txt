@@ -1,0 +1,53 @@
+ROYAL AMBITION (230) round 5 - faithful line-art icon + the ORIGINAL sfx concept rebuilt clean (2026-10-18, fork;
+NOTHING applied live, no shared builder edited).
+
+ICON: new mask patch scripts/royalambition5_user_mask.png (generator: tmp/royal5/mk_royal5_mask.py). Both mask outlines,
+the eye sockets, nose, cheek crease, lip lines, brow, tear streaks and frown are placed from coordinates MEASURED on the
+source (art import export/royal ambition.jpg; overlay check tmp/royal5/all_overlay.png = icon strokes in green over the
+source strokes in red). Eye holes = the source's almond shapes (x1.3 so they survive 40x35); the grin = ink between the
+lips with 4 teeth cut out (as in the source); hatching/noise dropped; stroke 1.6 px at 40x35 (v4 ~2.2); composition
+tilted -14 deg (close to the source's own lean). Preview: tmp/royal5/icon_v4_vs_v5.png (source | v4 | v5).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition5_user_mask.png")    # v5 10/18: line art traced from measured source coordinates, 1.6 px strokes
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_ROYAL.WAV" entry AND its comment lines above it with ==
+---- code ----
+    # Royal Ambition v5 (2026-10-18, user: "terrible - revert to the ORIGINAL and improve it"): the v1 concept (brass
+    # C-E-G fanfare into a held C/G chord, strings + choir, a timpani on the arrival, bell + shimmer) rebuilt clean:
+    # every pitch exact C major (C2 timpani with a G2 pickup/echo instead of the off-key 70 Hz drum; no gliding
+    # sub-bass), each brass note = the steady HEAD of a long horn tone with an 80 ms attack and a natural release
+    # (no swell-then-cut), the fanfare doubled an octave down for body, a rising C-E-G-C bell arpeggio for the magic;
+    # no drive (no distortion).
+    "DUALCO_ROYAL.WAV":     [('synth:drum:98.00:0.9', 0.3, 0.02, None, 0.4),
+                             ('synth:horn:261.63:261.63:4.0', 1.3, 0.05, 0.24, 0.1, 1, 0, 0, 1.8),
+                             ('synth:horn:130.81:130.81:4.0', 0.6, 0.05, 0.24, 0.1, 1, 0, 0, 1.8),
+                             ('synth:horn:329.63:329.63:4.0', 1.3, 0.32, 0.24, 0.1, 1, 0, 0, 1.8),
+                             ('synth:horn:164.81:164.81:4.0', 0.6, 0.32, 0.24, 0.1, 1, 0, 0, 1.8),
+                             ('synth:horn:392.00:392.00:4.0', 1.3, 0.59, 0.26, 0.1, 1, 0, 0, 1.8),
+                             ('synth:horn:196.00:196.00:4.0', 0.6, 0.59, 0.26, 0.1, 1, 0, 0, 1.8),
+                             ('synth:horn:523.25:523.25:14.0', 1.35, 0.88, 1.7, 1.1, 1, 0, 0, 1.8),
+                             ('synth:horn:392.00:392.00:14.0', 0.95, 0.88, 1.7, 1.1, 1, 0, 0, 1.8),
+                             ('synth:horn:329.63:329.63:14.0', 0.75, 0.88, 1.65, 1.05, 1, 0, 0, 1.8),
+                             ('synth:horn:261.63:261.63:14.0', 0.7, 0.88, 1.75, 1.15, 1, 0, 0, 1.8),
+                             ('synth:strings:130.81:2.6', 0.38, 0.84, None, 1),
+                             ('synth:choir:261.63:2.3', 0.28, 0.95, None, 1),
+                             ('synth:drum:65.41:1.2', 0.55, 0.88, None, 0.6),
+                             ('synth:drum:98.00:0.8', 0.22, 1.2, None, 0.4),
+                             ('synth:bell:1046.50:1.4', 0.16, 0.9, None, 0.7),
+                             ('synth:bell:1318.51:1.3', 0.12, 1.02, None, 0.7),
+                             ('synth:bell:1567.98:1.2', 0.1, 1.14, None, 0.7),
+                             ('synth:bell:2093.00:1.4', 0.07, 1.26, None, 0.8),
+                             ('synth:shimmer:2.4', 0.26, 0.88, None, 1)],
+---- end ----
+  DRIVE dict: "DUALCO_ROYAL.WAV": 1.0 (keep - no drive).   FADE_OUT dict: "DUALCO_ROYAL.WAV": 1.2 -> 1.0
+  Renders: tmp/royal5/DUALCO_ROYAL_v5.wav (3.44 s) vs tmp/royal5/DUALCO_ROYAL_v1_original.wav (the 10/17 original).
+  Spectrum 1.1-1.6 s: v5 = 66/98/262/330/392/523/784/1046/1568 Hz (pure C major); v1 had 50 + 70 Hz (glide + off-key drum).
+  Fanfare notes: RMS rises then decays per note (v1 swelled to the end and was cut).
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  No pipeline / DLL change.

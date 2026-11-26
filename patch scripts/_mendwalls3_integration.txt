@@ -1,0 +1,252 @@
+MEND WALLS (216) v3 - debris pulled out of the ground into the wall + green glow on arrival, lowered Remedy cross,
+re-timed sound that now actually plays (2026-10-17 round 3, fork; NOTHING applied live).
+Engine: patch scripts\patch_tc_mendwalls_v2.py upgraded IN PLACE to v3 (VERSION 3; --apply on the live v2 = in-place
+upgrade, backup backup\AoWTCPCK.dll.bak_mendwalls3 = the v2 state; zone 0x448400.. now 706 B; also chains the kind-0x26
+NewFrame 0x42A5E9 / Show 0x430059 slot-pick sites in front of Steadfast's caves).  v2 script kept as
+C:\Users\<user>\.claude\jobs\47241cad\tmp\mend3\patch_tc_mendwalls_v2.v2.py.
+Insert ONLY the code lines between the ---- code ---- / ---- end ---- markers; ast.parse each edited builder afterwards.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_mendwalls: lower the cross (it now sits just above the breach) ==
+  replace   cy0 = int(0.6 * S)   with   cy0 = int(6.4 * S)
+  (one occurrence, in glyph_mendwalls; preview old|new: tmp\mend3\icon_v3_opts.png (0.6 / 4.6 / 6.4 / 8.0))
+
+== 2. build_dual_sphere_fx_v1.py - functions before `def build():` ==
+---- code ----
+MEND3_ARRIVE = [28, 31, 34, 37, 40, 43]                    # ticks: rock k reaches the wall (shared by both variants + the glow)
+MEND3_TARGETS = [(-12, -44), (10, -48), (-3, -31), (14, -25), (-14, -18), (5, -12)]   # px from the hex centre: on the wall body
+MEND3_RW, MEND3_RH, MEND3_RAX, MEND3_RAY = 224, 212, 112, 120   # rock canvas + anchor (= the hex-centre point)
+_MEND3_BAY = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+
+
+def _mend3_sources(variant):
+    """6 ground points 2-3 hexes from the wall (combat HXtoHP lattice: columns 32 px apart, rows 32 px, odd columns
+    16 px lower), spread round the compass, |dy| <= 80; variant 1 is rotated half a step against variant 0."""
+    cand = []
+    for i in range(-3, 4):
+        for j in range(-4, 5):
+            q, r = i, j - (i - (i & 1)) // 2
+            dist = (abs(q) + abs(r) + abs(q + r)) // 2
+            dx, dy = 32 * i, 32 * j + 16 * (i & 1)
+            if dist in (2, 3) and abs(dy) <= 80: cand.append((math.atan2(dy, dx), dist, dx, dy))
+    rnd = random.Random(2163 + variant); out = []
+    for k in range(6):
+        a0 = -math.pi + (k + 0.5 * variant) * math.pi / 3 + 0.25
+        want = 2 if (k + variant) % 2 else 3
+        best = min(cand, key=lambda c: (abs(math.atan2(math.sin(c[0] - a0), math.cos(c[0] - a0))) + (0 if c[1] == want else 0.6)))
+        cand.remove(best)
+        out.append((best[2] + rnd.uniform(-6, 6), best[3] + rnd.uniform(-5, 5)))
+    order = list(range(6)); rnd.shuffle(order)                 # which source feeds which target (arrival order)
+    return [out[o] for o in order]
+
+
+def _mend3_poly(rnd, r, n=7):
+    return [(a, r * rnd.uniform(0.72, 1.08)) for a in sorted(rnd.uniform(0, 2 * math.pi) for _ in range(n))]
+
+
+def _mend3_stamp(dr, S, pts, x, y, rot, sc, fam):
+    """One rock: hard 3-tone (dark rim, body, one highlight facet), drawn at S x."""
+    rim, body, lit = (((36, 31, 28), (110, 104, 96), (166, 158, 146)), ((42, 30, 21), (124, 96, 66), (178, 148, 110)))[fam]
+    r0 = sum(rr for _a, rr in pts) / len(pts)
+    def P(grow, shx=0.0, shy=0.0, k=1.0):
+        return [((x + shx + math.cos(a + rot) * (rr * sc * k + grow)) * S, (y + shy + math.sin(a + rot) * (rr * sc * k + grow) * 0.9) * S) for a, rr in pts]
+    dr.polygon(P(1.0), fill=rim + (255,))
+    dr.polygon(P(0.0), fill=body + (255,))
+    dr.polygon(P(0.0, -0.3 * r0 * sc, -0.35 * r0 * sc, 0.5), fill=lit + (255,))
+
+
+def _mend3_bez(p0, p1, p2, u):
+    return ((1 - u) ** 2 * p0[0] + 2 * (1 - u) * u * p1[0] + u * u * p2[0], (1 - u) ** 2 * p0[1] + 2 * (1 - u) * u * p1[1] + u * u * p2[1])
+
+
+def mend3_rocks(variant, n=26):
+    """Mend Walls (216) v3 slots 3/4 (2026-10-17, user: "a bunch of debris/rocks etc being pulled from the ground fairly
+    nearby (within 2 or 3 hexes) and pulled into the wall ... green glow particles as they reach the wall"): one
+    kind-0x26 effect per MENDED wall hex (patch_tc_mendwalls_v2.py v3), ALPHA (258), 224x212, the hex centre at
+    (112, 120) (entry xs/ys -112/-120), 26 frames x 2 ticks.  Six rocks (grey stone / brown earth, hard 3-tone like
+    Oil Spring v3) crack out of the ground 2-3 hexes away (dark hole + a pebble spurt), rise with a green magic
+    shimmer, hover, then are pulled along an arc into the wall body (shadow sliding along the ground, a green speck
+    trail, a trailing pebble) and vanish into it at MEND3_ARRIVE - where the shared glow layer (mend3_glow) flashes.
+    Variants 0/1 differ only in the source layout (the wall's (x + y) parity picks one)."""
+    S = 4; W, H, AX, AY = MEND3_RW, MEND3_RH, MEND3_RAX, MEND3_RAY; bay = _MEND3_BAY
+    src = _mend3_sources(variant); rnd = random.Random(2170 + variant)
+    rocks = []
+    for k in range(6):
+        sx, sy = src[k]; tx, ty = MEND3_TARGETS[k]; arr = MEND3_ARRIVE[k]
+        pop = arr - 26; launch = pop + 14
+        ctrl = ((sx + tx) / 2.0 + rnd.uniform(-10, 10), min(sy - 14, ty) - rnd.uniform(26, 40))
+        rocks.append(dict(sx=sx, sy=sy, tx=tx, ty=ty, pop=pop, launch=launch, arr=arr, ctrl=ctrl, fam=k % 2,
+                          pts=_mend3_poly(rnd, rnd.uniform(5.2, 7.0)), spin=rnd.choice((-1, 1)) * rnd.uniform(5.0, 9.0),
+                          peb=_mend3_poly(rnd, 2.0, 5), pebo=(rnd.uniform(-4, 4), rnd.uniform(1, 4)),
+                          spurt=[(rnd.uniform(-1, 1), rnd.uniform(5, 10), _mend3_poly(rnd, 1.5, 5)) for _ in range(3)],
+                          motes=[(rnd.uniform(0, 6.28), rnd.uniform(5, 9), rnd.uniform(0.25, 0.45)) for _ in range(5)],
+                          jit=[(rnd.uniform(-1.5, 1.5), rnd.uniform(-1.5, 1.5)) for _ in range(3 * n)]))
+    out = []
+    for i in range(n):
+        t = 2.0 * i
+        big = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); dr = ImageDraw.Draw(big)
+        shade = Image.new("L", (W, H), 0); sd = ImageDraw.Draw(shade)          # dithered layers (holes, shadows)
+        hole = Image.new("L", (W, H), 0); hd = ImageDraw.Draw(hole)
+        specks = []
+        for R in rocks:
+            gx, gy = AX + R["sx"], AY + R["sy"]
+            if R["pop"] <= t < R["launch"] + 12:                             # the torn ground: open, then healing over
+                a = 1.0 if t < R["launch"] + 2 else max(0.0, 1.0 - (t - R["launch"] - 2) / 10.0)
+                hd.ellipse([gx - 5.5, gy - 2.2, gx + 5.5, gy + 2.6], fill=int(255 * a))
+            if R["pop"] <= t < R["pop"] + 9:                                   # pebble spurt
+                u = (t - R["pop"]) / 9.0
+                for vx, vy, pp in R["spurt"]:
+                    px_ = gx + vx * 7 * u; py_ = gy - vy * 4 * u * (1 - u) * 1.6
+                    _mend3_stamp(dr, S, pp, px_, py_, u * 6, 1.0, R["fam"])
+            if R["pop"] <= t < R["launch"]:                                    # emerging + hovering
+                u = min(1.0, (t - R["pop"]) / 10.0); e = u * u * (3 - 2 * u)
+                hov = 0.0 if u < 1 else math.sin((t - R["pop"] - 10) * 0.9) * 1.2
+                x, y = gx + math.sin(t * 0.7 + R["spin"]) * 0.6 * e, gy - 2 - 13 * e + hov
+                sd.ellipse([gx - 6 * e - 1, gy - 1.5, gx + 6 * e + 1, gy + 1.8], fill=int(120 * e))
+                _mend3_stamp(dr, S, R["pts"], x, y, 0.2 * math.sin(t * 0.5), 0.55 + 0.45 * e, R["fam"])
+                for ph, rr, sp in R["motes"]:                                     # the green pull swirling round it
+                    a = ph + t * sp; specks.append((x + math.cos(a) * rr, y + math.sin(a) * rr * 0.55 + 2, 0.55 + 0.45 * e))
+            elif R["launch"] <= t < R["arr"]:                                    # pulled into the wall
+                u = (t - R["launch"]) / float(R["arr"] - R["launch"]); e = u * u * (3 - 2 * u) * 0.35 + u * 0.65
+                p0 = (gx, gy - 15); p2 = (AX + R["tx"], AY + R["ty"]); p1 = (AX + R["ctrl"][0], AY + R["ctrl"][1])
+                x, y = _mend3_bez(p0, p1, p2, e)
+                shx, shy = gx + (AX + R["tx"] - gx) * e, gy + (AY - gy) * e        # its shadow slides to the wall foot
+                sd.ellipse([shx - 5, shy - 1.5, shx + 5, shy + 1.8], fill=int(110 * (1 - u)))
+                _mend3_stamp(dr, S, R["pts"], x, y, R["spin"] * u, 1.0 - 0.2 * u, R["fam"])
+                for q, b in enumerate((0.06, 0.12, 0.19)):                       # green speck trail
+                    if e - b > 0:
+                        bx, by = _mend3_bez(p0, p1, p2, e - b); jx, jy = R["jit"][3 * i + q]
+                        specks.append((bx + jx, by + jy, 1.0 - b * 3))
+            if R["launch"] + 3 <= t < R["arr"] + 3:                              # the trailing pebble
+                u = (t - R["launch"] - 3) / float(R["arr"] - R["launch"])
+                p0 = (gx + 3, gy - 12); p2 = (AX + R["tx"] + R["pebo"][0], AY + R["ty"] + R["pebo"][1])
+                p1 = (AX + R["ctrl"][0] + 6, AY + R["ctrl"][1] + 8)
+                x, y = _mend3_bez(p0, p1, p2, u)
+                _mend3_stamp(dr, S, R["peb"], x, y, R["spin"] * u * 1.3, 1.0, 1 - R["fam"])
+        im = big.resize((W, H), Image.BOX); a = np.array(im); hp = np.array(hole); sp_ = np.array(shade)
+        thr = np.tile(np.array(bay, np.int32) * 16 + 8, (H // 4 + 1, W // 4 + 1))[:H, :W]
+        solid = a[..., 3] >= 120
+        a[~solid] = 0; a[solid, 3] = 255
+        hm = (~solid) & (hp > thr) & (hp > 40); a[hm] = (30, 22, 16, 255)
+        sm = (~solid) & (~hm) & (sp_ > thr); a[sm] = (16, 14, 12, 255)
+        for x, y, s in specks:                                               # green motes: 1-2 px, dithered by strength
+            xi, yi = int(round(x)), int(round(y))
+            if 0 <= xi < W - 1 and 0 <= yi < H and s * 255 > thr[yi, xi]:
+                a[yi, xi] = (150, 255, 160, 255)
+                if s > 0.7: a[yi, xi + 1] = (70, 220, 110, 255)
+        out.append(Image.fromarray(a, "RGBA"))
+    return out
+
+
+_MEND3_GLOW = []
+
+
+def mend3_glow(n=24):
+    """Mend Walls (216) v3 slot 1 (shared by both rock variants): ADDITIVE (770), 96x112, the hex centre at (48, 92)
+    (entry xs/ys -48/-92), 24 frames x 3 ticks: a green flash + a ring of sparks + a short glowing seam where each
+    rock sinks into the wall (MEND3_TARGETS at MEND3_ARRIVE), then a soft green aura wraps the mended wall, one bright
+    band sweeps up through it and green-white motes drift off as it fades.  Cached (two builder rows slice it)."""
+    if _MEND3_GLOW: return _MEND3_GLOW
+    W, H, AX, AY = 96, 112, 48, 92
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); rnd = random.Random(2180)
+    sparks = [[(rnd.uniform(0, 6.28), rnd.uniform(9, 16), rnd.uniform(-0.3, 0.1)) for _ in range(8)] for _ in range(6)]
+    motes = [(rnd.uniform(-16, 16), rnd.uniform(0, 1), rnd.uniform(0.6, 1.0), rnd.uniform(0, 6.28)) for _ in range(16)]
+    colx = np.exp(-((xx - AX) ** 2) / (2 * 13.0 ** 2)); coly = np.clip((AY + 6 - yy) / 8.0, 0, 1) * np.clip((yy - (AY - 66)) / 14.0, 0, 1)
+    for i in range(n):
+        t = 3.0 * i; acc = np.zeros((H, W, 3), np.float32)
+        def add(g, col):
+            for c, cv in enumerate(col): acc[..., c] += g * cv
+        for k, (tx, ty) in enumerate(MEND3_TARGETS):
+            d = t - MEND3_ARRIVE[k]
+            if 0 <= d < 15:
+                x, y = AX + tx, AY + ty; f = math.exp(-d / 4.0)
+                add(np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * (2.5 + d * 0.35) ** 2)) * f * 1.1, (170, 255, 185))
+                add(np.exp(-((yy - y) ** 2) / 1.2 - ((xx - x) ** 2) / (2 * (3 + d * 0.8) ** 2)) * f * 0.7, (90, 240, 130))
+                for a, r, vy in sparks[k]:
+                    u = d / 15.0; sx = x + math.cos(a) * r * (1 - (1 - u) ** 2); sy = y + math.sin(a) * r * 0.7 * (1 - (1 - u) ** 2) + vy * d * 3
+                    add(np.exp(-((xx - sx) ** 2 + (yy - sy) ** 2) / 1.1) * (1 - u) * 0.95, (190, 255, 200))
+        ramp = 0.0 if t < MEND3_ARRIVE[0] else min(1.0, (t - MEND3_ARRIVE[0]) / 18.0)
+        fade = 1.0 if t < 54 else max(0.0, 1.0 - (t - 54) / 16.0)
+        env = ramp * fade; env = env * env * (3 - 2 * env)
+        add(colx * coly * (0.82 + 0.18 * np.sin(yy * 0.35 - t * 0.45 + xx * 0.12)) * 0.42 * env, (40, 210, 95))
+        u = (t - 44) / 16.0
+        if 0 <= u <= 1:
+            by = AY + 4 - u * 70
+            add(np.exp(-((yy - by) ** 2) / (2 * 1.6 ** 2)) * np.exp(-((xx - AX) ** 2) / (2 * 12.0 ** 2)) * math.sin(math.pi * u) * 0.7, (150, 255, 175))
+        add(np.exp(-((xx - AX) ** 2) / (2 * 16.0 ** 2) - ((yy - AY - 2) ** 2) / (2 * 2.4 ** 2)) * 0.4 * env, (60, 230, 110))
+        for x0, ph, sp, tw in motes:
+            if t < 34: continue
+            v = (ph + (t - 34) / 38.0 * sp * 1.3) % 1.0
+            y = AY - 2 - v * 72; x = AX + x0 + 2.5 * math.sin(tw + v * 7.0)
+            a = math.sin(math.pi * v) * (0.65 + 0.35 * math.sin(tw + t * 0.8)) * fade
+            add(np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 1.3) * a, (190, 255, 205))
+        _MEND3_GLOW.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return _MEND3_GLOW
+---- end ----
+
+== 2b. build_dual_sphere_fx_v1.py - group rows: REPLACE the (4350, mend_glow(), ...) row with these three
+       (mend_glow() itself can stay, unused).  Ids: 4350-4375 (2 above v2's 4373; 4374/4375 verified free),
+       4500-4549 all used; DualDF stays < 4550. ----
+---- code ----
+              (4350, mend3_rocks(1), "ERmrkB%02d.BMP", 258, 90, KEY),       # Mend Walls (216) v3 slot 4: debris variant B (224x212 alpha, 26 x 2 ticks)
+              (4500, mend3_rocks(0), "ERmrkA%02d.BMP", 258, 90, KEY),       # Mend Walls (216) v3 slot 3: debris variant A
+              (4526, mend3_glow(), "ERmgl3%02d.BMP", 770, 90, 0x0000),      # Mend Walls (216) v3 slot 1: arrival flashes + green aura (96x112, 24 x 3 ticks)
+---- end ----
+
+== 3. patch_dual_sphere_spells_v1.py, entry 216 - replace the desc line, and the gfx slot-1 line with these three lines
+       (slot 0 / slot 2 lines stay; the dict's closing `},` stays on the slot-2 line) ==
+---- code ----
+         desc="Earth magic tears stones and rubble from the ground around the walls and pulls them back into place: each damaged wall and gate section in the target area is repaired by a random amount. Fully destroyed sections cannot be mended.",
+---- end ----
+---- code ----
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(4526, 4550)), -48, -92, f20=3, f18=2),          # v3: arrival flashes + green aura per mended wall (marker 0 -> vanilla slot 1; 24 x 3 ticks = 72)
+              3: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(4500, 4526)), -112, -120, f18=1),               # v3: debris pulled into the wall, layout A (marker 3; 26 x 2 ticks)
+              4: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(4350, 4376)), -112, -120, f18=1),               # v3: layout B (marker 4 = walls with odd x + y)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py - REPLACE the "DUALER_MENDWALLS.WAV" entry (and the v1 comment above it); FADE_OUT keeps
+       "DUALER_MENDWALLS.WAV": 0.5; no DRIVE entry.  Scratch render 2.52 s: tmp\mend3\DUALER_MENDWALLS_v3.WAV ==
+---- code ----
+    # Mend Walls v3 (2026-10-17 round 3, user: debris pulled out of the ground 2-3 hexes away into the wall, green glow
+    # as it arrives): cue 0 now plays at the mend itself (patch_tc_mendwalls_v2.py v3); timed to the art (34.5 ticks/s):
+    # the Earth cast, the ground cracking open under each rock (pops 0.06-0.49 s), a low stone grind as they rise,
+    # a rush of air as they are pulled in, six stones thudding into the wall at 0.81-1.25 s, then the green glow -
+    # shimmer, a healing chime and two soft bells - over a faint drone.
+    "DUALER_MENDWALLS.WAV":  [("Attack/m_Earth.wav", 0.45, 0.00, 1.6, 0.7, 0.9),                 # the Earth sphere's cast
+                              ("Attack/Earth.WAV", 0.34, 0.06, 0.22, 0.12, 1.7),                # ground cracking open under the rocks
+                              ("Attack/Earth.WAV", 0.29, 0.23, 0.22, 0.12, 1.9, 0.0, 0.3),
+                              ("Attack/Earth.WAV", 0.26, 0.41, 0.22, 0.12, 1.6, 0.0, 0.6),
+                              ("Attack/A_Punch1.WAV", 0.22, 0.14, None, 0.15, 0.55),
+                              ("Attack/A_Punch2.WAV", 0.20, 0.32, None, 0.15, 0.5),
+                              ("Moves/HvyWh1.WAV", 0.26, 0.15, 0.9, 0.5, 0.6, 0.25),           # the stones grinding as they rise
+                              ("Attack/Wind.WAV", 0.22, 0.48, 0.75, 0.45, 1.35, 0.25),          # the rush as they are pulled in
+                              ("Moves/SFStep1.WAV", 0.64, 0.81, None, 0.15, 0.62),              # six stones thudding into the wall
+                              ("Moves/SFStep2.WAV", 0.56, 0.90, None, 0.15, 0.70),
+                              ("Moves/SFStep3.WAV", 0.62, 0.99, None, 0.15, 0.58),
+                              ("Moves/SFStep4.WAV", 0.53, 1.07, None, 0.15, 0.66),
+                              ("Moves/SFStep1.WAV", 0.59, 1.16, None, 0.15, 0.55),
+                              ("Moves/SFStep3.WAV", 0.56, 1.25, None, 0.15, 0.64),
+                              ("synth:shimmer:1.3", 0.35, 0.80, None, 0.0),                     # the green glow
+                              ("Attack/EnchP01.WAV", 0.42, 0.86, 1.2, 0.6, 0.95),               # a healing chime (Remedy's family)
+                              ("synth:bell:392:1.4", 0.20, 1.05, None, 0.6),
+                              ("synth:bell:587:1.2", 0.14, 1.32, None, 0.5),
+                              ("synth:drone:98:2.1", 0.18, 0.00, None, 0.7)],
+---- end ----
+
+== 5. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply       (SpellIcn 216: cross lowered)
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 4350-4375 + 4500-4549)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (DUALER_MENDWALLS.WAV v3)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 216: slots 1/3/4 + desc)
+  py -3.10 patch_tc_mendwalls_v2.py                    (dry-run: "gate ours | slot picks nf chain(0x448d20) show chain(0x448d40) |
+                                                        zone older build (v2) ... in-place upgrade v2 -> v3")
+  py -3.10 patch_tc_mendwalls_v2.py --apply
+  VEH startup check, then a test cast on damaged walls (sound at the cast, rocks from 2-3 hexes, green flashes on arrival).
+
+== 6. Chain consequences / revert ==
+  * NEW: the kind-0x26 slot-pick sites 0x42A5E9 / 0x430059 now enter OUR caves first (-> Steadfast 0x448D20 / 0x448D40 ->
+    ...).  patch_tc_steadfast_fx_v1.py (and anything older on those sites: crosswind_fx, ashes, hellfire_portal ...)
+    will see the sites as taken: revert mendwalls (v3) first, re-run that script, re-apply mendwalls (LIFO).
+  * NextStrike gate chain head unchanged (0x40B6F1 / 0x40CBE7 -> 0x448410 -> Suffocate 0x43FE00).
+  * patch_tc_mendwalls_v2.py --revert (v3) is exact: gate + both pick sites back to the stored targets, zone zeroed
+    (= the pre-Mend-Walls state, byte-identical to the v2 script's own revert).  Back to v2 only: --revert, then the kept
+    v2 script --apply (tmp\mend3\patch_tc_mendwalls_v2.v2.py).

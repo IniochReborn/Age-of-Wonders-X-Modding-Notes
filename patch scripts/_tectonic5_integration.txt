@@ -1,0 +1,80 @@
+TECTONIC SHIFT (219) round 5 (2026-10-17, fork; NOTHING applied live, no shared builder edited)
+User: "I want to be able to see the gfx underground/depths too, right now I can only see it on surface. also, the hex glow
+is too subtle, I can't see it."
+
+WHY SURFACE-ONLY: [map+0x88] is the VIEWED level (0 surface / 1 underground / 2 depths).  The vanilla Air Mastery draw
+callback 0x557F050C skips its drift whenever it is != 0 (clouds only on the surface), and shake v2/v3's own 219 draw
+`tect` copied that gate -> the fissure animation AND its shake request never ran while viewing underground.
+FIX = patch_tectonic_shake_v1.py v3.1 (edited in place): the gate is removed from `tect` only (Air Mastery / Overgrowth
+/ World Healer / Ice Age / Drought keep the vanilla surface-only drift).
+The per-hex glow has NO level filter (TFrozenWaterHS.Show 0x55764BD0 draws every marker; dig/bury create markers 8/9
+underground) - it was simply too faint everywhere.  Glow = art only (tectonic_glow3, same ids, same timing).
+
+Previews: C:\Users\<user>\.claude\jobs\47241cad\tmp\tfx5\glow3_sheet.png (grass / snow / desert / dirt / cave dirt;
+top row = live v2 @45, bottom = v3 @70) and glow3.gif (v3 on grass / snow / cave dirt).
+
+== 1. build_dual_sphere_fx_v1.py - add this function before `def build():` (tectonic_glow2 stays, unused) ==
+---- code ----
+def tectonic_glow3(n=48):
+    """Tectonic Shift (219) slot 3 v3 (2026-10-17, user: "the hex glow is too subtle, I can't see it"): tectonic_glow2's
+    design and timing unchanged (48 frames x 2 ticks, 2.8 s seamless loop; an emerald hex rim + wash breathing once per
+    loop and four green motes rising out of the hex, easing out and fading at their peak) - only the strengths go up:
+    rim 0.12 -> 0.46 (+0.08 breathing), wash 0.04 -> 0.13, motes 0.55 -> 0.95 with a whiter core, played at blend 70
+    (v2: 45).  Under GFXE Intensity that is ~+10..20 % light on grass / desert / dirt, a clear green tint on dark cave
+    dirt and still visible on snow; the motes read as small bright sparks.  32x40 additive, anchor (-16, -31)."""
+    W, H = 32, 40; cx, cy, rx, ry = 16.0, 29.5, 12.5, 7.5
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    verts = [(cx + rx * math.cos(math.radians(a)), cy + ry * math.sin(math.radians(a))) for a in range(0, 360, 60)]
+    def seg_d(px, py, a, b):
+        ax, ay = a; bx, by = b; vx, vy = bx - ax, by - ay
+        t = np.clip(((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy), 0, 1)
+        return np.hypot(px - (ax + t * vx), py - (ay + t * vy))
+    rim = np.exp(-(np.min([seg_d(xx, yy, verts[k], verts[(k + 1) % 6]) for k in range(6)], axis=0) / 1.0) ** 2)
+    wash = np.exp(-(((xx - cx) / 10.0) ** 2 + ((yy - cy) / 5.5) ** 2) * 1.4)
+    #        x0     y0    rise  sway  sway-ph  sigma  phase
+    motes = [(12.0, 32.5, 13.0, 0.8, 0.10, 1.00, 0.00),
+             (19.5, 29.5, 12.0, 0.7, 0.55, 0.90, 0.25),
+             (15.0, 34.0, 14.5, 0.9, 0.30, 0.95, 0.50),
+             (21.5, 33.0, 11.5, 0.6, 0.80, 0.85, 0.75)]
+    peak = (0.82 ** 1.6)
+    frames = []
+    for i in range(n):
+        t = i / float(n); b = 0.5 + 0.5 * math.cos(2 * math.pi * t)
+        a = rim * (0.46 + 0.08 * b) + wash * (0.13 + 0.03 * b); hot = np.zeros_like(a)
+        for x0, y0, rise, sway, sph, sig, ph in motes:
+            u = (t + ph) % 1.0
+            y = y0 - rise * (1.0 - (1.0 - u) ** 2)                          # ease-out: slows as it nears the peak
+            x = x0 + sway * math.sin(2 * math.pi * (u + sph))
+            br = min(1.0, u / 0.18) ** 1.5 * (1.0 - u) ** 1.6 / peak          # fades in fast, fades out toward the top
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * sig * sig)) * br * 0.95
+            a = a + g; hot = hot + g * 0.75
+        a = np.clip(a, 0, 1); hot = np.clip(hot, 0, 1)
+        r = 40 * a + 130 * hot; g_ = 215 * a + 40 * hot; bl = 90 * a + 80 * hot
+        frames.append(Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(g_, 0, 255), np.clip(bl, 0, 255),
+                                                 255 * (a > 0.012)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - REPLACE the (4750, tectonic_glow2(), ...) row with (same ids 4750-4797 -> no pipeline change) ==
+---- code ----
+              (4750, tectonic_glow3(), "ERtgv%02d.BMP", 770, 70, 0x0000),        # 219 slot 3 v3: per-hex glow, rising motes, clearly visible (32x40, 48 frames x 2 ticks; 4750-4797)
+---- end ----
+
+== 2. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 4750-4797 re-rendered brighter)
+  py -3.10 patch_tectonic_shake_v1.py                  (dry run: "721 bytes change (in-place upgrade ...)")
+  py -3.10 patch_tectonic_shake_v1.py --apply          (backup backup\AoWEPACK.dll.bak_tshake4 = the v3 state; .bak_tshake3 kept)
+  VEH startup check.
+  No pipeline / Spells.pfs / patch_tectonic_v1.py change.
+
+== 3. Tests (scratch copies in tmp\tfx5\) ==
+  shake v3.1 on a copy of the live v3 DLL+exe: dry run clean; apply -> "already applied (v3.1)"; --revert byte-identical
+  (dll AND exe) to the v3 script's own --revert (v3 copy: tmp\tfx5\patch_tectonic_shake_v1.v3.py); fresh apply on the
+  reverted copy == the in-place upgrade.  Disassembly: `tect` now goes straight from the PIC setup to the T_END / T_SPLIT
+  checks.  Live AoWEPACK.dll / AoWx.exe md5 unchanged.
+  glow3: same 48-frame loop and motion as v2 (largest RGB step between frames 85, the motes' bright core; no pops).
+
+== 4. Notes ==
+  * Strength knobs if it reads too strong/weak: the row blend (70) and the rim/wash/mote factors in tectonic_glow3.
+  * Underground glow on BURIED hexes (now EarthWall) may sit under the wall art - unverified in game.
+  * The shake now also fires when the cast animation plays while viewing underground (same 1.8 s camera shake).

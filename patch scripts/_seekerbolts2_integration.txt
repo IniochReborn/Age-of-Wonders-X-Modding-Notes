@@ -1,0 +1,256 @@
+SEEKER BOLTS v2 (ability 0x3A): fixes "nothing new shows", adds a solid gold/blue bolt and better sfx (2026-10-18, fork;
+NOTHING applied live, no shared builder edited).
+
+ROOT CAUSE
+  The shot is a KIND-1 TfxHS, not a kind-6 one.
+    * Unit ranged attacks take their fx kind from TCPCK's ability->kind table: DATA 0x467248, read through [0x4693DC]
+      at 0x409D07 by the ranged-attack CA, stored in [ca+0x60], then passed to AddEffect at 0x40A170.
+    * The table maps 0x3A -> 1, the same as Archery 0x16 and Javelin 0x39 (Magic Bolts 0x79 = 3).
+    * v1 wrongly read CreateHurl's cl = 6 as the fx kind.
+  What went wrong because of it:
+    * Every v1 cave tested [fx+0x34] == 6. So the hold, the spin-up, the launch cue and the impact burst never fired.
+    * Show kind 1 (0x42FAA3) picks the gfx slot from [fx+0x20], which is the flight DIRECTION (0..23). That is why the
+      vanilla record has 24 identical BOLTS slots.
+        - The new head showed only for directions 0 and 1.
+        - Directions 2 and 3 drew the spin/impact sequences as the bolt.
+        - Every other direction kept vanilla BOLTS.
+        - Kind 1 draws no trail.
+    * The pfs sounds did work: cue 0 (charge) and cue 1 (hit). That is the "okay-ish" sfx the user heard. Cue 2
+      (launch) never played.
+  The kind table must NOT be changed: about 12 AI/CA sites read it and treat kinds 1-3 as ranged.
+  Record 68 in the live Release\Ability.pfs is intact (the patch_seekerbolts_pfs_v1.py dry run says "applied"). The
+  other Ability.pfs writers append or replace only their own records through R.load/assemble, so they keep record 68.
+
+FIX = patch_tc_seekerbolts_v2.py (NEW; supersedes v1 and upgrades it IN PLACE)
+  * Keeps v1's caves but changes their kind test from 6 to 1. The caves are:
+      - NF6: hold, spin helper, launch cue.
+      - HIT: impact helper.
+      - SLT: hides the held bolt.
+  * Adds hook SHW at 0x42F9CB, in TfxHS.Show. It replaces 7 bytes: `movzx eax,byte [eax+0x34] / cmp eax,0x30`.
+      - A kind-1 0x3A fx is DISPATCHED as kind 6 (case 0x42FB2A).
+      - The kind-6 case draws the head from slot 0 (a fixed slot), runs the Hellfire gate 0x43CB70, draws the trail from
+        slot 1, then calls the shared 0x42F8E8. The Hellfire gate passes because ability shots have [+0x18] = 0.
+      - The fx stays kind 1 everywhere else (NewFrame, CA, AI).
+  * Uses the same zone, 0x44F000-0x44F400 (656 B). No site has a reloc; 0x42F9DB and 0x42F9DF lie outside the 7 SHW bytes.
+  * Live dry run:
+      "nf6 v2 | hit v2 | n26 v2 | shw vanilla | slot head ours(v1) | zone v1 | relocs none / upgrading v1 -> v2 in place"
+    nf6/hit/n26 print "v2" because their cave addresses did not move between v1 and v2.
+  * Scratch tests on copies of the live DLL:
+      - apply, then a second run says "already applied";
+      - --revert gives md5 27457a81..., which matches v1 --revert and the live DLL from before v1;
+      - a fresh apply from vanilla is byte-identical to the in-place upgrade.
+  * Revert v2 only with v2 --revert. v1 --revert would see the v2 zone as FOREIGN and abort.
+  * Backup suffix: .bak_seeker2.
+  * The SLT site is still the kind-6 chain head (gust -> soulsiphon -> Ashes -> Hellfire). Revert v2 BEFORE touching
+    any of those scripts.
+
+ART v2 (build_dual_sphere_fx_v1.py). User: "has the bolt actually changed? I don't see any blue"
+  The v1 head was additive, so it washed out to white on light terrain.
+  * New head: a SOLID sprite, drawMode ALPHA 258 at blend 95, opaque pixels only.
+      - A shaded gold orb with a white glint, inside a ring of saturated blue arcane fire.
+      - Four jagged electric-blue lightning spurs that rotate through the loop.
+      - A gold mote and a pale-blue mote orbiting it.
+  * New trail: additive, drawMode 770 at blend 70.
+      - Frames 0-1: a HOLLOW blue halo round the head, so no white blob covers the orb.
+      - Older frames: shrinking saturated blue wisps with gold/blue sparks.
+  * The spin art (7016-7045) and the impact art (7046-7061) are unchanged. They were simply never spawned.
+  * The ids stay 7000-7015, so the pfs record needs no change.
+  * Preview: tmp\seeker2\head2.png shows the 8 head frames on grass, sand and grey, plus a flight composite.
+---- code: insert before `def build():`, after the v1 seeker_* functions (it uses their SB_* / _sb_blob / _sb_rgba) ----
+def seeker_head2(n=8):
+    """Seeker Bolts (0x3A) slot 0 v2 (2026-10-18, user: "has the bolt actually changed? I don't see any blue"): a SOLID
+    sprite (ALPHA 258/95, opaque pixels only, so the colours survive on bright terrain instead of washing out to white
+    like the additive v1): a gold orb (shaded, with a white-hot glint) inside a ring of saturated blue arcane fire, four
+    jagged electric-blue lightning spurs crackling off the ring (they rotate through the 8-frame loop) and two small motes
+    (gold + pale blue) orbiting it.  64x64, centre (32, 33) = anchor -32/-33."""
+    W = H = 64; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2); ang = np.arctan2(yy - cy, xx - cx)
+    rnd = random.Random(3758)
+    for k in range(n):
+        t = k / n
+        rgb = np.zeros((H, W, 3), np.float32); a = np.zeros((H, W), bool)
+        # blue fire ring: radius wobbles with a flickering flame edge
+        edge = 8.2 + 1.3 * np.sin(6 * ang + 2 * math.pi * t * 2) * np.cos(3 * ang - 2 * math.pi * t) + 0.6 * np.sin(11 * ang - 2 * math.pi * t * 3)
+        ring = d <= edge
+        shade = np.clip((d - 5.0) / np.maximum(edge - 5.0, 0.1), 0, 1)               # 0 inner .. 1 outer edge
+        for c, (ci, co) in enumerate(zip((90, 170, 255), (25, 70, 215))):
+            rgb[..., c] = np.where(ring, ci * (1 - shade) + co * shade, rgb[..., c])
+        a |= ring
+        # lightning spurs: 4 jagged polylines from the ring outwards
+        sp = np.zeros((H, W), bool)
+        for j in range(4):
+            a0 = 2 * math.pi * (j / 4 + t / 4) + 0.35 * math.sin(2 * math.pi * (t + j * 0.3))
+            x, y = cx + 7.5 * math.cos(a0), cy + 7.5 * math.sin(a0) * 0.85
+            L = 5 + 4 * (0.5 + 0.5 * math.sin(2 * math.pi * (t * 2 + j * 0.37)))
+            rr = random.Random(9000 + 31 * j + k)
+            for s in range(int(L)):
+                aa = a0 + rr.uniform(-0.9, 0.9)
+                x += math.cos(aa); y += math.sin(aa) * 0.85
+                ix, iy = int(round(x)), int(round(y))
+                if 1 <= ix < W - 1 and 1 <= iy < H - 1: sp[iy, ix] = True
+        rgb[sp] = (160, 225, 255); a |= sp
+        # gold orb: radius 5 with a lit top-left and a darker bottom-right rim, white-hot glint
+        orb = d <= 5.0
+        lx, ly = -0.6, -0.8; nrm = np.clip(((xx - cx) * lx + (yy - cy) * ly) / 5.0, -1, 1)
+        lit = 0.5 + 0.5 * nrm
+        for c, (dk, br) in enumerate(zip((205, 120, 15), (255, 222, 110))):
+            rgb[..., c] = np.where(orb, dk * (1 - lit) + br * lit, rgb[..., c])
+        gl = (xx - (cx - 1.6)) ** 2 + (yy - (cy - 1.8)) ** 2 <= 2.3
+        rgb[gl] = (255, 252, 230)
+        # orbiting motes
+        for j, col in enumerate(((255, 205, 60), (190, 235, 255))):
+            aa = 2 * math.pi * (t + j * 0.5); mx = cx + 11.0 * math.cos(aa); my = cy + 4.5 * math.sin(aa)
+            m = (xx - mx) ** 2 + (yy - my) ** 2 <= 1.8
+            rgb[m] = col; a |= m
+        out.append(Image.fromarray(np.dstack([np.clip(rgb, 0, 255), 255 * a]).astype(np.uint8), "RGBA"))
+    return out
+
+
+def seeker_trail2(n=8):
+    """Seeker Bolts (0x3A) slot 1 v2: the TRAIL, drawn AFTER the head (TCPCK 0x42e85c, frame j at path point
+    pos-4+(7-j)/2: frame 0 sits on the head, 7 is the oldest).  Additive (770), 64x64, centre (32, 33).  Frame 0 is a
+    HOLLOW blue halo round the head (no white blob over the orb, so the solid head keeps its colours); the older frames
+    are saturated blue wisps shrinking behind it with gold and blue sparks that scatter and wink out."""
+    W = H = 64; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []; rnd = random.Random(3709)
+    d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+    sp = [(rnd.uniform(-1, 1), rnd.uniform(-1, 1), j % 2) for j in range(6)]
+    blue = (40, 110, 255)
+    for k in range(n):
+        u = k / (n - 1.0); acc = np.zeros((H, W, 3), np.float32)
+        if k <= 1:
+            halo = np.exp(-((d - 11.0) ** 2) / 10.0) * (0.5 if k == 0 else 0.3)
+            for c in range(3): acc[..., c] += halo * blue[c]
+        else:
+            rad = 3.6 * (1 - 0.5 * u) + 1.0; br = (1 - u) ** 1.1
+            _sb_blob(acc, xx, yy, cx, cy, rad, blue, 0.75 * br)
+            _sb_blob(acc, xx, yy, cx, cy, rad * 0.4, (90, 170, 255), 0.5 * br)
+        for sx, sy, j in sp:
+            x, y = cx + sx * (4 + 10 * u), cy + sy * (4 + 10 * u) - 2 * u
+            _sb_blob(acc, xx, yy, x, y, 0.85, ((255, 190, 50) if j == 0 else (120, 200, 255)), 1.3 * max(0.0, 1 - 1.2 * u) * (k > 0))
+        out.append(_sb_rgba(acc))
+    return out
+---- end ----
+---- rows: REPLACE the two v1 rows ----
+  old: (7000, seeker_head(), "SBhead%d.BMP", 770, 85, 0x0000),
+  new: (7000, seeker_head2(), "SBhead%d.BMP", 258, 95, 0x0000),           # Seeker Bolts slot 0 v2: SOLID gold orb in a blue fire ring + lightning spurs (64x64, 8-frame loop)
+  old: (7008, seeker_trail(), "SBtrail%d.BMP", 770, 80, 0x0000),
+  new: (7008, seeker_trail2(), "SBtrail%d.BMP", 770, 70, 0x0000),         # Seeker Bolts slot 1 v2: hollow blue halo + blue wisps / gold-blue sparks (drawn over the head)
+  Keep seeker_head / seeker_trail defined as the v1 fallback.
+
+SFX v2 (build_dual_sphere_sfx_v1.py). User: "okay-ish but not amazing"
+  CHARGE (0.90 s):
+    * New synth seekcharge2: a warm tone rising 98 -> 294 Hz, a sub, an orbit tremolo speeding up 4 -> 20 Hz and a
+      rising low-Q 'inhale', in a clean crescendo.
+    * Vanilla VORTEX sped up x1.35 and faded in: the orbs whirling.
+    * Magic Bolt (MAGICA04) played REVERSED, so it swells into the launch.
+  LAUNCH (0.80 s):
+    * The v1 seeklaunch synth.
+    * The vanilla SHOCKW onset at x1.25: a deep whoomp.
+    * MAGICA04, for the Magic Bolt identity.
+    * An A_FORCE2 punch.
+    * New synth seekzap: a low-Q electric crackle with no sustained partials.
+  HIT (0.90 s):
+    * Vanilla EXPLOD1 at x1.15.
+    * The v1 seekhit boom.
+    * A_FORCE1.
+    * A seekzap crackle.
+    * The thin DREAM_ESSENCE layer is dropped.
+  No bells, no tines, no DRIVE.
+  Measured, v1 -> v2:
+    * Tonal-peak metric above 2 kHz (charge/launch/hit): 90/88/104 -> 25/32/20, so no pings.
+    * Charge RMS is now a steady crescendo 0.03 -> 0.24 (v1 was flat, then jumped).
+    * The hit body lasts about 0.6 s (v1: about 0.3 s).
+  Renders in tmp\seeker2\:
+    * SEEKER_CHARGE.WAV, SEEKER_LAUNCH.WAV, SEEKER_HIT.WAV.
+    * preview_2shots_v2.wav: charge, launch 0.87 s later, hit 0.45 s after that, played twice.
+---- code: synth kinds - insert before `    if kind == "bell":` (inside synth()) ----
+    if kind == "seekcharge2":
+        # 'seekcharge2:f0:f1:seconds' -> Seeker Bolts charge-up v2 (2026-10-18; user: v1 'okay-ish', improve - powerful,
+        # magical, no pings, no distortion): a warm rising tone f0 -> f1 (harmonics 1..6, gentle 1/k^1.8 rolloff, two voices
+        # detuned +-4 cents), a sub-octave sine for weight, an orbit TREMOLO that speeds up 4 -> 20 Hz (the three orbs
+        # spinning up) and pans nothing, an airy 'inhale' (noise through a resonant band-pass climbing 250 -> 3000 Hz, low
+        # Q, so it rushes instead of whistling); crescendo (u^1.6) to full at the end, 30 ms attack, 12 ms cut (the launch
+        # cue takes over on the same tick)
+        f0, f1, secs = float(parts[1]), float(parts[2]), float(parts[3]); n = int(secs * RATE); out = []
+        rnd = random.Random(3761); ph = [0.0, 0.0]; phs = 0.0; pp = 0.0; y1 = y2 = 0.0
+        for i in range(n):
+            u = i / n; f = f0 * (f1 / f0) ** (u ** 1.3)
+            tone = 0.0
+            for v, det in enumerate((1.0023, 0.9977)):
+                ph[v] += f * det / RATE
+                tone += sum(math.sin(2 * math.pi * k * ph[v]) / k ** 1.8 for k in range(1, 7))
+            phs += 0.5 * f / RATE; sub = math.sin(2 * math.pi * phs)
+            pp += (4 + 16 * u ** 1.4) / RATE; trem = 0.62 + 0.38 * (0.5 + 0.5 * math.sin(2 * math.pi * pp))
+            fc = 250 * (3000 / 250) ** u; w = 2 * math.pi * fc / RATE; q = 0.86
+            x = rnd.random() * 2 - 1; y = x + 2 * q * math.cos(w) * y1 - q * q * y2; y2 = y1; y1 = y
+            env = (0.08 + 0.92 * u ** 1.6) * min(1.0, i / (0.03 * RATE)) * min(1.0, (n - i) / (0.012 * RATE))
+            out.append(env * (0.22 * tone * trem + 0.30 * sub + 0.05 * y * (0.3 + 0.7 * u)))
+        return out
+    if kind == "seekzap":
+        # 'seekzap:seconds:seed' -> an electric CRACKLE (Seeker Bolts v2 launch / hit): 30-40 short noise sparks (1-6 ms,
+        # random gaps) through a band-pass at 1.6-3.5 kHz with LOW Q (a fizz, not a tone), denser and louder at the
+        # start, decaying over the length; no sustained partials, so nothing pings
+        secs, seed = float(parts[1]), int(parts[2]); n = int(secs * RATE); out = [0.0] * n; rnd = random.Random(seed)
+        t = 0.0
+        while t < secs:
+            u = t / secs; L = int(rnd.uniform(0.001, 0.006) * RATE); a = (1 - u) ** 1.5 * rnd.uniform(0.5, 1.0)
+            fc = rnd.uniform(1600, 3500); w = 2 * math.pi * fc / RATE; q = 0.7; y1 = y2 = 0.0; s0 = int(t * RATE)
+            for j in range(L + int(0.004 * RATE)):
+                x = (rnd.random() * 2 - 1) if j < L else 0.0
+                y = x + 2 * q * math.cos(w) * y1 - q * q * y2; y2 = y1; y1 = y
+                if s0 + j < n: out[s0 + j] += a * 0.5 * y
+            t += rnd.uniform(0.004, 0.012) + 0.05 * u * u
+        return out
+---- end ----
+---- MIXES: REPLACE the three v1 SEEKER_* entries (and their comment lines) with ----
+    # Seeker Bolts v2 (2026-10-18; user: v1 'okay-ish but not amazing'): three cues of Ability.pfs record 68.  No bell /
+    # tine / chime layers (no crystal pings), no DRIVE (no distortion).
+    # cue 0 = the unit's attack animation = the start of the 30-tick (~0.87 s) orb spin-up: the vanilla VORTEX swirl
+    # sped up (the orbs whirling) under a warm rising tone with an accelerating orbit tremolo, and the Magic Bolt sound
+    # (MAGICA04) played BACKWARDS so it swells into the launch.
+    "SEEKER_CHARGE.WAV":    [("synth:seekcharge2:98:294:0.90", 0.95, 0.00, None, 0.0),
+                             ("Attack/Vortex.WAV", 0.85, 0.00, 0.90, 0.10, 1.35, 0.55, 0.40),
+                             ("Attack/MagicA04.WAV", 0.75, 0.32, 0.58, 0.0, -1.0)],
+    # cue 2 (patch_tc_seekerbolts_v2.py, the release tick): a deep SHOCKWAVE whoomp (vanilla SHOCKW onset), the Magic
+    # Bolt zap (MAGICA04) for identity, an A_FORCE2 punch, the v1 thump/blast/zap synth and a short electric crackle.
+    "SEEKER_LAUNCH.WAV":    [("synth:seeklaunch:0.8", 0.75, 0.00, None, 0.1),
+                             ("Attack/Shockw.wav", 0.55, 0.00, 0.75, 0.45, 1.25),
+                             ("Attack/MagicA04.WAV", 0.85, 0.00, 0.80, 0.35, 1.0),
+                             ("Attack/A_Force2.WAV", 0.40, 0.00, 0.24, 0.10, 1.0),
+                             ("synth:seekzap:0.35:3771", 0.30, 0.01, None, 0.10)],
+    # cue 1 (each landing, vanilla 0x42A0C6): a rich EXPLOSION (vanilla EXPLOD1, slightly higher) with the deep boom
+    # synth under it, an A_FORCE1 body hit and a crackle of blue sparks.
+    "SEEKER_HIT.WAV":       [("Attack/Explod1.wav", 0.70, 0.00, 0.90, 0.50, 1.15),
+                             ("synth:seekhit:0.6", 0.75, 0.00, None, 0.1),
+                             ("Attack/A_Force1.WAV", 0.45, 0.00, 0.40, 0.20, 0.95),
+                             ("synth:seekzap:0.45:3772", 0.28, 0.02, None, 0.15)],
+---- end ----
+---- FADE_OUT: change these values ----
+  "SEEKER_CHARGE.WAV": 0.04 -> 0.03
+  "SEEKER_LAUNCH.WAV": 0.3 (unchanged)
+  "SEEKER_HIT.WAV": 0.25 -> 0.3
+  Keep the seekcharge / seeklaunch / seekhit synths: seeklaunch and seekhit are still used.
+
+APPLY ORDER (game + editor closed: tasklist | grep -ci "aowx.exe\|aowdevx" = 0)
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF.ILB: 7000-7015 redrawn; the head is now drawMode 258)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (rewrites Sfx\Zsp\SEEKER_CHARGE / LAUNCH / HIT.WAV)
+  py -3.10 patch_seekerbolts_pfs_v1.py                 (dry run only: it must say "applied"; no change needed)
+  py -3.10 patch_tc_seekerbolts_v2.py --apply          ("upgrading v1 -> v2 in place"; backup AoWTCPCK.dll.bak_seeker2)
+  Then run the VEH startup check and a combat with a Seeker Bolts unit, shooting in several directions.
+  Ship DualDF.ILB, AoWTCPCK.dll and Release\Ability.pfs. Add the WAVs by hand:
+    --add Sfx\Zsp\SEEKER_CHARGE.WAV Sfx\Zsp\SEEKER_LAUNCH.WAV Sfx\Zsp\SEEKER_HIT.WAV
+
+WHAT THE USER SHOULD NOW SEE
+  1. The attack animation plays with the charge swell.
+  2. The bolt is hidden while 3 gold/blue orbs spin up about 20 px in front of the shooter (0.87 s).
+  3. A flash and the launch cue.
+  4. The solid gold/blue bolt flies with a blue halo/wisp trail, in any direction.
+  5. The impact cue with a white-gold flash, a blue shock ring and gold sparks.
+  Kind 1's ground shadow (0x42F8E8) is still drawn, because the kind-6 case calls it too.
+
+OPEN / RISKS
+  * Arrow arc: kind-1 paths have height (z). As in v1, the head is drawn at y - z and the helpers at (x, y - z).
+  * HOLD 30 ticks and LAUNCH_PX 20 are unchanged from v1. They were never exercised in game.
+  * The kind-6 Show case also runs the Hellfire gate cave 0x43CB70 ([+0x18] == 0xCE skips the trail). Ability shots
+    have [+0x18] = 0, because AddEffect objects are zeroed and the CA only sets +0x14.
+  * seeker-bolts.md (memory) should record the kind-1 root cause and table 0x467248 (ability -> fx kind).

@@ -1,0 +1,94 @@
+WALL OF FLAMES (226) v3 - lingering-flame speed fix + icon flames (2026-10-17, fork; NOTHING applied live)
+
+ROOT CAUSE (speed): Ilpack TImageSequenceList.ShowLooped (0x55219794) calls TImageSequence.GetFrameIndex(seq, time, 0)
+(0x552186EC); for kind 4 that path IGNORES the time argument and instead advances a counter stored IN THE SHARED
+SEQUENCE OBJECT on every call: [seq+0x30] counts down from f18, and when it hits 0 [seq+0x34] += 1 (frame = [seq+0x34]
+mod count).  Every lingering flame draws through the same slot-3 sequence, so 6 flames = 6x speed, a 2nd cast (12
+flames) = 12x - and f18 only divides that.  ([[0x46E8D4]+0x40] + (self>>2) was never used.)
+FIX (engine, patch_tc_walloflames_v1.py v2.1 -> v3 in place, header magic WoF3): the show cave computes the frame from
+real time - f = ((KUSER InterruptTime / 1,430,000) + ((self >> 4) & 0xFFFF)) mod 12 (one FIRESM frame per 143 ms
+= ~7 fps, a 1.7 s loop, each flame out of phase; the 64-bit time is divided in two steps so it never overflows) - and
+PINS the sequence before the ShowLooped call: [seq+0x34] = f, [seq+0x30] = 1 (GetFrameIndex then only decrements the
+countdown and draws frame f).  Speed is now independent of flame count, casts and the f18 value.  Visual only (local
+real-time clock, no game state) -> MP-safe.  The pipeline's slot-3 f18 (7) no longer matters; leave it.
+
+== 1. build_dual_sphere_icons_v1.py - add these two functions right before `def glyph_mendwalls():` and in GLYPHS
+       change   "walloflames": glyph_walloflames2   to   "walloflames": glyph_walloflames3  (v2 stays, unused) ==
+---- code ----
+def _flame3(cx, base_y, h, w, lean=0.0, seed=0):
+    """Wall of Flames v3 flame (user 10/17: 'the flames don't look enough like flames'): a real fire silhouette - a tall
+    S-curved main tongue whose tip curls over, two shorter side licks peeling off its flanks (leaning outward), a round
+    belly at the base, and an inner teardrop cut-out (the hot core) so each flame reads as a flickering hollow tongue."""
+    im = Image.new("L", (W * S, H * S), 0); d = ImageDraw.Draw(im)
+    def tongue(x0, y0, hh, ww, ln, curl, sgn):
+        pts_l, pts_r = [], []
+        for i in range(33):
+            t = i / 32.0
+            prof = math.sin(math.pi * min(1.0, 0.22 + t * 0.78)) ** 0.65 * (1 - t) ** 1.15
+            hw = ww * 0.5 * prof
+            # S-curved spine: sways one way low, the other way high, the tip curls over by `curl`
+            sx = x0 + ln * hh * (0.35 * math.sin(math.pi * t) * sgn + t ** 2.4) + curl * hh * max(0.0, t - 0.72) ** 2 * 9.0
+            sy = y0 - hh * t
+            pts_l.append((sx - hw, sy)); pts_r.append((sx + hw, sy))
+        d.polygon(pts_l + pts_r[::-1], fill=255)
+    sg = 1 if seed % 2 else -1
+    tongue(cx, base_y, h, w, lean, 0.05 * sg, sg)                                   # the main tongue, curling tip
+    side = -1 if seed % 2 == 0 else 1                                               # ONE side lick, alternating side
+    tongue(cx + side * w * 0.30, base_y - h * 0.08, h * 0.60, w * 0.66, lean + side * 0.34, side * 0.07, side)
+    bw = 0.46 if h >= 12.5 * S else 0.36                                            # round belly (slimmer on small flames)
+    d.ellipse([cx - w * bw, base_y - w * bw * 1.05, cx + w * bw, base_y + w * 0.16], fill=255)
+    if h < 12.5 * S: return im                                                      # small flames: solid (a core would read as a ring)
+    core = Image.new("L", im.size, 0); cd = ImageDraw.Draw(core)                    # the hot core: an inner teardrop
+    ch, cw = h * 0.40, w * 0.26
+    pts_l, pts_r = [], []
+    for i in range(25):
+        t = i / 24.0
+        prof = math.sin(math.pi * min(1.0, 0.25 + t * 0.75)) ** 0.7 * (1 - t) ** 1.2
+        sx = cx + lean * ch * t ** 2 * 1.3; sy = base_y - w * 0.10 - ch * t
+        pts_l.append((sx - cw * prof, sy)); pts_r.append((sx + cw * prof, sy))
+    cd.polygon(pts_l + pts_r[::-1], fill=255)
+    return ImageChops.subtract(im, core)
+
+
+def glyph_walloflames3():
+    """Wall of Flames v3 (user 10/17: 'the flames don't look enough like flames. improve them. keep the 3D circle
+    idea'): the same perspective ring - tall flames at the back, the burning ground band, short flames in front, all
+    dark-rimmed - with every flame redrawn by _flame3 (S-curved main tongue with a curling tip, two side licks peeling
+    outward, round belly, hollow hot core), heights and sway varied around the ring so the silhouette flickers."""
+    from PIL import ImageFilter
+    im = canvas()
+    cx, cy, rx, ry = 20.0, 24.5, 16.0, 6.6
+    def flame(a, h, w, k, rim=True):
+        c = math.cos(math.radians(a)); s = math.sin(math.radians(a))
+        x = cx + rx * c; y = cy + ry * s
+        m = _flame3(x * S, (y + 0.6) * S, h * S, w * S, lean=0.20 * c, seed=k)
+        if rim: im.paste(0, mask=m.filter(ImageFilter.MaxFilter(int(1.0 * S) | 1)))
+        im.paste(255, mask=m)
+    for k, (a, h) in enumerate(((180, 11.5), (0, 10.5), (212, 14.0), (328, 13.0), (243, 16.0), (297, 15.0), (270, 18.0))):
+        flame(a, h, 7.0, k, rim=a not in (180, 0))
+    band = Image.new("L", im.size, 0); bd = ImageDraw.Draw(band)
+    bd.ellipse([(cx - rx) * S, (cy - ry) * S, (cx + rx) * S, (cy + ry) * S], fill=255)
+    bd.ellipse([(cx - rx + 2.8) * S, (cy - ry + 1.8) * S, (cx + rx - 2.8) * S, (cy + ry - 1.8) * S], fill=0)
+    im.paste(0, mask=band.filter(ImageFilter.MaxFilter(int(0.8 * S) | 1))); im.paste(255, mask=band)
+    ImageDraw.Draw(im).ellipse([(cx - rx + 3.6) * S, (cy - ry + 2.4) * S, (cx + rx - 3.6) * S, (cy + ry - 2.4) * S], fill=0)
+    for k, (a, h) in enumerate(((150, 10.0), (30, 9.2), (113, 9.4), (67, 10.0), (90, 8.6))):
+        flame(a, h, 5.8, k + 7)
+    return im
+---- end ----
+
+== 2. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 226 v3 flames)
+  py -3.10 patch_tc_walloflames_v1.py                 (dry run: "older build ... (b'WoF2') -> in-place upgrade to v3")
+  py -3.10 patch_tc_walloflames_v1.py --apply         (backup backup\AoWTCPCK.dll.bak_walloflames3 = the v2.1 state)
+  VEH startup check.  No pipeline / Spells.pfs change.
+  Wall of Flames is the TOP of its LIFO stack (land 0x40C609 / hn 0x40E29B / step / bc) - nothing to revert first.
+
+== 3. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\wof3) ==
+  * script: live v2.1 copy -> dry run "in-place upgrade to v3" -> apply -> "already applied (v3)"; v3 --revert md5
+    b78e204c... == the v2.1 script's own --revert; fresh v3 apply on the reverted copy == the upgrade (9dcd5efa...).
+  * emu3.py (Unicorn, real v3 zone, AoWEPACK rebased): 0 failures - all earlier checks (land / clone / turn-start /
+    move-in incl. the v2.1 lethal-burn move-finish / msg / hn ring) plus: sequence countdown pinned to 1; one frame per
+    143 ms of InterruptTime wrapping mod 12 at 4 time bases incl. a large 64-bit one; 20 Show calls at one instant ->
+    the same frame (no per-call advance); flames out of phase; a list without slot 3 -> no draw.
+  * icon: icon_old_vs_new.png (40x35 composite old | new, then the full masks); all snippets parse in a trial
+    integration of the icons builder.

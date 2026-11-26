@@ -1,0 +1,105 @@
+CROSSWIND (213) v3 VISUALS - integration (2026-10-16, fork; nothing below is applied live)
+==========================================================================================
+
+User: the Air Mastery-style clouds were janky (v2 = 3-tick flicker drivers) -> smooth clouds drifting the SAME
+direction as the Winds of Fury particles, at the same time; no 'bubble' animations over the targets -> a very subtle
+mote swirl round each enemy, gone when the spell's gfx is over.
+Engine = patch_tc_crosswind_fx_v1.py v3 (upgraded in place; a live v2 is detected and upgraded).  Art = DualDF 3300-3383.
+
+---- 1. build_dual_sphere_fx_v1.py: functions (before def build(); ilbcodec / MAGIC / raw_pixels / np / math / Image
+        are already in that module) ----
+def xwind_cloudset():
+    """Crosswind (213) v3 field wash: Air Mastery's OWN cloud images (MAGIC.ILB 160 / 161 / 162 'Cloud01-03', 201x118)
+    copied 1:1.  The group table stores this set five times at intensity 6 / 12 / 18 / 24 / 30 (Air Mastery draws them at
+    770 / 30) so a 30-frame driver sequence can fade each cloud in and out while patch_tc_crosswind_fx_v1 v3 drifts it
+    across the field with the Winds of Fury particles."""
+    lib = ilbcodec.read(MAGIC); out = []
+    for src in (160, 161, 162):
+        im, r = raw_pixels(lib, src); out.append(im.convert("RGBA"))
+    return out
+
+
+def xwind_swirl(n=32):
+    """Crosswind (213) v3 per-ENEMY swirl (user: no 'bubbles' over the targets - a very subtle animation like Suspend's
+    spinning motes, going round them, gone when the spell's gfx is over): 64x80, additive 770, centre (32, 46) = 16 px
+    above the hex centre (driver at hex centre, anchor -32/-62).  Five small white motes circle the unit on a flattened
+    ring (rx 20, ry 7) with a short fading trail and a gentle bob, the back half dimmer (behind the unit); seamless
+    32-frame loop (one turn).  Stored dim - additive at 70 (and a 30 copy for the fade in / out)."""
+    W, H = 64, 80; cx, cy = 32.0, 46.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    for i in range(n):
+        t = i / float(n); acc = np.zeros((H, W), np.float32)
+        for k in range(5):
+            for j in range(4):                                         # the mote + 3 trailing ghosts
+                a = 2 * math.pi * (t + k / 5.0) - j * 0.16
+                x = cx + 20.0 * math.cos(a); y = cy + 7.0 * math.sin(a) - 2.5 * math.sin(2 * math.pi * (2 * t + k / 5.0))
+                front = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(a))
+                lv = front * (1.0, 0.45, 0.25, 0.12)[j]
+                acc += np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (1.2 if j == 0 else 1.6)) * 225.0 * lv
+        v = np.clip(acc, 0, 255)
+        out.append(Image.fromarray(np.dstack([v, v, np.clip(v * 1.05, 0, 255)]).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+  group-table rows - REPLACE the three v2-era rows 3300 xwind_cloud(160) / 3330 xwind_motes() / 3360 xwind_cloud(162)
+  (their functions xwind_cloud / xwind_motes can be deleted):
+              (3300, xwind_cloudset(), "AIxc06_%d.BMP", 770, 6, 0x0000),   # Crosswind (213) Air Mastery clouds 160/161/162 at intensity 6
+              (3303, xwind_cloudset(), "AIxc12_%d.BMP", 770, 12, 0x0000),   # Crosswind (213) Air Mastery clouds 160/161/162 at intensity 12
+              (3306, xwind_cloudset(), "AIxc18_%d.BMP", 770, 18, 0x0000),   # Crosswind (213) Air Mastery clouds 160/161/162 at intensity 18
+              (3309, xwind_cloudset(), "AIxc24_%d.BMP", 770, 24, 0x0000),   # Crosswind (213) Air Mastery clouds 160/161/162 at intensity 24
+              (3312, xwind_cloudset(), "AIxc30_%d.BMP", 770, 30, 0x0000),   # Crosswind (213) Air Mastery clouds 160/161/162 at intensity 30
+              (3320, xwind_swirl(), "AIxsw%02d.BMP", 770, 70, 0x0000),          # Crosswind (213) per-enemy mote swirl (64x80, loop)
+              (3352, xwind_swirl(), "AIxswf%02d.BMP", 770, 30, 0x0000),         # ... the same frames dimmer (fade in / out)
+
+---- 2. patch_dual_sphere_spells_v1.py: entry 213 gfx - REPLACE slots 2/3/4 (v2: single MAGIC.ILB frames, f18=2 =
+        3 ticks) and ADD slot 5 (slots 0/1 stay; nothing spawns them for 213 any more) ----
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", [3300, 3303, 3306, 3309, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3309, 3306, 3303, 3300, 3300], -100, -53, f18=2, f20=2),   # v3 drifting cloud 0: fade in 6->30, hold, fade out (30 fr x 3 ticks = 90)
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", [3301, 3304, 3307, 3310, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3310, 3307, 3304, 3301, 3301], -95, -53, f18=2, f20=2),   # v3 drifting cloud 1: fade in 6->30, hold, fade out (30 fr x 3 ticks = 90)
+              4: G.seq_entry("EFFECTS\\DUALDF.ILB", [3302, 3305, 3308, 3311, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3311, 3308, 3305, 3302, 3302], -97, -56, f18=2, f20=2),   # v3 drifting cloud 2: fade in 6->30, hold, fade out (30 fr x 3 ticks = 90)
+              5: G.seq_entry("EFFECTS\\DUALDF.ILB", [3352, 3353, 3354, 3355, 3356, 3357, 3358, 3359, 3328, 3329, 3330, 3331, 3332, 3333, 3334, 3335, 3336, 3337, 3338, 3339, 3340, 3341, 3342, 3343, 3344, 3345, 3346, 3347, 3348, 3349, 3350, 3351, 3320, 3321, 3322, 3323, 3324, 3325, 3326, 3327, 3328, 3329, 3330, 3331, 3332, 3333, 3334, 3335, 3336, 3337, 3338, 3339, 3340, 3341, 3342, 3343, 3344, 3345, 3346, 3347, 3348, 3349, 3350, 3351, 3352, 3353, 3354, 3355, 3356, 3357, 3358, 3359], -32, -62, f18=1, f20=2)},   # v3 per-enemy mote swirl: fade in, ~2 turns, fade out (72 fr x 2 = 144 ticks)
+
+  RE (why f18): a kind-0x26 driver lives GetTotalSequenceFrames = frames * (seq byte +0x18 + 1) ticks (kind 4) and
+  shows frames[tick / (+0x18 + 1)] (Ilpack 0x552186A0 / 0x552188A8) - so f18 = ticks per frame - 1.  NB for the
+  parent: the same field likely sets the speed of the Ability.pfs status-overlay sequences (Suspend 205 / Static
+  Shield 206 were tuned via f20) - not verified for the overlay draw path.
+
+---- 3. engine: patch_tc_crosswind_fx_v1.py v3 (AoWTCPCK) ----
+  * TK 0x42DC19 (site unchanged; chained in front of the Bloodbath aura's jmp 0x43C480): tick 0 seeds the private LCG and
+    measures the field (+ KDY = the particles' down-slope, 8.8 fixed, BSS 0x46C6E0); every wave tick 0,4,..64: one wave
+    of 8 genuine Winds of Fury particles (as v2) AND N_CW = 2 cloud drivers (kind 0x26, marker 2..4 random, scattered
+    x in [-400, W+100), y in [-120, H+40)).  The v2 per-tick 3-tick flicker clouds are gone.
+  * NF 0x42A5E9 (kind-0x26 NewFrame slot pick): 213 markers 2..5 -> slot = marker; markers 2..4 also DRIFT every tick:
+    x += 8, y += the KDY slope -> they travel with the particles (~720 px over a 90-tick life).
+  * SHOW 0x430059: 213 markers 2..5 -> slot = marker.
+  * S1 0x42DD41 (High Prayer per-unit sparkle walk, ticks 0..95): 213 -> no kind-0x1F sparkles; at tick 0 every living
+    ENEMY gets one kind-0x26 driver, marker 5 (slot 5 swirl), at its hex centre (HXtoHP(hs VMT+0x74, VMT+0x78) + 16).
+  * S2 0x42DED8 (tick-100 aura walk): 213 -> skipped (no dome).
+  Zones: 0x443C00-0x444000 (header + rnd / ext / spawn26 / tk / s2 / show) + NEW 0x445800-0x445C00 (cloud / wave / s1 /
+  nf; verified zero, no relocs, no other script claims it); 1168 B total.  BSS 0x46C6E0 (the unused v1 latch) = KDY.
+
+---- APPLY ORDER (game + editor closed) ----
+  1. build_dual_sphere_fx_v1.py --apply        (rows 3300-3383)
+  2. patch_dual_sphere_spells_v1.py --apply    (213 slots 2..5)
+  3. py -3.10 patch_tc_crosswind_fx_v1.py --apply   (reports 'v2 build found -> upgrading to v3')
+  4. VEH startup check
+  Revert: patch_tc_crosswind_fx_v1.py --revert (all 5 sites back to their previous targets / vanilla bytes, both zones
+  zeroed; byte-identical to the v2 script's own --revert - verified).  Apply 1-3 together: the pipeline step alone
+  would make v2's 3-tick flicker drivers show the first fade frame (intensity 6).
+
+---- CHAIN CONSEQUENCES ----
+  As v2: patch_tc_bloodbath_aura_v1.py dry-run reports its TK entry OTHER (revert this script first to touch it);
+  oil-gush / Ashes see NF / SHOW as foreign.
+
+---- SCRATCH TESTS (tmp\xwind4, copy of the LIVE AoWTCPCK.dll) ----
+  dry-run 'v2 build found -> upgrading to v3' OK; --apply written; re-apply 'already applied' (prev nf 0x43b700 / show
+  0x43b740 / tk 0x43c480 decoded from the header); --revert written, 2nd revert 'already reverted'; v3 revert == the v2
+  script's revert of the live DLL (byte-identical); fresh apply on the reverted copy == the upgrade (byte-identical);
+  --dis read by hand (cloud / wave / s1 / nf / tk).  Art previewed through the GFXE intensity formula (prev.png).
+
+---- IN-GAME TESTS ----
+  1. Cast: soft Air Mastery clouds fade in across the whole field and DRIFT right (slightly down) with the Winds of Fury
+     streams; no flicker; clouds and particles start together and fade out together.
+  2. No sparkles / dome over any unit; each ENEMY shows a faint ring of 5 white motes circling it (fade in, ~2 turns,
+     fade out, ~144 ticks).  Own units: nothing.  If the ring sits too high/low on units, tune slot 5's ys (-62).
+  3. Frame rate on a big field (<= ~34 clouds alive; N_CW = 1 halves it).
+  4. High Prayer / Heavenly Chorus / Bloodbath / Oil Spring gush / Ashes / Call of the Dead spiral unchanged.
+  5. LAN / replay in sync (visual randomness = the private LCG; for 213 S1 also skips vanilla's RandInt-based sparkle,
+     identically on every machine).

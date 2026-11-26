@@ -1,0 +1,66 @@
+LUCKY (232) v2 - smaller icon, vanilla-style white icon-emblem glow, new 'luck' sound (2026-10-18, fork; NOTHING applied live).
+Builders: the pipeline + sfx builder are CRLF, fx + icons LF (detect per file); ast.parse each edited builder afterwards.
+Previews (C:\Users\<user>\.claude\jobs\47241cad\tmp\lucky2\): icon_old_vs_new.png, emblem_preview.png (5 strengths),
+twinkles.png (TWINKGR families: 30-51 gold, 60-83 pale, 90-109 dark, 160-183 blue, 190-209 GREEN, 220-239 orange),
+DUALSE_LUCKY_old.wav, DUALSE_LUCKY_v2_recommended.wav (= B_harp_coin_d1.3), A_harp_arpeggio_d1.3/_d1.6.wav, B_harp_coin_d1.6.wav.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_lucky: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("lucky2_user_mask.png")    # v2 10/18 (user: a bit smaller): the v1 clover scaled 0.87 about its centre
+---- end ----
+(new file patch scripts\lucky2_user_mask.png already written; v1 mask kept)
+
+== 2. build_dual_sphere_fx_v1.py - group row (right after the (6500, lucky_glow(), ...) row) ==
+---- code ----
+              (6520, _icon_emblem("glyph_lucky"), "SElukemb%d.BMP", 770, 100, 0x0000),   # Lucky (232) v2 EMBLEM: its own (smaller) clover icon glowing white x5 strengths (replaces the twinkle chain's ENCHANT.ILB emblem)
+---- end ----
+(_icon_emblem reads glyph_lucky at build time, so build the ICONS change first or together; DualDF 6520-6524 free - live Lucky uses 6500-6515)
+
+== 3. patch_dual_sphere_spells_v1.py, entry 232 - replace the gfx line with ==
+---- code ----
+         gfx={0: _emblem_slot(49, 0, 6520, VANILLA_PFS)},   # v2 10/18 (user: like other enchantments - the white icon glow): a vanilla unit-enchantment cast chain (pfs 49, GREEN TWINKGR 190-209 twinkles) with OUR emblem (its clover icon glowing, DualDF 6520-6524)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py ==
+4a. synth(): insert before `    if kind == "bell":`
+---- code ----
+    if kind == "harp":
+        # 'harp:f0:seconds' -> Lucky v2 (2026-10-18): a warm plucked HARP string (Karplus-Strong): a noise burst in a
+        # delay line one period long, averaged (low-passed) each pass so the tone mellows as it rings; a soft 3 ms
+        # attack, decay ~ seconds; gentle (no glassy click) - the luck arpeggio's voice
+        f0, secs = float(parts[1]), float(parts[2]); n = int(secs * RATE); rnd = random.Random(int(f0 * 7))
+        P = max(2, int(round(RATE / f0))); buf = [rnd.random() * 2 - 1 for _ in range(P)]
+        # pre-soften the excitation (a pluck with a finger, not a pick)
+        for _ in range(2):
+            buf = [0.5 * (buf[k] + buf[k - 1]) for k in range(P)]
+        out = []; idx = 0; damp = 0.996
+        for i in range(n):
+            a = buf[idx]; b = buf[(idx + 1) % P]
+            buf[idx] = damp * 0.5 * (a + b); idx = (idx + 1) % P
+            t = i / RATE
+            out.append(a * min(1.0, t / 0.003) * min(1.0, (n - i) / (0.05 * RATE)))
+        return out
+---- end ----
+4b. MIXES: REPLACE the "DUALSE_LUCKY.WAV" entry (and its comment lines above it) with
+---- code ----
+    # Lucky v2 (2026-10-18, user: "sfx kinda sucks, improve it"): a quick rising plucked-HARP arpeggio (E5 G5 B5 E6, 60 ms
+    # apart) - luck falling into place - a short pitched-up coin-flip ting (Gold.WAV sliced) as it lands, the vanilla
+    # enchantment chime (EnchP01, the unit-enchantment family) softly underneath, and a magical shimmer.
+    "DUALSE_LUCKY.WAV":     [("synth:harp:659:1.2", 0.50, 0.00, None, 0.6),
+                             ("synth:harp:784:1.2", 0.48, 0.06, None, 0.6),
+                             ("synth:harp:988:1.2", 0.46, 0.12, None, 0.6),
+                             ("synth:harp:1319:1.3", 0.44, 0.18, None, 0.7),
+                             ("Events/Gold.WAV", 0.22, 0.28, 0.35, 0.25, 1.35, 0.0, 0.05),
+                             ("synth:shimmer:1.2", 0.18, 0.05, None, 0.7),
+                             ("Attack/EnchP01.WAV", 0.25, 0.00, 1.0, 0.6, 1.1)],
+---- end ----
+4c. DRIVE dict: "DUALSE_LUCKY.WAV": 1.2 -> 1.3        FADE_OUT stays 0.6.
+    (render: 1.48 s, RMS 0.242 = the live v1's 0.237.  Alternate A = pure harp arpeggio G5 B5 D6 G6 + EnchP02 + strings +
+     a soft high bell, DRIVE 1.6 (RMS 0.204): layers listed in tmp\lucky2 render script; previews A_harp_arpeggio_d1.6.wav)
+
+== 5. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 232 smaller)
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF 6520-6524 emblem)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (DUALSE_LUCKY.WAV v2)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (Spells.pfs 232 gfx slot 0 = emblem chain)
+  No engine change.  The old lucky_glow frames 6500-6515 stay in DualDF, unused.

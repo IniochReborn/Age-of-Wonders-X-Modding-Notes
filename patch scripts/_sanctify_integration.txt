@@ -1,0 +1,140 @@
+SANCTIFY (spell 208, Life tier 3) - integration snippets (2026-10-16, fork; nothing below is applied live)
+==========================================================================================================
+
+IDS / ROOM CLAIMED (check against the Miracle 209 fork before integrating):
+  spell 208 (pfs key 218) . ability 0xC0 'Sanctified Ground' (Ability.pfs record 202) . DualDF 2885-2900 (strike) +
+  2901-2912 (field loop) -> next free 2913 . HS ClassID 0x22010E . AoWEPACK zone 0x55868000-0x55868800 (630 B used) .
+  AoWEPACK BSS clone room 0x558FAD00-0x558FAE50 . AoWTCPCK zone 0x441400-0x441800 (852 B used).
+  Chained (not consumed) hook points: AoWEPACK 0x557BCF6E (Second Wind's RegisterAbility call), 0x5577F5E0
+  (GetAbilityEnabled prologue, in front of Life/Air 'fl'), 0x55784391 (PlaceOnMap tail, in front of Gravity Well 'pom'),
+  TGreatHail VMT+0xD8 slot 0x557F55DC (in front of Life/Air 'fg'); AoWTCPCK 0x40C609 (in front of Gravity Well's field
+  'land').  The two free RegisterAbility sites 0x557BCDFB / 0x557BCE30 are left untouched.
+
+---- 1. patch_dual_sphere_spells_v1.py: SPELLS entry (put it right after dict(id=207 ...) Harvest Souls) ----
+    dict(id=208, name="Sanctify", sphere=1, tier=3, mana=4, research=120,
+         donor="TGreatHail", pfs_donor=126, tc_type=0x0A, icon=208,              # hail class, 7 strikes (patch_rotaway STRIKES[208]); zone = patch_tc_sanctify_field_v1.py
+         pokes=[(0x34, 1, 0), (0x35, 1, 0), (0x36, 2, 0), (0x39, 1, 0x0C), (0x3B, 1, 3)],   # ATK 0 / DMG 0 / no damage type / range 12 (long) / own units + enemies + empty hexes
+         desc="Consecrates the target hex and every hex around it for 3 turns. Good units standing there are Fearless and fight as Holy Champions (Holy Champion II if pure good); evil and pure neutral units there are Panicked, and pure evil units also suffer Vertigo.",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),                       # nothing visibly falls
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),
+              2: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(2885, 2901)), -48, -40, f20=2, f18=1),   # per-hex landing: shaft of light + spreading ring
+              3: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(2901, 2913)), -12, 0, f20=2, f18=2)},   # the consecrated-hex loop (drawn by the field HS's Show)
+         sfx=["SFX\ZSP\DUALDF_SANCTIFY.WAV", ["SFX\ZSP\DUALDF_SANCTHIT.WAV"]]),
+
+---- 2. patch_tc_spell_alias_v1.py ----
+  ALIAS += {208: 0x74}                      # Sanctify -> Great Hail (hail class, 7 strikes)
+  SITE_KEEP[0x40F0E3] += {208}              # like 309 / 366
+  SITE_ALIAS[0x42827A][208] = 0x82          # 7-hex targeting preview (like 309)
+
+---- 3. patch_rotaway_v1.py ----
+  STRIKES[208] = 7
+
+---- 4. ceilings: append 0xC0 to LADDER in patch_tcablist_ceiling_v1.py and patch_aowx_banner_ceilings_v1.py
+        (bound 0xC0 -> 0xC1), re-run both.
+
+---- 5. build_dual_sphere_icons_v1.py ----
+  ICONS[208] = "sanctify"      CLOUDS["sanctify"] = 80 (Life cloud)      GLYPHS["sanctify"] = glyph_sanctify
+  (key 'sanctify' - make sure 'art import export/sanctify.png' does NOT exist: override trap)
+def glyph_sanctify():
+    """Sanctify (208, Life tier 3, 2026-10-16): consecrated ground - a ring of light on the ground (perspective ellipse,
+    a thick rim with six small glints) with a broad beam of light falling into it from above (two converging edges and
+    a softer core), and a four-pointed holy star flaring where the beam meets the ground."""
+    im = canvas(); dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    cx, cy = 20.0, 28.6
+    stroke_ellipse(dr, ((cx - 16.5) * S, (cy - 5.2) * S, (cx + 16.5) * S, (cy + 5.2) * S), int(1.6 * S), 255)   # the ring
+    for k in range(6):
+        a = math.radians(k * 60 + 30); x = cx + 16.5 * math.cos(a); y = cy + 5.2 * math.sin(a)
+        dr.ellipse([(x - 1.2) * S, (y - 1.2) * S, (x + 1.2) * S, (y + 1.2) * S], fill=255)
+    beam = Image.new("L", (W * S, H * S), 0); bd = ImageDraw.Draw(beam)
+    bd.polygon(P([(cx - 3.2, -0.5), (cx + 3.2, -0.5), (cx + 7.5, cy), (cx - 7.5, cy)]), fill=90)         # soft core
+    bd.line(P([(cx - 3.2, -0.5), (cx - 7.5, cy - 0.5)]), fill=255, width=int(1.0 * S))                    # edges
+    bd.line(P([(cx + 3.2, -0.5), (cx + 7.5, cy - 0.5)]), fill=255, width=int(1.0 * S))
+    paste_max(im, beam)
+    sy = cy - 7.0                                                                                          # the star
+    dr.polygon(P([(cx, sy - 10.0), (cx + 3.4, sy - 3.4), (cx + 10.0, sy), (cx + 3.4, sy + 3.4), (cx, sy + 8.0),
+                  (cx - 3.4, sy + 3.4), (cx - 10.0, sy), (cx - 3.4, sy - 3.4)]), fill=0)                  # dark halo
+    dr.polygon(P([(cx, sy - 8.5), (cx + 1.6, sy - 1.6), (cx + 8.5, sy), (cx + 1.6, sy + 1.6), (cx, sy + 6.5),
+                  (cx - 1.6, sy + 1.6), (cx - 8.5, sy), (cx - 1.6, sy - 1.6)]), fill=255)
+    return im
+
+---- 6. build_dual_sphere_fx_v1.py: functions (before def build()) + group-table rows ----
+              (2885, sanctify_strike(), "LSsanct%02d.BMP", 770, 85, 0x0000),    # Sanctify (208) slot 2: per-hex landing (96x80, additive)
+              (2901, sanctify_field(), "LSfield%02d.BMP", 770, 60, 0x0000),     # Sanctify (208) slot 3: consecrated-hex loop (64x40, additive)
+def sanctify_strike(n=16):
+    """Sanctify (208) slot 2 (2026-10-16): the per-hex landing (96x80, additive, 16 frames x 2 ticks, anchor -48/-40 =
+    hex centre (48, 46)): a narrow shaft of white-gold light falls onto the hex, flares, and a flat golden RING of
+    light spreads over the ground with a few motes rising from it; all fade together."""
+    W, H = 96, 80; cx, cy = 48.0, 46.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []; rnd = random.Random(2081)
+    motes = [(rnd.uniform(-20, 20), rnd.uniform(-5, 5), rnd.uniform(0.25, 0.55)) for _ in range(12)]
+    hexr = np.sqrt((xx - cx) ** 2 + ((yy - cy) / 0.45) ** 2)                       # ground ellipse radius (hex-sized, not hex-shaped: grid-agnostic)
+    for i in range(n):
+        t = i / (n - 1.0); env = math.sin(math.pi * min(1.0, t * 1.04)) ** 0.6
+        bot = cy - 44 + 44 * min(1.0, t / 0.3)                                     # the shaft reaches the ground at t = 0.3
+        shaft = np.exp(-((xx - cx) / (2.4 + 3 * t)) ** 2) * ((yy <= bot) & (yy >= 0)) * np.clip((yy + 4) / 50.0, 0, 1) * (1 - t) ** 0.8
+        flare = np.exp(-((xx - cx) ** 2 + ((yy - cy) / 0.6) ** 2) / (10 + 60 * t)) * max(0.0, 1 - abs(t - 0.32) / 0.3)
+        R = 4 + 24 * min(1.0, max(0.0, t - 0.25) / 0.6)
+        ring = np.exp(-((hexr - R) / 1.6) ** 2) * (t > 0.25) * (1 - t) * 0.9
+        fill = np.exp(-(hexr / (R + 2)) ** 6) * (t > 0.25) * 0.25 * (1 - t)
+        v = (0.8 * shaft + 1.1 * flare + ring + fill) * env
+        acc = np.zeros((H, W, 3), np.float32)
+        for c, cv in enumerate((255, 235, 165)): acc[..., c] += v * cv
+        for dx, dy, d0 in motes:
+            u = (t - d0) / 0.45
+            if 0 <= u <= 1:
+                g = np.exp(-((xx - cx - dx) ** 2 + (yy - (cy + dy - 30 * u)) ** 2) / 1.5) * math.sin(math.pi * u)
+                for c, cv in enumerate((255, 245, 200)): acc[..., c] += g * cv
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+
+def sanctify_field(n=12):
+    """Sanctify (208) slot 3 (2026-10-16): the consecrated hex, a SEAMLESS 12-frame loop (64x40, centre (32, 20), drawn
+    by patch_tc_sanctify_field_v1.py at HXtoHP + (-12, 0) like Gravity Well's field), additive: a faint golden ring
+    on the ground with a softly breathing inner glow and six glints running round its rim; low level so the units on
+    it stay readable."""
+    frames = []; W, H = 64, 40; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); cx, cy = 32.0, 20.0
+    rr = np.sqrt((xx - cx) ** 2 + ((yy - cy) / 0.5) ** 2)
+    hexr = rr                                                                         # ground ellipse (grid-agnostic)
+    for i in range(n):
+        t = i / float(n); br = 0.75 + 0.25 * math.cos(2 * math.pi * t)
+        rim = np.exp(-((hexr - 21) / 1.3) ** 2) * 0.55
+        inner = np.exp(-(hexr / 17.0) ** 4) * 0.22 * br
+        glints = np.zeros_like(rr)
+        for k in range(6):
+            a = 2 * math.pi * (k / 6.0 + t / 6.0)
+            gx, gy = cx + 21 * math.cos(a), cy + 10.5 * math.sin(a)
+            glints += np.exp(-((xx - gx) ** 2 + ((yy - gy) / 0.7) ** 2) / 2.5)
+        v = rim + inner + 0.8 * glints
+        acc = np.dstack([v * 255, v * 225, v * 140])
+        frames.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return frames
+
+---- 7. build_dual_sphere_sfx_v1.py: MIXES (ship: Sfx\Zsp\DUALDF_SANCTIFY.WAV / DUALDF_SANCTHIT.WAV - covered by the DUALDF_* glob) ----
+    # Sanctify (208, Life T3 2026-10-16): cast = a sung C-major swell, the Life enchant shimmer, a struck holy bell;
+    # per consecrated hex = a quiet high bell + a short bright sparkle (subtle: 7 land almost together).
+    "DUALDF_SANCTIFY.WAV":  [("synth:choir:130.8:2.2", 0.8, 0.00, None, 0.0),
+                             ("Attack/EnchP02.WAV", 0.5, 0.10, 2.0, 0.8),
+                             ("synth:bell:523:1.6", 0.35, 0.45, None, 0.5),
+                             ("Attack/MagicC01.WAV", 0.3, 0.30, 1.8, 0.9, 1.1, 0.4)],
+    "DUALDF_SANCTHIT.WAV":  [("synth:bell:784:0.7", 0.22, 0.00, None, 0.35),
+                             ("Attack/MagicA04.WAV", 0.25, 0.00, 0.8, 0.4, 0.9)],
+  (tested through mix(): 2.2 s peak 0.61 / 0.8 s peak 0.21)
+
+---- APPLY ORDER (game closed) ----
+  a. pipeline entry + alias + rotaway + icons/fx/sfx builders (their usual --apply; pipeline before the alias script
+     so SpellTypes[208] = 0x0A exists)
+  b. patch_sanctify_ability_pfs_v1.py --apply      (record 202; 201 Second Wind must be present)
+  c. ceilings (LADDER += 0xC0) -> patch_tcablist_ceiling_v1.py --apply, patch_aowx_banner_ceilings_v1.py --apply
+  d. patch_sanctify_v1.py --apply                  (AoWEPACK; needs patch_secondwind_v1.py v3 applied - chains its reg site)
+  e. patch_tc_sanctify_field_v1.py --apply         (AoWTCPCK; checks the AoWEPACK export; needs Gravity Well's field applied)
+  f. VEH startup check
+REVERT ORDER: e, d (then b / pipeline as needed).
+
+---- CHAIN CONSEQUENCES (while applied) ----
+  * patch_gravitywell_field_v1.py dry-run -> land 'OTHER' -> ABORT (we sit in front of its 0x40C609 call).
+  * patch_gravitywell_v1.py dry-run -> pom 'OTHER' -> ABORT (we sit in front of 0x55784391).
+  * patch_secondwind_v1.py dry-run -> reg 'OTHER(e8..)' -> ABORT (verified on the scratch copy).
+  * patch_lifeair_v1.py dry-run says "older build detected -> rewriting ... Dry run OK" (fl / fg read as 'chain').
+    !! NEVER --apply it while Sanctify is applied: it would chain in front of our caves whose 'previous' IS lifeair's
+    own fl/fg cave -> an endless jmp loop in GetAbilityEnabled.  Always revert e + d first, then re-apply in order.
+  * Same rule for any of those four scripts: revert Sanctify (e, d) before touching them, re-apply after.

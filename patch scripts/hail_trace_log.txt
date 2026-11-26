@@ -1,0 +1,11 @@
+pid 16140  AoWTCPCK.dll base 0x2720000
+handler hits 13 | sender hits 21 | last sender spell id 354
+  ring[0] msg+0xC=354 msg id=0x31006
+  ring[1] msg+0xC=354 msg id=0x31006
+  ring[2] msg+0xC=354 msg id=0x31006
+  ring[3] msg+0xC=354 msg id=0x31006
+  ring[4] msg+0xC=354 msg id=0x31006  <- newest
+  ring[5] msg+0xC=354 msg id=0x31006
+  ring[6] msg+0xC=354 msg id=0x31006
+  ring[7] msg+0xC=354 msg id=0x31006
+cave bytes @0x43C400: c745b8ffffffff8b45e08b40188945a851e8000000005981e916c44300ff81ccb74600898110b8460059c300000000005150e800000000582d37c443008b88c8b7460083e1078d8cc8d0b746008b55f88b520c89118b55f88b12895104ff80c8b7460058598b55f88b520c85d27505ba74000000c30000000000000000000000

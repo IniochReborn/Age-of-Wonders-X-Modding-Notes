@@ -1,0 +1,22 @@
+THOUSAND THREADS (335, Earth/Death T4) icon v3 - 2026-10-18 (fork; NOTHING applied live, no shared builder edited)
+Source: art import export\thousand threads.jpg (only matching file; black-on-white: a spider whose head bears an eye
+under a crown of spikes).  Traced with trace_ref.py (fill 0.96), then the head's fine eye/crown cut-outs (which close up
+at 40x35) were REDRAWN at icon scale: head filled solid, one clear almond eye (rx 38 / ry 22 mask px) with a solid pupil
+(r 11) and five crown spikes above it -> patch scripts\thousandthreads_user_mask.png (320x280, white = ink).
+Variants tried (tmp\threads\icon_preview*.png): A plain trace (eye turns to mush), B/C thinned, D/E widened holes (head
+goes hollow), F eye only, G eye + crown (CHOSEN), H smaller eye.  Preview source | current | new: tmp\threads\final_preview.png
+Icon key stays "threads" (cloud (40, 20) = Earth->Death blend, unchanged); no art import export\threads.png exists, so
+the icon-override trap does not apply (do NOT drop a file named threads.png there).
+
+== 1. build_dual_sphere_icons_v1.py (LF) - add this function right before `def glyph_threads():` and in GLYPHS change
+       "threads": glyph_threads   ->   "threads": glyph_threads3   (glyph_threads / glyph_threads_v1 stay, unused) ==
+---- code ----
+def glyph_threads3():
+    """Thousand Threads (335) v3 (2026-10-18, user: new reference art import export/thousand threads.jpg - a spider
+    with an eye under a crown of spikes on its head): TRACED -> thousandthreads_user_mask.png; the head's eye + crown
+    redrawn at icon scale (the traced cut-outs close up at 40x35)."""
+    return _user_mask_glyph("thousandthreads_user_mask.png")
+---- end ----
+
+== 2. Apply (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply

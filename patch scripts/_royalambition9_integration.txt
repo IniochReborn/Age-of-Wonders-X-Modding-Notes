@@ -1,0 +1,44 @@
+ROYAL AMBITION (230) round 9 (2026-10-18, fork; NOTHING applied live, no shared builder edited)
+Insert ONLY the code lines between ---- code ---- / ---- end ----.  build_dual_sphere_sfx_v1.py may be CRLF - detect the newline.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition9_user_mask.png")    # v9 10/18 (user: sad eyes = the HAPPY eyes upside down + reversed, brows re-oriented): happy RIGHT eye turned 180 deg per sad eye (mirrored pair), happy brow upright on swapped sides (high end now INNER = sad), tilted to the sad mask (tmp\royal9\mk_mask9.py T0_1.65)
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALCO_ROYAL.WAV" entry AND its comment lines above it with ==
+---- code ----
+    # Royal Ambition v9 (2026-10-18, user: "don't like it, especially the drum. improve it"): the Herald & Choir idea
+    # without any drum; warmer herald call (top octave dropped, low octave up), choir + strings blended as one warm
+    # D-major bed, bell tolls softened, sparkle bells + shimmer on top.  DRIVE 1.4 (gentle; RMS ~0.21 like City Spy).
+    "DUALCO_ROYAL.WAV":     [('synth:horn:293.66:293.66:0.40', 0.62, 0.00, 0.14, 0.05),
+                             ('synth:horn:146.83:146.83:0.40', 0.34, 0.00, 0.14, 0.05),
+                             ('synth:horn:587.33:587.33:0.40', 0.07, 0.00, 0.14, 0.05),
+                             ('synth:horn:293.66:293.66:0.40', 0.62, 0.17, 0.10, 0.04),
+                             ('synth:horn:146.83:146.83:0.40', 0.34, 0.17, 0.10, 0.04),
+                             ('synth:horn:587.33:587.33:0.40', 0.07, 0.17, 0.10, 0.04),
+                             ('synth:horn:440.00:440.00:0.90', 0.70, 0.30, 0.66, 0.36),
+                             ('synth:horn:220.00:220.00:0.90', 0.38, 0.30, 0.66, 0.36),
+                             ('synth:strings:146.83:2.3', 0.40, 0.86, None, 1.10, 1.00, 0.35),
+                             ('synth:strings:293.66:2.2', 0.22, 0.90, None, 1.10, 1.00, 0.35),
+                             ('synth:choir:146.83:2.1', 0.56, 0.95, None, 1.10),
+                             ('synth:choir:220.00:2.0', 0.26, 0.98, None, 1.10),
+                             ('synth:choir:293.66:2.0', 0.24, 1.00, None, 1.10),
+                             ('synth:bell:146.83:2.2', 0.12, 0.95, None, 1.20),
+                             ('synth:bell:220.00:1.6', 0.10, 1.65, None, 1.00),
+                             ('synth:shimmer:1.8', 0.26, 1.10, None, 0.90, 1.00, 0.30),
+                             ('synth:bell:1174.66:1.0', 0.16, 1.35, None, 0.70),
+                             ('synth:bell:1479.98:1.0', 0.14, 1.50, None, 0.70),
+                             ('synth:bell:1760.00:1.0', 0.13, 1.65, None, 0.70),
+                             ('synth:bell:2349.32:1.0', 0.11, 1.80, None, 0.70)],
+---- end ----
+  DRIVE dict:  "DUALCO_ROYAL.WAV": 1.5 -> 1.4        FADE_OUT dict: "DUALCO_ROYAL.WAV": 0.8 -> 0.9
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  (no pipeline / DLL change)
+
+Previews (C:\Users\<user>\.claude\jobs\47241cad\tmp\royal9\): icon_preview.png (source | v8 | v9, full + 40x35),
+variants.png (P = whole happy eye+brow pair turned 180, brows end up BELOW | chosen T | S = brows also turned 180),
+DUALCO_ROYAL_v9.wav (chosen, drive 1.4), DUALCO_ROYAL_v9_d1.10 .. d1.50.wav (drive options), DUALCO_ROYAL_old_v8.wav.

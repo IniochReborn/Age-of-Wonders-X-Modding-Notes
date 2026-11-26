@@ -1,0 +1,69 @@
+SUSPEND (214) round 2 - integration (2026-10-16, fork; nothing applied live)
+============================================================================
+Scripts: patch_suspend_fix_v1.py (AoWEPACK, new) . patch_tc_suspend_overlay_v1.py (AoWTCPCK, new) .
+patch_suspend_ability_pfs_v1.py (upgraded in place to v2: record 205 + tag 8 overlay, replaced IN PLACE).
+Room: AoWEPACK 0x5586D800-0x5586D90B (267 B) . AoWTCPCK 0x444000-0x444050 (16-id table + header) . DualDF 3250-3273.
+
+---- 1. build_dual_sphere_fx_v1.py: function (before def build()) + group-table row ----
+              (3250, suspend_status(), "AIsustat%02d.BMP", 770, 60, 0x0000),   # Suspend (214) 0xC3 status overlay: faint white beam + rising motes (48x128, loop)
+def suspend_status(n=24):
+    """Suspend (214) STATUS OVERLAY (2026-10-16, user: like Entangled - a very subtle beam of WHITE light, like Repent's
+    but white and very very subtle, with small white particles slowly spinning upwards around it).  Ability.pfs record
+    205 tag 8 (patch_suspend_ability_pfs_v1.py v2) -> drawn every frame by TTacticalCombatUnitHS.Show's overlay loop
+    (patch_tc_suspend_overlay_v1.py) at xs -23 / ys -104.  48x128, ADDITIVE 770 (GFXE Intensity: out = d + 1.75*f*s^2/
+    (s+d), black = invisible - so the beam is stored DIM and adds only a faint glow), 24 frames x 2 ticks, seamless
+    loop: a narrow soft white column fading out at both ends with a slow shimmer, and 6 small white motes on a helix
+    (radius 10, flattened) each rising once per loop while turning one full turn - brighter in front, dimmer behind."""
+    W, H = 48, 128; cx = 24.0; y_top, y_bot = 6.0, 118.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    vert = np.clip((yy - y_top) / 22.0, 0, 1) * np.clip((y_bot - yy) / 16.0, 0, 1)
+    for i in range(n):
+        t = i / float(n)
+        shim = 0.85 + 0.15 * np.sin(2 * math.pi * (t * 2 + yy / 40.0))
+        beam = (np.exp(-((xx - cx) / 2.2) ** 2) * 0.45 + np.exp(-((xx - cx) / 6.0) ** 2) * 0.18) * vert * shim
+        acc = beam * 120.0
+        for k in range(6):
+            u = (t + k / 6.0) % 1.0
+            a = 2 * math.pi * (t + k / 6.0) + u * 2 * math.pi * 0.5
+            x = cx + 10.0 * math.cos(a); y = y_bot - 4 - u * (y_bot - y_top - 12); z = math.sin(a)
+            fade = min(1.0, u / 0.15) * min(1.0, (1 - u) / 0.2)
+            lvl = (0.55 + 0.45 * z) * fade
+            acc = acc + np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 1.3) * 210.0 * lvl
+        v = np.clip(acc, 0, 255)
+        out.append(Image.fromarray(np.dstack([v, v, np.clip(v * 1.04, 0, 255)]).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+---- 2. patch_dual_sphere_spells_v1.py: entry 214 - DROP the poke (0x3B, 1, 3) ----
+  For a TUnitSpell (TRemedy) +0x38..+0x3B is the RANGE dword (Static Shield pokes it whole); (0x3B, 1, 3) only set its
+  top byte -> range 0x0300000C (effectively unlimited) and never touched the target side.  Keep
+      pokes=[(0x22, 1, 0), (0x0C, 1, 2)],
+  -> range back to TRemedy's 12 (long), as specified.  The side is fixed by patch_suspend_fix_v1.py's GCI hook.
+
+---- APPLY ORDER (game + editor closed) ----
+  a. build_dual_sphere_fx_v1.py --apply                  (DualDF 3250-3273)
+  b. patch_dual_sphere_spells_v1.py --apply              (poke dropped -> Spells.pfs / zone re-sync)
+  c. patch_suspend_ability_pfs_v1.py --apply             (v2: replaces record 205 in place; 206 Static Shield untouched)
+  d. patch_tc_suspend_overlay_v1.py --apply              (AoWTCPCK: overlay table 0x444010 = 15 live ids + 0xC3)
+  e. patch_suspend_fix_v1.py --apply                     (AoWEPACK: GCI side + RL ATK-7 roll)
+  f. VEH startup check
+  REVERT: e, d (exact, from their zone headers); c's --revert removes record 205 entirely (then 206 must be reverted
+  too before 205 can be re-appended) - to go back to the v1 record use tmp\susp2\patch_suspend_ability_pfs_v1_v1.py
+  only after removing 206.
+
+---- CHAIN CONSEQUENCES (while applied) ----
+  * patch_staticshield_v1.py dry-run: ex site OTHER -> ABORT (RL sits in front of Static Shield's ex cave).  Expected;
+    revert patch_suspend_fix_v1 first to touch Static Shield / Suspend / Second Wind's ExecuteSpell chain.
+  * patch_rot_overlay_v1.py dry-run: RD1/RD2/BOUND/LOOP OTHER -> ABORT.  Expected; revert d first to touch it.
+  * patch_suspend_v1.py already ABORTs on the live file (Static Shield chained in front) - unchanged.
+
+---- IN-GAME TESTS ----
+  1. Suspend on an ENEMY: valid cursor + click works.  Over several casts some are resisted (ATK 7 vs its RES: 50 %
+     at RES 7, 90 % max / 10 % min) - a resisted cast spends the mana and nothing happens (no popup).
+  2. Suspend on a FRIENDLY unit: always works.  Machines still refused.
+  3. A suspended unit shows a faint white beam with small white motes slowly spiralling up for the whole duration;
+     it disappears when Suspended ends.  Check the beam sits on the unit (xs -23 / ys -104 in record 205 tag 8 are
+     estimates from Cursed's anchor - tune there if it floats / sinks).  Other status overlays (Cursed, Burning, Rot)
+     still draw.
+  4. Range is 12 again (long), not unlimited.
+  5. Static Shield / Second Wind / Martyr still behave (shared ExecuteSpell chain).
+  6. LAN / replay: the enemy roll matches on both sides (same RandInt as damage rolls).

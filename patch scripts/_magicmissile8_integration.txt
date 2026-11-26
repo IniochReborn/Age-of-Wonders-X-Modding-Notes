@@ -1,0 +1,142 @@
+MAGIC MISSILE (228) SFX v12 CANDIDATES (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+User: 'bad, scrap it, start fresh, totally new'.  Four genuinely different candidates; pick ONE block for section 2.
+Previews: C:\Users\<user>\.claude\jobs\47241cad\tmp\mm8\<X>_launch.wav / <X>_hit.wav / <X>_3bolts.wav (3 bolts 10 ticks apart, hits 15 ticks after each).
+Measured (launch RMS over audible part / energy below 120 Hz | hit RMS):
+  A_whum     0.225 / 0.9 %  | 0.083
+  B_comet    0.227 / 0.0 %  | 0.083
+  C_energy   0.223 / 0.0 %  | 0.087
+  D_firewind 0.225 / 12 %   | 0.096   (some low end from the reversed Wind / Fireball samples)
+
+== 1. build_dual_sphere_sfx_v1.py (CRLF) - synth(): insert these three new kinds right BEFORE `    if kind == "bell":` ==
+   (needed by A, B and C; harmless if D is chosen)
+---- code ----
+    if kind == "whum":
+        # 'whum:seconds' -> Magic Missile candidate A (2026-10-18): a warm 'whum' of arcane force - white noise through a
+        # resonant state-variable low-pass whose cutoff leaps 320 -> 3600 Hz in ~45 ms and then sinks slowly to 650 Hz,
+        # a soft body tone gliding 230 -> 150 Hz (nothing below 120 Hz), a 10 ms attack and a long smooth exponential
+        # decay, plus a faint airy high-passed breath that outlasts it
+        secs = float(parts[1]); n = int(secs * RATE); out = [0.0] * n; rnd = random.Random(2281)
+        lo = bp = 0.0; hp_prev = hp = 0.0; ph = 0.0
+        for i in range(n):
+            t = i / RATE
+            if t < 0.045: fc = 320 * (3600 / 320) ** (t / 0.045)
+            else: fc = 650 + (3600 - 650) * math.exp(-(t - 0.045) / 0.16)
+            f = 2 * math.sin(math.pi * min(fc, RATE / 6) / RATE); q = 0.45
+            x = rnd.random() * 2 - 1
+            hi = x - lo - q * bp; bp += f * hi; lo += f * bp
+            env = min(1.0, t / 0.010) * math.exp(-t / (0.30 * secs / 1.0))
+            fb = 150 + 80 * math.exp(-t / 0.10); ph += 2 * math.pi * fb / RATE
+            body = math.sin(ph) * min(1.0, t / 0.012) * math.exp(-t / 0.16)
+            hp = 0.97 * (hp + x - hp_prev); hp_prev = x
+            air = hp * 0.10 * math.sin(math.pi * min(1.0, t / secs)) ** 0.7
+            out[i] = 0.75 * (lo * 0.9 + bp * 0.35) * env + 0.35 * body + air
+        return out
+    if kind == "comet":
+        # 'comet:seconds' -> Magic Missile candidate B (2026-10-18): a whooshing streak - noise through a band-pass whose
+        # centre falls 5200 -> 850 Hz (a doppler fall) on a fast-rise / long-fall bump, a softer octave-down band for
+        # body, and a sparkly GRANULAR tail: ~70 tiny high-passed noise grains (3-9 ms, no pitch) thinning out over time
+        secs = float(parts[1]); n = int(secs * RATE); out = [0.0] * n; rnd = random.Random(2282)
+        l1 = b1 = l2 = b2 = 0.0
+        for i in range(n):
+            t = i / RATE
+            fc = 850 + (5200 - 850) * math.exp(-t / (0.22 * secs))
+            f1 = 2 * math.sin(math.pi * fc / RATE); f2 = 2 * math.sin(math.pi * (fc * 0.5) / RATE)
+            x = rnd.random() * 2 - 1
+            h1 = x - l1 - 0.35 * b1; b1 += f1 * h1; l1 += f1 * b1
+            h2 = x - l2 - 0.5 * b2; b2 += f2 * h2; l2 += f2 * b2
+            env = min(1.0, t / 0.035) ** 1.5 * math.exp(-max(0.0, t - 0.035) / (0.26 * secs))
+            out[i] = (0.85 * b1 + 0.35 * b2) * env
+        for k in range(70):                                                   # sparkle grains
+            t0 = (rnd.random() ** 1.8) * secs * 0.85 + 0.02; g = int(rnd.uniform(0.003, 0.009) * RATE)
+            amp = 0.45 * math.exp(-t0 / (0.35 * secs)) * rnd.uniform(0.4, 1.0); s0 = int(t0 * RATE); pv = 0.0; hpv = 0.0
+            for j in range(g):
+                if s0 + j >= n: break
+                x = rnd.random() * 2 - 1; hpv = 0.6 * (hpv + x - pv); pv = x
+                out[s0 + j] += amp * hpv * math.sin(math.pi * j / g)
+        return out
+    if kind == "energystab":
+        # 'energystab:f0:seconds' -> Magic Missile candidate C (2026-10-18): a 'chorus of energy' - six detuned
+        # band-limited saws (f0, a fifth and an octave, each pair +-0.6 %%) through a 2-pole low-pass whose cutoff snaps
+        # 420 -> 4800 Hz in 8 ms and closes to 700 Hz, swirled by a slowly swept short-delay flanger (phaser-like), with a
+        # 5 ms attack, a long decay and three soft low-passed echoes (60 / 115 / 180 ms) as a reverb-ish tail
+        f0 = float(parts[1]); secs = float(parts[2]); n = int(secs * RATE); dry = [0.0] * n
+        voices = [(f0, 1.0), (f0 * 1.006, 1.0), (f0 * 1.5, 0.7), (f0 * 1.5 * 0.995, 0.7), (f0 * 2.0, 0.5), (f0 * 2.0 * 1.004, 0.5)]
+        phs = [random.Random(2283 + k).random() for k in range(len(voices))]; a1 = a2 = 0.0
+        for i in range(n):
+            t = i / RATE; v = 0.0
+            for k, (fq, gv) in enumerate(voices):
+                p = (phs[k] + fq * t) % 1.0
+                for h in range(1, 14):                                        # band-limited saw (harmonics < ~9 kHz)
+                    if fq * h > 9000: break
+                    v += gv * math.sin(2 * math.pi * h * p) / h
+            fc = 420 * (4800 / 420) ** min(1.0, t / 0.008) if t < 0.008 else 700 + 4100 * math.exp(-(t - 0.008) / 0.13)
+            a = 1 - math.exp(-2 * math.pi * fc / RATE); a1 += a * (v - a1); a2 += a * (a1 - a2)
+            env = min(1.0, t / 0.005) * math.exp(-t / (0.32 * secs))
+            dry[i] = a2 * env * 0.18
+        out = [0.0] * n
+        for i in range(n):                                                    # flanger swirl
+            t = i / RATE; d = (0.0012 + 0.0018 * (0.5 + 0.5 * math.sin(2 * math.pi * 0.9 * t))) * RATE
+            j = i - d; j0 = int(j); fr = j - j0
+            w = (dry[j0] * (1 - fr) + dry[j0 + 1] * fr) if 0 <= j0 < n - 1 else 0.0
+            out[i] = dry[i] + 0.7 * w
+        lp = 0.0
+        for dt, ga in ((0.060, 0.35), (0.115, 0.22), (0.180, 0.13)):         # soft echoes
+            o = int(dt * RATE); lp = 0.0
+            for i in range(n - o):
+                lp += 0.35 * (out[i] - lp); out[i + o] += ga * lp
+        return out
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALCO_MMISSILE.WAV" and "DUALCO_MMHIT.WAV" entries (and their comment lines) with ONE of these blocks, then set DRIVE / FADE_OUT as listed under it ==
+
+-- candidate A_whum: warm 'whum' of arcane force: resonant low-pass noise burst leaping up then sinking, soft 230->150 Hz body, airy whoosh tail (recommended)
+---- code ----
+    # Magic Missile v12 candidate A_whum (2026-10-18, user: 'scrap it, start fresh'): warm 'whum' of arcane force: resonant low-pass noise burst leaping up then sinking, soft 230->150 Hz body, airy whoosh tail
+    "DUALCO_MMISSILE.WAV": [("synth:whum:1.10", 1.0, 0.0, None, 0.55, 1.0, 0.0, 0.0, 1.4),
+                            ("synth:airwhoosh:900:3800:0.80", 0.3, 0.02, None, 0.45),
+                            ("synth:shimmer:1.0", 0.1, 0.1, None, 0.6)],
+    # per landing (cue 1, x3): the matching soft hit, no drive (stays quieter than the launch)
+    "DUALCO_MMHIT.WAV": [("synth:whum:0.50", 0.3, 0.0, None, 0.3, 1.0, 0.0, 0.0, 1.4),
+                         ("synth:airwhoosh:2500:900:0.35", 0.18, 0.0, None, 0.2)],
+---- end ----
+   DRIVE dict: "DUALCO_MMISSILE.WAV": 2.0   (no DRIVE key for DUALCO_MMHIT.WAV - remove it if present)
+   FADE_OUT dict: "DUALCO_MMISSILE.WAV": 0.45, "DUALCO_MMHIT.WAV": 0.25
+
+-- candidate B_comet: comet streak: band-passed whoosh with a doppler fall 5.2k->850 Hz and a sparkly granular (unpitched) tail
+---- code ----
+    # Magic Missile v12 candidate B_comet (2026-10-18, user: 'scrap it, start fresh'): comet streak: band-passed whoosh with a doppler fall 5.2k->850 Hz and a sparkly granular (unpitched) tail
+    "DUALCO_MMISSILE.WAV": [("synth:comet:1.10", 1.0, 0.0, None, 0.55, 1.0, 0.0, 0.0, 1.4),
+                            ("synth:subswell:150:130:0.6", 0.18, 0.0, None, 0.35)],
+    # per landing (cue 1, x3): the matching soft hit, no drive (stays quieter than the launch)
+    "DUALCO_MMHIT.WAV": [("synth:comet:0.45", 0.19, 0.0, None, 0.25, 1.0, 0.0, 0.0, 1.4)],
+---- end ----
+   DRIVE dict: "DUALCO_MMISSILE.WAV": 2.3   (no DRIVE key for DUALCO_MMHIT.WAV - remove it if present)
+   FADE_OUT dict: "DUALCO_MMISSILE.WAV": 0.45, "DUALCO_MMHIT.WAV": 0.22
+
+-- candidate C_energy: chorus of energy: six detuned saws (A3 + fifth + octave) with a snapping filter, flanger swirl and soft echoes
+---- code ----
+    # Magic Missile v12 candidate C_energy (2026-10-18, user: 'scrap it, start fresh'): chorus of energy: six detuned saws (A3 + fifth + octave) with a snapping filter, flanger swirl and soft echoes
+    "DUALCO_MMISSILE.WAV": [("synth:energystab:220:1.10", 1.0, 0.0, None, 0.55, 1.0, 0.0, 0.0, 1.4),
+                            ("synth:airwhoosh:1200:5000:0.6", 0.22, 0.0, None, 0.35)],
+    # per landing (cue 1, x3): the matching soft hit, no drive (stays quieter than the launch)
+    "DUALCO_MMHIT.WAV": [("synth:energystab:440:0.50", 0.5, 0.0, None, 0.3, 1.0, 0.0, 0.0, 1.4)],
+---- end ----
+   DRIVE dict: "DUALCO_MMISSILE.WAV": 1.35   (no DRIVE key for DUALCO_MMHIT.WAV - remove it if present)
+   FADE_OUT dict: "DUALCO_MMISSILE.WAV": 0.45, "DUALCO_MMHIT.WAV": 0.25
+
+-- candidate D_firewind: sample-based: reversed Wind swell into the release, Fireball whoosh (x1.45) + Tornado swirl (x1.45) + airy whoosh
+---- code ----
+    # Magic Missile v12 candidate D_firewind (2026-10-18, user: 'scrap it, start fresh'): sample-based: reversed Wind swell into the release, Fireball whoosh (x1.45) + Tornado swirl (x1.45) + airy whoosh
+    "DUALCO_MMISSILE.WAV": [("Attack/Wind.WAV", 0.45, 0.0, 0.3, 0.0, -1.15, 0.12),
+                            ("Attack/Firebs.WAV", 0.4, 0.24, 0.8, 0.5, 1.45, 0.02),
+                            ("Attack/Tornado.wav", 0.42, 0.26, 0.7, 0.45, 1.45, 0.05, 0.3),
+                            ("synth:airwhoosh:2000:5500:0.5", 0.18, 0.22, None, 0.35)],
+    # per landing (cue 1, x3): the matching soft hit, no drive (stays quieter than the launch)
+    "DUALCO_MMHIT.WAV": [("Attack/Firebs.WAV", 0.22, 0.0, 0.4, 0.25, 1.5, 0.01, 0.1),
+                         ("synth:airwhoosh:3000:1000:0.3", 0.15, 0.0, None, 0.2)],
+---- end ----
+   DRIVE dict: "DUALCO_MMISSILE.WAV": 1.15   (no DRIVE key for DUALCO_MMHIT.WAV - remove it if present)
+   FADE_OUT dict: "DUALCO_MMISSILE.WAV": 0.45, "DUALCO_MMHIT.WAV": 0.22
+
+== 3. Apply (game + editor closed) ==
+  py -3.10 build_dual_sphere_sfx_v1.py --apply      (no engine / pipeline / Spells.pfs change)

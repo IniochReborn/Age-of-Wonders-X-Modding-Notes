@@ -1,0 +1,152 @@
+MIMIC (233, Secret L2, 2026-10-18, fork) - integration notes.
+Task: Mimic = combat spell, research 100 / cost 5: the caster copies the LAST spell cast in the current combat by ANY
+player, paying Mimic's cost; with nothing cast yet it is a Dispel Magic for Mimic's cost (cancellable).
+NOTHING applied live; no shared builder edited.  Builders may be CRLF - detect the newline per file before editing.
+Scratch: C:\Users\<user>\.claude\jobs\47241cad\tmp\mimic\
+  art\mimic_icon_preview.png   8x glyph | 40x35 composite on the Secret cloud (SpellIcn 120)
+  art\mimic_icon_40x35.png     the 40x35 icon alone
+  art\mimic_fx_preview.png     the 20 shimmer frames (additive over grey)
+  art\DUALSE_MIMIC.WAV         the sfx mix rendered with the builder's own mix() (2.12 s)
+  emu.py                       Unicorn test of the engine caves (ALL PASS at preferred bases + two rebased layouts)
+New files (already written): patch scripts\patch_tc_mimic_v1.py, patch scripts\mimic_frame_mask.png (the user's
+reference art import export\mimic.jpg - ornate oval mirror - traced: invert, thr 128, crop, 34 px tall, MaxFilter 3).
+Icon-override trap: there is NO art import export\mimic.png (only mimic.jpg, which the builder ignores) - keep it so.
+
+== 1. patch_dual_sphere_spells_v1.py ==
+1a. DONORS += (TDispelMagic: classref cell 0x557E53B4 -> VMT 0x557E53F4; Create 0x557E8940 sets id 8 @0x557E8993,
+    referenced @0x557E8CA5 `mov eax,[0x557E53B4] / call 0x557E8940`)
+---- code ----
+    "TDispelMagic":      (0x557E53B4, 0x557E8940),   # Mimic 233's chassis = Dispel Magic (id 8, pfs 18, SpellTypes 7); patch_tc_mimic_v1.py
+---- end ----
+1b. SPELLS: the Secret block (after id=232 Lucky, before id=234 Reversal)
+---- code ----
+    dict(id=233, name="Mimic", sphere=7, tier=2, mana=5, research=100,
+         donor="TDispelMagic", pfs_donor=18, tc_type=7, icon=233,        # Secret L2; a Dispel Magic clone = the fallback when nothing was cast yet; patch_tc_mimic_v1.py turns the book pick into the last spell cast this combat (charged 5)
+         desc="Mirrors the last spell cast in this battle by anyone, friend or foe, for Mimic's own cost. If no spell has been cast yet, it becomes a Dispel Magic.",
+         gfx={1: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(6600, 6620)), -32, -76, f20=2, f18=1)},   # slot 1 = mirror shimmer at the CASTER (kind-0x26 driver from patch_tc_mimic_v1; 64x96, hex centre at (32,76), 20 x 2 ticks); slot 0 = Dispel Magic's own twinkle (fallback target fx) kept
+         sfx=["SFX\\ZSP\\DUALSE_MIMIC.WAV", "SFX\\ZSP\\DUALSE_MIMIC.WAV"]),   # cue 0 = the fallback's cast (cast animation), cue 1 = played by the engine at a copied cast
+---- end ----
+    No pokes: the donor's AI priority stays (an AI Mimic is always the plain Dispel - the AI never calls SelectSpell).
+    Donor pfs 18 tag 0xC: slot 0 TWINKGR chain, slots 1-9 empty (slot 1 None -> the pipeline's assert allows it).
+
+== 2. build_dual_sphere_icons_v1.py ==
+2a. ICONS dict: add   233: "mimic",
+2b. CLOUDS dict: add  "mimic": 120,          (Secret cloud, as City Spy / Magic Missile)
+2c. GLYPHS dict: add  "mimic": glyph_mimic,
+2d. new function (anywhere after _user_mask_glyph's def is fine - it is only CALLED at build time):
+---- code ----
+def glyph_mimic():
+    """Mimic (233, Secret L2): the user's reference mirror frame (art import export/mimic.jpg, ornate oval with scroll
+    work) TRACED -> mimic_frame_mask.png; inside the glass a spell star split down a dashed mirror axis - the left
+    half solid, the right half its hollow reflection."""
+    im = _user_mask_glyph("mimic_frame_mask.png")
+    dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    cx, cy, R, r = 20.0, 17.6, 7.6, 3.1
+    star = []
+    for k in range(10):
+        a = math.radians(90 + 36 * k); rr = R if k % 2 == 0 else r
+        star.append((cx + rr * math.cos(a), cy - rr * math.sin(a)))
+    left = Image.new("L", im.size, 0); ImageDraw.Draw(left).polygon(P(star), fill=255)
+    half = Image.new("L", im.size, 0); ImageDraw.Draw(half).rectangle([0, 0, int((cx - 0.55) * S), H * S], fill=255)
+    solid = ImageChops.multiply(left, half)
+    ring = Image.new("L", im.size, 0); ImageDraw.Draw(ring).polygon(P(star), fill=255)
+    inner = ring.filter(ImageFilter.MinFilter(int(1.3 * S) | 1))
+    outline = ImageChops.subtract(ring, inner)
+    rhalf = Image.new("L", im.size, 0); ImageDraw.Draw(rhalf).rectangle([int((cx + 0.55) * S), 0, W * S, H * S], fill=255)
+    outline = ImageChops.multiply(outline, rhalf)
+    im.paste(255, mask=solid); im.paste(255, mask=outline)
+    for y0 in (7.4, 11.0, 23.2, 26.8):                                                    # the dashed mirror axis
+        dr.line(P([(cx, y0), (cx, y0 + 1.8)]), fill=255, width=int(0.8 * S))
+    for x, y in ((15.2, 11.0), (25.8, 26.4)):                                              # two glints on the glass
+        dr.line(P([(x - 1.2, y), (x + 1.2, y)]), fill=255, width=int(0.6 * S)); dr.line(P([(x, y - 1.2), (x, y + 1.2)]), fill=255, width=int(0.6 * S))
+    return im
+---- end ----
+
+== 3. build_dual_sphere_fx_v1.py ==
+3a. new function before `def build():`
+---- code ----
+def mimic_shimmer(n=20):
+    """Mimic (233) slot 1 (2026-10-18): the kind-0x26 driver at the CASTER's hex (patch_tc_mimic_v1.py), additive,
+    64x96 (hex centre at (32, 76)): a tall oval pane of silvery-violet light forms around the caster (frames 0-5), a
+    bright sheen sweeps across it left -> right and is answered by its mirror image sweeping back right -> left
+    (6-13), then the pane breaks into glints that drift up and fade (14-19)."""
+    W, H = 64, 96; cx, cy, A, B = 32.0, 50.0, 17.0, 30.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); rnd = random.Random(2330)
+    e = np.sqrt(((xx - cx) / A) ** 2 + ((yy - cy) / B) ** 2)
+    glints = [(rnd.uniform(0, 6.283), rnd.uniform(0.6, 1.05), rnd.uniform(0.6, 1.4)) for _ in range(22)]
+    out = []
+    for i in range(n):
+        t = i / (n - 1.0); acc = np.zeros((H, W, 3), np.float32)
+        form = min(1.0, i / 5.0); fade = 1.0 if i < 14 else max(0.0, 1.0 - (i - 13) / 6.0)
+        rim = 0.85 * np.exp(-((e - 1.0) / 0.07) ** 2) * form * fade
+        pane = np.clip(1.0 - e, 0, 1) ** 0.6 * 0.22 * form * fade
+        sheen = np.zeros_like(xx)
+        if 6 <= i <= 13:
+            k = (i - 6) / 7.0
+            for pos, w in ((-1.0 + 2.0 * k, 0.9), (1.0 - 2.0 * k, 0.6)):                  # the sweep and its mirror
+                u = (xx - cx) / A + 0.35 * (yy - cy) / B * (1 if w > 0.7 else -1)
+                sheen += w * np.exp(-((u - pos) / 0.16) ** 2)
+            sheen *= (e < 1.0)
+        for c, (rc, pc, sc) in enumerate(((150, 105, 235), (170, 140, 235), (235, 220, 255))):
+            acc[..., c] += rim * rc + pane * pc + sheen * sc * fade
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"); dr = ImageDraw.Draw(im)
+        if i >= 12:
+            g = (i - 12) / 7.0
+            for a, v, s in glints:
+                x = cx + A * v * math.cos(a); y = cy + B * v * math.sin(a) - 22 * g * s
+                lum = int(255 * max(0.0, 1.0 - g) ** 0.7)
+                if lum < 20: continue
+                col = (lum, int(lum * 0.9), 255 if lum > 0 else 0, 255); r = 1.6 if s > 1.0 else 1.0
+                dr.line([(x - r, y), (x + r, y)], fill=col); dr.line([(x, y - r), (x, y + r)], fill=col)
+        out.append(im)
+    return out
+---- end ----
+3b. groups list: add (DualDF 6600-6619 verified free in the builder AND in the live DualDF.ILB; 6700+ = Reversal)
+---- code ----
+              (6600, mimic_shimmer(), "SEmimic%02d.BMP", 770, 85, 0x0000),       # Mimic (233) slot 1: mirror pane forms around the caster, sheen + its mirrored sweep, breaks into glints (64x96, kind-0x26 driver)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py ==
+4a. MIXES: add next to "DUALSE_REVERSAL.WAV"
+---- code ----
+    # Mimic (233, Secret L2 2026-10-18): a MIRRORED chime swell - the enchantment chime reversed + slowed (with Dispel
+    # Magic's own cast reversed under it) sucked in up to a struck E5/E6 'mirror line', then the same chime thrown back
+    # forward and higher = its reflection; airy bands rising then falling around the line, a shimmer over it all.
+    "DUALSE_MIMIC.WAV":     [("Attack/EnchP01.WAV", 0.70, 0.00, 0.85, 0.04, -0.82, 0.30),     # the chime REVERSED + slowed = a swell sucked in
+                             ("Attack/MAGIC13.WAV", 0.30, 0.10, 0.70, 0.05, -0.70, 0.25),     # Dispel's own cast reversed under it (the fallback's root)
+                             ("synth:glasswind:900:2600:0.80", 0.16, 0.05, None, 0.10),        # an airy band rising to the mirror line
+                             ("synth:bell:659:1.3", 0.26, 0.82, None, 0.70),                   # the mirror line: E5 + its octave struck together
+                             ("synth:bell:1318:1.0", 0.14, 0.83, None, 0.60),
+                             ("Attack/EnchP01.WAV", 0.42, 0.86, 0.80, 0.45, 1.22),            # ... and the chime thrown back FORWARD, higher = the reflection
+                             ("synth:glasswind:2600:900:0.80", 0.12, 0.88, None, 0.40),
+                             ("synth:shimmer:1.6", 0.20, 0.40, None, 0.70)]],
+---- end ----
+4b. DRIVE dict: add  "DUALSE_MIMIC.WAV": 1.15,      FADE_OUT dict: add  "DUALSE_MIMIC.WAV": 0.6,
+
+== 5. Apply order ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (check the log: NO "imported ...mimic.png" line; render 233)
+  py -3.10 build_dual_sphere_fx_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (-> Sfx\Zsp\DUALSE_MIMIC.WAV)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (registers 233, SpellTypes[233] = 7, Spells.pfs key 243)
+  py -3.10 patch_tc_mimic_v1.py                       (dry run: expect sites E/A/B/C/D=vanilla, zone zero, relocs none)
+  py -3.10 patch_tc_mimic_v1.py --apply
+  then the usual VEH / launch check, and an in-game combat test:
+    a) Mimic first in a fresh combat -> Dispel Magic targeting, cost 5, mirror shimmer at the caster; cancel works.
+    b) after an enemy casts e.g. Fireball: Mimic -> Fireball's targeting, Fireball's effect, 5 mana (minus caster
+       discounts), shimmer + Mimic chime at the caster; Mimic again repeats Fireball (a copy never records itself).
+    c) instant spells (High Prayer etc.) copy and fire at once; summons need a free hex as usual.
+    d) LAN/MP: both sides see the copied spell and the same mana spent (the mark rides inside the TE).
+
+== 6. Engine summary / LIFO (details in patch_tc_mimic_v1.py's docstring) ==
+  AoWTCPCK only.  Hooks (all vanilla 5-7 B sites, reloc-free): E 0x41B398 TAoWCombatMap.Create (reset per combat),
+  A 0x423270 SelectSpell (book pick 233 -> LAST, arm), B 0x4238BA after CreateTCAbRangedTE (mark [te+0x18] |= 0x10000),
+  C 0x40B32B TCAbRangedTE.Execute (strip mark -> MIMIC_TE, every client), D 0x40B44D the only CombatSpellCast call
+  (MIMIC_TE -> CastingMana(hero, GetSpell(233)) + CombatCastingDone(copied spell); else record LAST unless 233).
+  Caves 0x44D800-0x44DAC4 (allocation to 0x44E000).  Globals: 4 dwords AoWEPACK .idata page slack 0x5590BE40-0x5590BE4F
+  (no other script uses 0x5590BE00-0x5590BEFF; essence 0x5590BD00/BD10, reversal 0x5590BFF0).  AoWEPACK allocation
+  0x55880000-0x55880800 NOT used; DualDF 6620-6699 left free.
+  Independent of every other script: revert THIS before anything that rewrites 0x423270 / 0x4238BA / 0x40B32B /
+  0x40B44D / 0x41B398.  patch_tc_callofdead_instant_v1 (0x4233A2 inside SelectSpell, reads [ebp-8]) is compatible:
+  it sees the redirected id.  --revert restores the file byte-exact (verified md5 round trip on a scratch copy).
+  Backup <game>\backup\AoWTCPCK.dll.bak_mimic.  Ship: AoWTCPCK.dll, Spells.pfs, AoWEPACK.dll (pipeline), SpellIcn.ILB,
+  DualDF.ILB, Sfx\Zsp\DUALSE_MIMIC.WAV (release zip --add, like the other DUAL* WAVs).

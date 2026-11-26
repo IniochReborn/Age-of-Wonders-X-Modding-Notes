@@ -1,0 +1,30 @@
+# AoWx /map flavour lines - the bot posts ONE of these at random (in italics) under the assigned races.
+# One line per message. Blank lines and lines starting with # are ignored. Emoji are fine.
+Time to die in a crypt on turn one!
+Let there be blood!
+More blood... for the Blood God!
+May the best wizard win!
+In the first days of the world...
+Kill them all... let the gods sort them out!
+The slaughter begins!
+Prepare for annihilation!
+By the power of Grayskull!
+Unleash the Hell Hounds!
+A wizard is never late. Everyone else is simply early to their doom.
+The old powers stir once more.
+The fate of the world hangs in the balance.
+Let the chronicles be written in blood.
+An uneasy silence engulfed the lands...
+Time to commit some war crimes!
+Time to ruin some friendships!
+Good luck, have fun, trust nobody.
+May your starting position be blessed and your neighbours incompetent.
+May the RNG gods be ever in your favour...
+May your starting spells suck and your spawn location be unfavourable!
+Diplomacy is just war with extra steps...
+Let the backstabbing commence!
+Unleash the frogs!
+There's no Geneva Convention in the Valley of Wonders!
+Live, Laugh, ~~Love~~ Loot
+
+

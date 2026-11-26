@@ -1,0 +1,30 @@
+ESSENCE SHIFT (231) v6 - smooth fade-out of the cast effect + underground node art (2026-10-18, fork; NOTHING applied live)
+
+ENGINE ONLY - no builder / pipeline / Spells.pfs change (swirl2 already has a 44-frame fade tail at DualDF 6200-6243;
+it was being cut off by the engine, see below).
+
+Root causes:
+ * Fade: the TRejuvenateTE cast effect is the particle emitter [0x557FB300] (setup 0x557FC008; pushes at 0x5579F450:
+   100 particles, 64 px radius, birth jitter Random(30), LIFE 50 ticks). The emitter frees itself at tick 50, so
+   late-born particles are only ~20 ticks into the 88-tick swirl2 when everything vanishes -> abrupt end.
+   Fix: new hook FX 0x5579F488 (right after the setup) -> cave fxc: spell 231 -> [emitter+0x48] = 120
+   (30 jitter + 44 frames x 2 ticks + 2). Other TRejuvenate clones keep 50.
+ * Lump of earth underground: every node class has TWO resources in Release.hss (tag 2 = [res+0x10] editor group:
+   21 = surface art, 23 = underground/cave art). v5 placed the first matching resource = always surface art.
+   Fix: the resource picker prefers group 23 when level > 0 (underground + depths), 21 on the surface, then falls back
+   to any matching resource. The recovery re-place (old node back) uses the same rule.
+
+Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0):
+  py -3.10 patch_essenceshift_v1.py            (dry run: in-place upgrade, 171 bytes change; FX site 'free')
+  py -3.10 patch_essenceshift_v1.py --apply    (backup backup\AoWEPACK.dll.bak_essence6 = the v5 state)
+  VEH startup check.
+
+Chain / LIFO: unchanged (Essence Shift in front of terrain_spells + armyhooks); it now also owns FX 0x5579F488
+(vanilla before, no relocs, no other script references it). --revert restores the exact pre-v1 bytes from v6 or v5.
+
+Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\essence6\):
+  * live copy: upgrade -> "already applied"; v6 --revert md5 d8cea328 == the v5 script's own revert of live; fresh v6
+    apply on the reverted copy == the upgrade (e3742ba3); v6 --revert straight on the live v5 copy == d8cea328.
+  * emu6.py (Unicorn, real v6 DLL at 0x55700000 and 0x56C10000): ALL OK - every v5 case plus: level 0 -> surface fire
+    resource; level 1 and 2 -> the UG (group 23) fire resource; UG variant missing -> surface fallback; fxc id 231 ->
+    life 120, id 204 -> 50, movsx/push replayed, resumes 0x5579F48D with the stack balanced.

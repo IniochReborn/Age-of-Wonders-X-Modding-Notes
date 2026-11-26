@@ -1,0 +1,128 @@
+LUCKY (232) - Secret L1 unit enchantment, +3 RES (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+Engine: patch scripts\patch_lucky_v1.py (AoWEPACK zone 0x55881800-0x55881973, backup .bak_lucky).
+Ability.pfs: patch scripts\patch_lucky_ability_pfs_v1.py (record 210 = ability 0xC8 'Lucky', backup .bak_lucky).
+Icon mask: patch scripts\lucky_user_mask.png (traced from art import export\lucky2.jpg: the four-leaf clover body +
+stem, outer outline ring dropped, veins widened; drawn on the vanilla SECRET cloud = SpellIcn 151 frame 0).
+No art import export\lucky.png exists (lucky.jpg / lucky2.jpg only) - no icon-override trap.
+Newlines at writing time: patch_dual_sphere_spells_v1.py LF, build_dual_sphere_icons_v1.py LF, build_dual_sphere_fx_v1.py LF, build_dual_sphere_sfx_v1.py LF - detect per file, insert ONLY the code blocks, ast.parse each edited builder.
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry (right after the dict(id=231 ...) Cosmos entry) ==
+---- code ----
+    dict(id=232, name="Lucky", sphere=7, tier=1, mana=7, research=77, upkeep=1,
+         donor="TDarkGift", pfs_donor=87, tc_type=7, icon=232,                   # Secret L1 (sphere 7; research = Wizard's Tower cost); TDarkGift clone like Lionheart 373 - patch_lucky_v1.py grants ability 0xC8 (+3 RES)
+         desc="Fortune smiles on the target unit: it gains +3 Resistance while the enchantment lasts.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(6500, 6516)), -20, -24, f20=2, f18=1)},   # green four-leaf clover bloom + golden sparkles on the unit (Dark Gift slot 0, as Lionheart)
+         sfx=["SFX\\ZSP\\DUALSE_LUCKY.WAV"]),
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py ==
+  ICONS += 232: "lucky"      CLOUDS += "lucky": 151 (vanilla Secret cloud)      GLYPHS += "lucky": glyph_lucky
+  function (e.g. right before glyph_mendwalls):
+---- code ----
+def glyph_lucky():
+    """Lucky (232, Secret L1 2026-10-18): the user's reference art import export/lucky2.jpg (bold four-leaf clover with
+    white veins) TRACED -> lucky_user_mask.png: clover body (veins widened so they survive 40x35) + stem; the outer
+    outline ring is dropped (noise at icon size)."""
+    return _user_mask_glyph("lucky_user_mask.png")
+---- end ----
+
+== 3. build_dual_sphere_fx_v1.py - function before `def build():` + group row (after the last Cosmos row) ==
+---- code ----
+def lucky_glow():
+    """Lucky (232) slot 0 (16 frames 40x40 additive, Dark Gift's twinkle slot like Lionheart): a soft green four-leaf
+    clover blooms on the unit (four heart-lobed leaves, rotating slowly), golden lucky sparkles spiral up around it,
+    then the clover fades out in a gold-green glint."""
+    frames = []; rnd = random.Random(232); SZ = 40; N = 16
+    yy, xx = np.mgrid[0:SZ, 0:SZ].astype(np.float32); cx, cy = 20.0, 20.0
+    sparks = [(rnd.uniform(0, 6.28), rnd.uniform(0.7, 1.2), rnd.uniform(0.8, 1.3), rnd.uniform(0, 0.35)) for _ in range(12)]
+    for i in range(N):
+        t = i / (N - 1.0)
+        grow = min(1.0, t / 0.35); fade = 1.0 if t < 0.6 else max(0.0, 1.0 - (t - 0.6) / 0.4)
+        amp = grow * fade
+        rot = 0.6 * t
+        a = np.arctan2(yy - cy, xx - cx) - rot; r = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        # four heart-lobed leaves: r < R * (0.55 + 0.45 |cos 2a|) with a notch
+        R = 9.5 * (0.35 + 0.65 * grow)
+        leaf = np.clip((R * (0.45 + 0.55 * np.abs(np.cos(2 * a))) - r) / 2.0, 0, 1)
+        vein = np.exp(-((np.sin(2 * a)) ** 2) / 0.01) * np.clip(1 - r / (R + 1e-3), 0, 1)     # the 4 midribs, a touch brighter
+        core = np.exp(-r * r / 6.0)
+        g = amp * (0.75 * leaf + 0.35 * vein * leaf + 0.6 * core)
+        gold = amp * 0.9 * core
+        for a0, v, sz, ph in sparks:
+            age = t - ph
+            if age < 0 or age > 0.65: continue
+            ang = a0 + 5.0 * age; rad = 4 + 14 * age * v
+            x = cx + math.cos(ang) * rad; y = cy + math.sin(ang) * rad * 0.8 - 10 * age
+            if 0 <= x < SZ and 0 <= y < SZ:
+                tw = (1 - age / 0.65) * (0.6 + 0.4 * math.sin(age * 40 + a0))
+                s = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (sz * sz)) * tw
+                gold += 1.1 * s; g += 0.25 * s
+        g = np.clip(g, 0, 1); gold = np.clip(gold, 0, 1)
+        rr = 255 * np.clip(0.25 * g + 1.0 * gold, 0, 1)
+        gg = 255 * np.clip(0.95 * g + 0.85 * gold, 0, 1)
+        bb = 255 * np.clip(0.30 * g + 0.25 * gold, 0, 1)
+        lum = np.maximum(np.maximum(rr, gg), bb) / 255.0
+        frames.append(Image.fromarray(np.dstack([rr, gg, bb, np.where(lum > 0.03, 255, 0)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+---- code ----
+              (6500, lucky_glow(), "SElucky%02d.BMP", 770, 55, 0x0000),       # Lucky (232) slot 0: green four-leaf clover bloom + golden sparkles (40x40, 16 frames, additive)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py - MIXES entry (before "DUALEW_OVERGROWTH.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # Lucky (232, Secret L1 2026-10-18): a light lucky chime - rising G-major bell arpeggio (G5 B5 D6 G6) over a soft
+    # shimmer, a glassy sparkle swirling up and a faint choir 'ah' underneath; no stock samples.
+    "DUALSE_LUCKY.WAV":     [("synth:shimmer:1.3", 0.28, 0.00, None, 0.7),
+                             ("synth:bell:784:1.0", 0.30, 0.00, None, 0.6),
+                             ("synth:bell:988:1.0", 0.27, 0.12, None, 0.6),
+                             ("synth:bell:1175:1.0", 0.25, 0.24, None, 0.6),
+                             ("synth:bell:1568:1.1", 0.20, 0.38, None, 0.7),
+                             ("synth:glasswind:1500:3200:0.60", 0.14, 0.05, None, 0.35),
+                             ("synth:choir:392:1.4", 0.14, 0.00, None, 0.7)],
+---- end ----
+---- code ----
+    "DUALSE_LUCKY.WAV": 1.2,      # DRIVE dict (and FADE_OUT dict: "DUALSE_LUCKY.WAV": 0.6)
+---- end ----
+  (test render 1.48 s, peak 0.83, RMS 0.237: C:\Users\<user>\.claude\jobs\47241cad\tmp\lucky\DUALSE_LUCKY_d1.2.wav)
+
+== 5. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply         (SpellIcn 232)
+  py -3.10 build_dual_sphere_fx_v1.py --apply            (DualDF 6500-6515)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply           (Sfx\Zsp\DUALSE_LUCKY.WAV - NEW file, ship via build_release_zip --add)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply        (Spells.pfs 232 + registration + SpellTypes[232] = 7)
+  py -3.10 patch_lucky_ability_pfs_v1.py --apply         (Ability.pfs record 210 = 0xC8)
+  ceilings: append 0xC8 to LADDER in patch_aowx_banner_ceilings_v1.py AND patch_tcablist_ceiling_v1.py (bound -> 0xC9),
+            then re-run both with --apply
+  py -3.10 patch_lucky_v1.py          (dry run: zone zero | sites free | prev ex 0x55863320 vt 0x558633A0 reg 0x558634B0 r64 0x5574E998 d68 0x558633E0)
+  py -3.10 patch_lucky_v1.py --apply
+  VEH startup check.
+
+== 6. Chain / LIFO ==
+  * patch_lucky_v1.py chains IN FRONT of Lionheart (patch_lionheart_v1.py) on the TDarkGift ExecuteSpell / ValidTarget
+    entry jumps, the RegisterAbility call @0x557BCDAF and TDarkGiftEnchantment VMT+0x68 (GetDamage); it also owns
+    VMT+0x64 (GetResistance, was the base 0).  Revert Lucky before re-running/reverting Lionheart; re-apply after.
+  * --revert is exact (zone header stores each site's original bytes) and refuses if a site no longer points at Lucky.
+    Works on a DLL with vanilla sites too (prologue-replay stubs) - tested.
+  * Ability 0xC8 skips 0xC7 (reserved).  If 0xC7's Ability.pfs record 209 is added later it must precede 210:
+    revert patch_lucky_ability_pfs_v1.py, append 209, re-apply (writers require ascending keys).
+
+== 7. Behaviour / RE ==
+  * Lucky = a 3rd TDarkGiftEnchantment instance (id 0xC8, name "Lucky"): RES getter 3, DMG getter 0 -> +3 RES only
+    (no Death Strike: GetDamageTypes checks 0xA9 only; no Fearless: 0xB1 only).  Upkeep 1 = spell+0x1C, copied into the
+    enchantment by ExecuteSpell like Dark Gift; one Lucky per unit (ValidTarget refuses an already-Lucky unit).
+  * Unit-enchantment stats come from TUnitEnchantmentAbility VMT getters +0x5C ATK / +0x60 DEF / +0x64 RES / +0x68 DMG
+    (base 0x5574E998 = xor eax,eax; Blessed DEF/RES 1, Stone Skin DEF 2, Enchanted Weapon ATK/DMG 1).
+  * Secret sphere = 7 (0 Cosmos .. 6 Water, 7 Secret, 8 None; pipeline sphere assert 0..255 OK).  Secret spells have no
+    sphere picks, so they are never researched normally: the Wizard's Tower (editor-time config, dispenses a random
+    spell of a chosen sphere) hands them out.  'Research / Wizard Tower cost' 77 = spell field +0x18 (pipeline
+    research=); mana +0x14, upkeep +0x1C, tier +0x21.
+  * Unit-window RES display depends on the stat cache (+0x44..47, refreshed by TUnit.Changed) - unverified in game.
+
+== 8. Tests (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\lucky\) ==
+  * patch_lucky_v1.py on a live-DLL copy: dry run -> apply -> "already applied" -> revert byte-identical; re-apply
+    identical.  On a copy with Lionheart reverted (vanilla sites): apply -> revert byte-identical.
+  * emu.py (Unicorn on the applied DLL): 21/21 pass - getters per ability, 373 still routed to Lionheart, ValidTarget,
+    ExecuteSpell args + ret 8, registration order, registers preserved.
+  * patch_lucky_ability_pfs_v1.py on a copy: apply -> already applied -> revert byte-identical.
+  * Previews: icon_preview.png, clover_variants.png, fx_preview.png, DUALSE_LUCKY_d1.2.wav.

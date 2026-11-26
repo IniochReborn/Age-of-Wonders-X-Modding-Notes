@@ -1,0 +1,163 @@
+HURL SKULL v4 art/sfx + engine v4 (scream cue) + pfs v5 (2026-10-19, fork; NOTHING applied live, no shared builder edited).
+Scratch: C:\Users\<user>\.claude\jobs\47241cad\tmp\bxlabil5 (art5.py, sfx5.py, prev5.py, mk_v4.py, verify_int5.py, previews, WAVs).
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` (keep hurl_skull3 / dark_explosion as fallbacks) ----
+def hurl_skull4(n=12):
+    """Hurl Skull (0xCC) v4 slot 0 (2026-10-19, user: 'make the skull SPIN like the boulder - the face does not need to
+    stay in front; needs more glow / tail'): Hurl Boulder's BALLS.ILB 7-14 turn a full revolution in 8 frames at
+    f20 5 (40 ticks); this skull turns 30 deg per frame = one revolution per 12-frame loop at the live f20 3 (36 ticks,
+    ~ the boulder's speed) - same ids 7410-7421, same 64x64 canvas centre 31/33, size ~ the boulder (~10x12 px).
+    Gritty bone-grey skull (grime, pits, cracks, pitch-black sockets / nose / teeth gaps), a wider CRIMSON glow halo
+    hugging it, a ragged BLACK smoke aura, and a rising PLUME (black smoke + blood-red flame tongues + dark-red embers,
+    ~22 px up) that reads as a fire trail behind the lob (the kind-2 arc has no direction / trail slot, so the trail
+    is baked as rising smoke).  Solid keyed sprite (256): edges alpha-dithered by rec_for = gritty broken edges."""
+    S = 8; W = H = 64; cx, cy = 31.0, 33.0
+    rnd = random.Random(5410)
+    tongues = [(rnd.uniform(-3.0, 3.0), rnd.uniform(9.0, 15.0), rnd.uniform(0, 6.28), rnd.uniform(1.3, 2.2)) for _ in range(10)]
+    puffs = [(rnd.uniform(-5.0, 5.0), rnd.uniform(0, 1), rnd.uniform(2.0, 3.6), rnd.uniform(0, 6.28)) for _ in range(9)]
+    embers = [(rnd.uniform(-4.5, 4.5), rnd.uniform(0, 1), rnd.uniform(0.7, 1.4)) for _ in range(10)]
+    grime = np.random.RandomState(5411).rand(H, W)
+
+    def skull(ang):
+        L = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); d = ImageDraw.Draw(L); k = S
+        def E(x0, y0, x1, y1, c): d.ellipse([(cx + x0) * k, (cy + y0) * k, (cx + x1) * k, (cy + y1) * k], fill=c)
+        def P(pts, c): d.polygon([((cx + x) * k, (cy + y) * k) for x, y in pts], fill=c)
+        def Ln(pts, c, w): d.line([((cx + x) * k, (cy + y) * k) for x, y in pts], fill=c, width=max(1, int(w * k)))
+        rim, bone, lit, shade, blk = (14, 8, 8, 255), (200, 196, 186, 255), (236, 233, 224, 255), (124, 116, 110, 255), (4, 2, 2, 255)
+        E(-5.4, -6.6, 5.4, 3.4, rim)
+        P([(-3.9, 1.2), (3.9, 1.2), (3.1, 6.2), (-3.1, 6.2)], rim)
+        E(-4.8, -6.0, 4.8, 2.8, bone)
+        P([(-3.3, 1.6), (3.3, 1.6), (2.6, 5.6), (-2.6, 5.6)], bone)
+        E(-3.8, -5.0, 1.6, -1.6, lit)
+        E(1.4, -2.4, 4.2, 2.6, shade); P([(0.6, 3.0), (3.0, 1.8), (2.3, 4.8), (0.4, 4.8)], shade)
+        E(-4.0, -2.2, -0.4, 1.5, blk); E(0.4, -2.2, 4.0, 1.5, blk)
+        P([(-3.6, -2.1), (-0.3, -1.5), (-0.6, -1.0), (-3.6, -1.3)], rim); P([(3.6, -2.1), (0.3, -1.5), (0.6, -1.0), (3.6, -1.3)], rim)
+        P([(0, 1.6), (-1.0, 3.2), (1.0, 3.2)], blk)
+        d.rectangle([(cx - 2.8) * k, (cy + 3.7) * k, (cx + 2.8) * k, (cy + 4.4) * k], fill=blk)
+        for t in (-1.8, -0.6, 0.6, 1.8): Ln([(t, 3.7), (t, 5.4)], blk, 0.42)
+        Ln([(-1.2, -5.2), (-0.4, -3.6), (-1.0, -2.6)], rim, 0.32)
+        Ln([(2.0, -4.6), (1.2, -3.4), (1.9, -2.5)], rim, 0.28)
+        return L.rotate(ang, resample=Image.BICUBIC, center=(cx * k, cy * k))
+
+    out = []
+    for i in range(n):
+        ph = 2 * math.pi * i / n
+        F = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); d = ImageDraw.Draw(F); k = S
+        for (ox, t0, r, p0) in puffs:                                         # rising black smoke plume (the 'tail')
+            t = (i / n + t0) % 1.0
+            x = cx + ox * (0.5 + 0.6 * t) + 1.4 * math.sin(ph + p0); y = cy - 4 - 20 * t
+            rr = r * (0.7 + 0.9 * t) * (1.0 - 0.45 * t); a = int(255 * (1 - t) ** 0.6)
+            d.ellipse([(x - rr) * k, (y - rr) * k, (x + rr) * k, (y + rr) * k], fill=(10, 6, 6, a))
+
+        def tongue(ox, ln, p0, wd, col, sc, a):
+            fl = 0.7 + 0.3 * math.sin(ph * 2 + p0)
+            Lg = ln * sc * fl + 2.0; w = wd * (0.85 + 0.4 * sc); sway = 1.4 * math.sin(ph + p0)
+            base = (cx + ox * (0.6 + 0.4 * sc), cy - 0.5); tip = (cx + ox * 0.35 + sway, cy - 0.5 - Lg)
+            pts = [(base[0] - w, base[1] + 2.6), (base[0] + w, base[1] + 2.6), (base[0] + w * 0.55 + sway * 0.4, base[1] - Lg * 0.5),
+                   tip, (base[0] - w * 0.55 + sway * 0.4, base[1] - Lg * 0.5)]
+            d.polygon([(x * k, y * k) for x, y in pts], fill=col + (a,))
+        d.ellipse([(cx - 8.0) * k, (cy - 7.8) * k, (cx + 8.0) * k, (cy + 7.2) * k], fill=(14, 4, 4, 200))      # black smoke aura
+        for col, sc, a in (((80, 4, 4), 1.0, 230), ((140, 10, 8), 0.8, 245), ((200, 22, 12), 0.56, 255)):
+            for (ox, ln, p0, wd) in tongues: tongue(ox, ln, p0, wd, col, sc, a)
+        F = F.filter(ImageFilter.GaussianBlur(S * 0.4))
+        sk = skull(-30.0 * i)                                                  # full spin: 30 deg / frame
+        m = sk.split()[3]
+        for col, rad, bl in (((120, 6, 6, 255), 3, 1.0), ((210, 26, 14, 255), 1, 0.5)):   # wide dark-crimson glow + hot rim
+            g = Image.new("RGBA", F.size, (0, 0, 0, 0)); g.paste(col, mask=m.filter(ImageFilter.MaxFilter(2 * rad * S + 1)))
+            F = Image.alpha_composite(F, g.filter(ImageFilter.GaussianBlur(S * bl)))
+        im = Image.alpha_composite(F, sk)
+        small = np.array(im.resize((W, H), Image.LANCZOS)).astype(np.float32)
+        a = small[:, :, 3]; opaque = a > 200; lum = small[:, :, :3].mean(2); bonepx = opaque & (lum > 95)
+        g = (grime - 0.5) * 32.0
+        for c in range(3): small[:, :, c] = np.where(bonepx, small[:, :, c] + g, small[:, :, c])
+        pit = bonepx & (grime > 0.92)
+        for c in range(3): small[:, :, c] = np.where(pit, small[:, :, c] * 0.45, small[:, :, c])
+        small[:, :, 3] = np.where(a > 120, 255, 0)                             # v4: hard edge (no checkerboard dither) - chunky gritty smoke
+        smoke = (small[:, :, 3] > 0) & (lum < 40)                              # sooty smoke pixels: vary the greys for texture
+        tex = (grime[::-1, :] - 0.5) * 34.0
+        for c in range(3): small[:, :, c] = np.where(smoke, np.clip(small[:, :, c] + 14 + tex, 4, 70), small[:, :, c])
+        img = Image.fromarray(np.clip(small, 0, 255).astype(np.uint8), "RGBA"); dr = ImageDraw.Draw(img)
+        for (ex, e0, sp) in embers:
+            t = (i / n * sp + e0) % 1.0
+            x = cx + ex + 1.8 * math.sin(ph + e0 * 6); y = cy - 7 - 16 * t
+            if t < 0.9: dr.point((round(x), round(y)), fill=(int(230 - 100 * t), int(34 - 24 * t), 10, 255))
+        out.append(img)
+    return out
+
+
+_DARK_EXPL2 = []
+EXPL2_MODE = [514] * 4 + [1026] * 26             # a short crimson FLASH (brighten), then the blast drawn as MULTIPLY (darkening)
+
+
+def dark_explosion2():
+    """Hurl Skull (0xCC) v4 impact (slot 2) (2026-10-19, user: 'cool idea but looks bad - polish it to the quality of the
+    original explosion'): v3's alpha version had to DITHER its soft coverage (a keyed sprite has no per-pixel alpha) -
+    hence the blocky, speckled look.  v4 keeps Self Destruct's EXPLBIG.ILB 0-29 at FULL size (274x258, vanilla's own
+    canvas; Implosion's 280x280 DualDF sprite runs live) and every gradient smooth by using the two modes that take
+    per-pixel strength from the colour itself:
+      frames 0-3   BRIGHTEN (514, like vanilla): the ignition flash re-graded onto a crimson ramp (blood-red glow ->
+                   hot red-orange core, never yellow / white).
+      frames 4-29  MULTIPLY (1026, white = no change): the fireball darkens the ground - each pixel's darkening
+                   follows vanilla's own luminance, tinted deep crimson in the burning body (the hottest parts nearly
+                   black-red) and turning to sooty grey-black smoke from frame 16 as the fire dies, thinning out by 29.
+    Same 30 frames / timing as vanilla; record 214 slot 2 anchor = vanilla's -131/-142 (pfs v5)."""
+    if _DARK_EXPL2: return _DARK_EXPL2
+    src = _aowx_ilb_frames(os.path.join("Effects", "ExplBig.ILB"), list(range(30)))
+    xs = np.array([0, 20, 60, 120, 180, 230, 255], np.float32)            # flash ramp: luminance -> added light
+    R = np.array([0, 50, 120, 175, 215, 240, 255], np.float32)
+    Gc = np.array([0, 0, 3, 8, 22, 50, 80], np.float32)
+    Bc = np.array([0, 0, 3, 6, 14, 30, 50], np.float32)
+    FIRE = np.array([175, 18, 12], np.float32)                             # multiply tint of the burning body
+    CORE = np.array([95, 4, 4], np.float32)                                # the hottest parts: near black-red
+    SOOT = np.array([70, 62, 60], np.float32)                              # dying smoke
+    for i, s in enumerate(src):
+        a = np.array(s).astype(np.float32)
+        lum = np.maximum(a[:, :, 0] * 0.4 + a[:, :, 1] * 0.45 + a[:, :, 2] * 0.15, a[:, :, :3].max(2) * 0.85)
+        o = np.zeros_like(a)
+        if EXPL2_MODE[i] == 514:
+            o[:, :, 0] = np.interp(lum, xs, R); o[:, :, 1] = np.interp(lum, xs, Gc); o[:, :, 2] = np.interp(lum, xs, Bc)
+            o[:, :, 3] = np.where(o[:, :, :3].max(2) >= 4, 255, 0)
+        else:
+            k = max(0.0, (i - 15) / 14.0)                                    # 0 = fire .. 1 = last smoke frame
+            fade = (1.0 - k) ** 1.1 * (min(1.0, (i - 3) / 3.0))              # ramps in over 4-6, thins out by 29
+            d = np.clip(lum / 230.0, 0, 1) ** 0.7                            # 0..1 per-pixel strength from vanilla
+            hot = np.clip((lum - 170) / 85.0, 0, 1)
+            body = FIRE[None, None, :] * (1 - hot[:, :, None]) + CORE[None, None, :] * hot[:, :, None]
+            tint = body * (1 - min(1.0, k * 1.6)) + SOOT[None, None, :] * min(1.0, k * 1.6)   # fire -> soot
+            amt = (d * fade)[:, :, None]
+            o[:, :, :3] = 255.0 * (1 - amt) + tint * amt
+            o[:, :, 3] = np.where(amt[:, :, 0] > 0.02, 255, 0)
+        _DARK_EXPL2.append(Image.fromarray(np.clip(o, 0, 255).astype(np.uint8), "RGBA"))
+    return _DARK_EXPL2
+---- end ----
+---- rows: REPLACE the (7410, hurl_skull3(), ...) row with the 1st line, and REPLACE the 10 dark_explosion() rows (7460 + 7481..7489) with the 2nd + 3rd ----
+              (7410, hurl_skull4(), "HSkull%02d.BMP", 256, 0, KEY),          # Hurl Skull (0xCC) v4 slot 0: full 30-deg/frame SPIN like the boulder, wider crimson glow + black aura + rising smoke/ember plume (12 frames, 64x64 BALLS canvas)
+              (7460, dark_explosion2()[:4], "SKexp%02d.BMP", 514, 100, KEY),  # Hurl Skull v4 slot 2 (pfs v5): crimson ignition FLASH (brighten, 274x258 = vanilla canvas)
+              (7464, dark_explosion2()[4:], "SKexq%02d.BMP", 1026, 100, KEY), # Hurl Skull v4 slot 2: MULTIPLY dark-crimson blast -> soot (frames 4-29, smooth per-pixel)
+---- end ----
+---- MIXES: build_dual_sphere_sfx_v1.py - REPLACE the two v3 SKULL_* entries (from "    # Hurl Skull v3 landing (cue 1" up to "DUALEW_OVERGROWTH") with ----
+    # Hurl Skull v4 landing (cue 1; 2026-10-19 user: 'WAY more violent, like Self-Destruct - just change it so it is not
+    # identical'): Self Destruct's own BLAST at full weight (pitched 0.93 = a touch deeper, cut at 2.2 s) with a second
+    # BLAST copy 40 ms later at 0.80 (thicker, chorused), Fire Ball's Explod1 slightly sped up for the hot crack, and the
+    # bone CRUNCH on top at t=0 (A_PUNCH2 x0.85 + the D_UNDEAD bone hit + an A_FORCE1 thud), a sub boom underneath.
+    # Heavy DRIVE (soft-clipped, dense, loud).  No shriek, no bells (no pings).
+    "SKULL_HIT.WAV":    [("Attack/BLAST.WAV", 1.0, 0.00, 2.2, 0.9, 0.93),
+                         ("Attack/BLAST.WAV", 0.55, 0.04, 1.8, 0.8, 0.80),
+                         ("Attack/Explod1.wav", 0.55, 0.00, 1.3, 0.6, 1.08),
+                         ("Attack/A_Punch2.WAV", 1.0, 0.00, None, 0.05, 0.85),
+                         ("Hit_Death/D_Undead.WAV", 0.8, 0.00, 0.45, 0.2, 0.92),
+                         ("Attack/A_Force1.WAV", 0.7, 0.00, None, 0.1, 0.70),
+                         ("synth:subswell:38:50:1.4", 0.55, 0.00, None, 0.8)],
+    # Hurl Skull v4 mid-flight (cue 2; user: 'the scream starts too late - it should start fading in IMMEDIATELY'):
+    # every layer starts at its LOUD body (WraithDeath +0.15 s, Screech3 +0.15 s, scream4 +1.60 s, ghoul +0.25 s - the
+    # sources' own quiet heads measured and skipped) with a 0.08 s linear per-layer fade-in only (no slow whole-mix
+    # swell), pitched down for an evil timbre; 0.85 s, 0.3 s fade-out.  The engine (patch_bxl_ranged_abilities_v4)
+    # also fires the cue at the first quarter of the lob instead of the midpoint.
+    "SKULL_SCREAM.WAV": [("Zu/WraithDeath.wav", 0.9, 0.00, 0.85, 0.35, 0.86, 0.08, 0.15),
+                         ("Hit_Death/Screech3.WAV", 0.5, 0.00, 0.80, 0.35, 0.84, 0.08, 0.15),
+                         ("xHero_Death/scream4.wav", 0.45, 0.00, 0.80, 0.40, 0.92, 0.08, 1.60),
+                         ("xSFX/ghoul.wav", 0.35, 0.00, 0.80, 0.40, 0.78, 0.08, 0.25)],
+---- end ----
+---- DRIVE: change "SKULL_HIT.WAV": 1.7 -> 2.4 ----
+---- FADE_OUT: change "SKULL_HIT.WAV": 0.6 -> 0.7 ----
+---- FADE_IN: REMOVE  "SKULL_SCREAM.WAV": 0.2,  (the slow whole-mix swell caused the late start; per-layer 0.08 s fade-ins now) ----

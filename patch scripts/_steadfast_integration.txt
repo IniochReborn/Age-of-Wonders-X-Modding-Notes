@@ -1,0 +1,97 @@
+Steadfast (218, Earth tier 3) - integration snippet for the parent (2026-10-17).  Nothing below is applied; every
+edit lands in a SHARED file, so the parent merges it.  Scripts already written (own files, scratch-tested only):
+  patch_steadfast_v1.py               AoWEPACK: reg 0xC5 'Steadfast' / ix grant (spell 218, friendly non-machines) /
+                                      live DEF in TCombatUnit.GetDefense 0x5572549C / fg auto-combat scorer = 0
+  patch_steadfast_ability_pfs_v1.py   Ability.pfs record 207 (needs 206 = Static Shield present)
+  steadfast_user_mask.png             icon trace of art import export/steadfast.jpg (hoplite, spear, shield; 320x280 white = ink)
+
+1) patch_dual_sphere_spells_v1.py - SPELLS entry (Earth = sphere 3; next to Mend Walls 216):
+
+    dict(id=218, name="Steadfast", sphere=3, tier=3, mana=5, research=130,
+         donor="TGreatHail", pfs_donor=126, tc_type=0x0A, icon=218,              # hail class, 7 strikes (patch_rotaway STRIKES[218]); grant + live DEF = patch_steadfast_v1.py
+         pokes=[(0x34, 1, 0), (0x35, 1, 0), (0x36, 2, 0), (0x39, 1, 0x0C), (0x3B, 1, 3)],   # ATK 0 / DMG 0 / no damage type / range 12 (long) / own units + enemies + empty hexes (Sanctify's)
+         desc="The earth steadies your troops: friendly units in the target hex and every hex around it stand their ground until the end of the battle, gaining +2 defense while they still have their full movement and +1 while they have more than half.",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),                       # nothing visibly falls (Sanctify's blank)
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),
+              2: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(4250, 4266)), -51, -40, f20=2, f18=1)},   # per-hex landing: dust ring + rising earthen wall of light
+         sfx=["SFX\ZSP\DUALER_STEADFAST.WAV", ["SFX\ZSP\DUALER_STEADHIT.WAV"]]),           # cue-1 sub-list REQUIRED (hail landing plays sound 1)
+
+2) patch_tc_spell_alias_v1.py:
+    ALIAS       += 218: 0x74,          # Steadfast -> Great Hail (hail class, 7 strikes)
+    SITE_KEEP[0x40F0E3] |= {218}
+    SITE_ALIAS[0x42827A][218] = 0x82   # 7-hex preview (as Sanctify 208 / Inspiration 309)
+   patch_rotaway_v1.py:  STRIKES[218] = 7
+
+3) Ceilings: LADDER += 0xC5 in patch_aowx_banner_ceilings_v1.py and patch_tcablist_ceiling_v1.py, bound -> 0xC6; re-run both.
+
+4) build_dual_sphere_icons_v1.py:
+    ICONS[218] = "steadfast";  CLOUDS["steadfast"] = 40     (Earth cloud, as mendwalls);  GLYPHS["steadfast"] = glyph_steadfast
+
+def glyph_steadfast():
+    """Steadfast (218, Earth tier 3): art import export/steadfast.jpg - a crested hoplite behind his round shield,
+    spear levelled - TRACED -> steadfast_user_mask.png (thresholded, cropped, stretched to fill 312x240, lines
+    thickened MaxFilter 5 so the spear shaft and shield rims survive at 40x35)."""
+    return _user_mask_glyph("steadfast_user_mask.png")
+
+   ⚠ The art-import trap: steadfast.jpg is a .jpg, so it is NOT auto-imported over the glyph; never drop a
+   steadfast.png into art import export (it would silently replace the glyph).
+   Preview: C:\Users\<user>\.claude\jobs\47241cad\tmp\stead\glyph_preview.png
+
+5) build_dual_sphere_fx_v1.py - function (before def build()) + row:
+
+def steadfast_ward(n=16):
+    """Steadfast (218) slot 2 (2026-10-17): the per-hex landing (96x80, additive, 16 frames x 2 ticks, anchor -51/-40
+    like Sanctify = hex centre (48, 46)): the ground answers - a low ring of amber-brown dust and stone chips kicks up
+    around the hex, then a ring of earthen bronze light rises a short way up the unit (a 'rooted' wall of light) and
+    settles back into the ground; all fade together.  Earthy, no white flare."""
+    W, H = 96, 80; cx, cy = 48.0, 46.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []; rnd = random.Random(2181)
+    hexr = np.sqrt((xx - cx) ** 2 + ((yy - cy) / 0.45) ** 2)
+    chips = [(rnd.uniform(0, 2 * math.pi), rnd.uniform(16, 24), rnd.uniform(0.0, 0.25), rnd.uniform(8, 16)) for _ in range(14)]
+    for i in range(n):
+        t = i / (n - 1.0); env = math.sin(math.pi * min(1.0, t * 1.04)) ** 0.6
+        R = 10 + 14 * min(1.0, t / 0.35)
+        dust = np.exp(-((hexr - R) / 3.2) ** 2) * max(0.0, 1 - t / 0.7) * 0.55
+        h = 22 * math.sin(math.pi * min(1.0, max(0.0, t - 0.15) / 0.8))           # the wall of light: rises then sinks
+        side = np.exp(-((np.sqrt((xx - cx) ** 2) - 22) / 2.2) ** 2)
+        wall = np.clip(1 - (cy + 4 - yy) / max(h, 0.5), 0, 1) * (yy <= cy + 4) * (yy >= cy + 4 - h)
+        rim = np.exp(-((hexr - 22) / 1.8) ** 2) * (t > 0.12) * 0.8
+        v_wall = (0.55 * wall * np.exp(-((xx - cx) / 24) ** 6) + 0.9 * side * wall + 0.7 * rim) * env
+        acc = np.zeros((H, W, 3), np.float32)
+        for c, cv in enumerate((205, 160, 90)): acc[..., c] += dust * cv * env
+        for c, cv in enumerate((215, 150, 70)): acc[..., c] += v_wall * cv
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"); dr = ImageDraw.Draw(im)
+        for a, r0, d0, up in chips:
+            u = (t - d0) / 0.55
+            if 0 <= u <= 1:
+                x = cx + (r0 + 4 * u) * math.cos(a); y = cy + 0.45 * (r0 + 4 * u) * math.sin(a) - up * math.sin(math.pi * u)
+                k = int(150 * (1 - u)) + 40
+                dr.rectangle([x - 1, y - 1, x, y], fill=(k, int(k * 0.75), int(k * 0.45), 255))
+        out.append(im)
+    return out
+
+    row:  (4250, steadfast_ward(), "ERstead%02d.BMP", 770, 85, 0x0000),      # Steadfast (218) slot 2: per-hex landing (96x80, additive)
+    (DualDF 4250-4265 used; 4266-4299 still free for this fork's range.)  Sheet: tmp\stead\fx_sheet.png
+
+6) build_dual_sphere_sfx_v1.py:
+    # Steadfast (218, Earth T3 2026-10-17): the Earth sphere's cast, a deep ground rumble and a shield-on-shield clank;
+    # per landing hex a soft stony thud with a faint parry ring.
+    "DUALER_STEADFAST.WAV": [("Attack/m_Earth.wav", 0.9, 0.00, 2.2, 0.8),
+                             ("Attack/Earth.WAV", 0.6, 0.10, 1.6, 0.7, 0.85),
+                             ("Attack/Parry.WAV", 0.45, 0.35, 0.8, 0.4, 0.8),
+                             ("synth:subswell:30:55:1.8", 0.4, 0.00, None, 1.0)],
+    "DUALER_STEADHIT.WAV":  [("Attack/Earth.WAV", 0.35, 0.00, 0.6, 0.4, 1.1),
+                             ("Attack/Parry.WAV", 0.15, 0.05, 0.5, 0.3, 0.9)],
+    DRIVE += "DUALER_STEADFAST.WAV": 1.6, "DUALER_STEADHIT.WAV": 1.5
+    (sources verified present: Sfx\Attack\m_Earth.wav, Earth.WAV, Parry.WAV)
+
+7) Apply order (live):
+    a. patch_staticshield_ability_pfs_v1.py must already be in (record 206) -> patch_steadfast_ability_pfs_v1.py --apply
+    b. ceilings (3) re-run
+    c. pipeline (1) + alias/strikes (2) + icons (4) + fx (5) + sfx (6): rebuild Spells.pfs / SpellIcn.ILB / DualDF.ILB / WAVs
+    d. patch_steadfast_v1.py --apply  (LAST among the reg-site / 0x557F6A20 / TGreatHail+0xD8 chainers; it decodes
+       the current fronts at apply time: reg 0x5586C920 Static Shield, ix 0x5583A1C0 Life/Air, fg 0x55868280)
+   Revert: patch_steadfast_v1.py --revert first, then the rest.
+   ⚠ While Steadfast is applied, DO NOT re-run patch_lifeair_v1.py --apply: its dry run says "Dry run OK" (it does not
+     detect a foreign cave in front of its ix site) and an apply would point its ix jmp at our cave, whose prev is
+     Life/Air's own cave -> an infinite jmp loop on every TCombatSpellCA execute.  Revert Steadfast first.
+     Static Shield's script correctly reports ABORT.

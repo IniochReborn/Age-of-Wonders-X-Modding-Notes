@@ -1,0 +1,53 @@
+ROYAL AMBITION (230) round 3 - new icon from the user's NEW reference + peace-offer-based sfx (2026-10-18, fork; NOTHING applied
+live, no shared builder edited).  Builders: sfx = CRLF (detect the newline per file), icons = LF; ast.parse after editing.
+
+REFERENCE: art import export\royal ambition.jpg (replaced 10-18 01:17 - a sketchy comedy/tragedy mask pair, happy upper-right,
+sad lower-left with tears).  Its hatched sketch lines cannot be traced to 40x35, so the icon is a CLEAN STYLISED REDRAW of that
+layout in SpellIcn style: two angular masks as solid ink (dark on the Cosmos cloud) with the features CUT OUT - the front
+happy mask (laughing eye arches, a broad grin with three teeth gaps, nose notch) tilted right, separated by a clear gap from the
+sad mask behind it (drooping eyes under slanted brows, a tear, a frown, nose notch) tilted left.  No royalambition.png in
+art import export (no override).  Mask: patch scripts\royalambition3_user_mask.png (made by tmp\royal3\mkicon.py).
+Preview (v2 | v3 at 40x35 x6 | v3 mask): C:\Users\<user>\.claude\jobs\47241cad\tmp\royal3\icon_preview.png
+
+PEACE OFFER SOUND: Sfx\Events\Message.WAV (AoWEPACK diplomacy message-type switch @0x5572EE44; a brass fanfare in C major,
+its C5 at ~527 Hz = ~12 cents sharp).  Renders: tmp\royal3\DUALCO_ROYAL_v3.wav (new, 4.05 s, RMS falls smoothly to 0 by
+~3.75 s), DUALCO_ROYAL_old_v2.wav (current live mix, for comparison).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition3_user_mask.png")    # v3 10/18: stylised redraw of the user's new masks reference
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_ROYAL.WAV" entry AND its 3 comment lines above it with ==
+---- code ----
+    # Royal Ambition v3 (2026-10-18, user: "like the PEACE OFFER sound, but extra extravagant and with some magic"): a
+    # quick brass C-E-G pickup into the vanilla peace-offer trumpets (Events/Message.WAV, C major ~12 c sharp - every synth
+    # tuned x1.007 to it) doubled an octave down (0.5x) and a fifth below (0.749x), C2 timpani, a held brass/strings/choir
+    # C triad swelling in under its tail, and the magic on top: a rising C-E-G-C bell arpeggio, a shimmer and a C8 glint.
+    "DUALCO_ROYAL.WAV":     [('synth:horn:263.46:263.46:0.14', 0.34, 0.0, None, 0.07),
+                             ('synth:horn:331.94:331.94:0.14', 0.34, 0.09, None, 0.07),
+                             ('synth:horn:394.74:394.74:0.16', 0.36, 0.18, None, 0.08),
+                             ('Events/Message.WAV', 0.85, 0.28, None, 0.6, 1.0),
+                             ('Events/Message.WAV', 0.3, 0.28, 2.9, 1.2, 0.5, 0.15),
+                             ('Events/Message.WAV', 0.16, 0.4, 2.6, 1.1, 0.749, 0.3),
+                             ('synth:drum:65.87:1.0', 0.5, 0.28, None, 0.6),
+                             ('synth:drum:65.87:1.2', 0.42, 2.05, None, 0.8),
+                             ('synth:horn:526.91:526.91:1.9', 0.34, 2.0, None, 1.3, 1.0, 0.25),
+                             ('synth:horn:394.74:394.74:1.9', 0.24, 2.0, None, 1.3, 1.0, 0.25),
+                             ('synth:horn:331.94:331.94:1.9', 0.2, 2.0, None, 1.3, 1.0, 0.25),
+                             ('synth:strings:131.73:3.0', 0.26, 0.3, None, 1.3, 1.0, 0.5),
+                             ('synth:strings:263.46:2.0', 0.22, 1.95, None, 1.2, 1.0, 0.3),
+                             ('synth:choir:263.46:2.2', 0.2, 1.85, None, 1.3, 1.0, 0.4),
+                             ('synth:bell:1053.83:1.2', 0.11, 1.7, None, 0.9),
+                             ('synth:bell:1327.73:1.2', 0.1, 1.82, None, 0.9),
+                             ('synth:bell:1578.98:1.2', 0.1, 1.94, None, 0.9),
+                             ('synth:bell:2107.65:1.6', 0.09, 2.06, None, 1.2),
+                             ('synth:shimmer:2.4', 0.16, 1.55, None, 1.2, 1.0, 0.4),
+                             ('synth:bell:4215.30:1.4', 0.04, 2.4, None, 1.1)],
+---- end ----
+  DRIVE dict: "DUALCO_ROYAL.WAV" stays 1.2.   FADE_OUT dict: "DUALCO_ROYAL.WAV": 0.9 -> 1.2
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 230 v3)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (Sfx\Zsp\DUALCO_ROYAL.WAV v3)
+  No pipeline / DLL change.

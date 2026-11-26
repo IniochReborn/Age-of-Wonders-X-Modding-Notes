@@ -1,0 +1,75 @@
+WATER ICON FIXES (2026-10-17, fork) - Crashing Wave 220 / Rite of the Seas 221 / Flash Flood 223.  NOTHING applied live,
+no shared builder edited.  build_dual_sphere_icons_v1.py is LF.  Insert ONLY the code blocks; ast.parse afterwards.
+Previews (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\icons6\): final_old_vs_new.png (top = live, bottom = new; 40x35
+ink on water-blue x6 + the 320x280 mask), cw6_zoom.png (tail variants), rite2_preview.png, ff2_preview.png.
+Icon-override trap checked: no art import export\crashingwave.png / riteseas.png / flashflood.png.
+
+== 1. Crashing Wave (220): glyph_crashingwave - replace its return line with ==
+  (new mask patch scripts\crashingwave2_user_mask.png, tmp\icons6\cw6.py variant "m": the long left tail and its curl
+   removed; the tail bands end in one clean tapered brush point, cut along a slanted line and smoothed only in the
+   tail zone so the crest spirals keep their detail; old mask kept)
+---- code ----
+    return _user_mask_glyph("crashingwave2_user_mask.png")    # v2 10/17: left tail trimmed to a clean tapered point
+---- end ----
+
+== 2. Rite of the Seas (221): add this function right after glyph_riteseas, and in GLYPHS change
+      "riteseas": glyph_riteseas  ->  "riteseas": glyph_riteseas2   (glyph_riteseas stays, unused) ==
+---- code ----
+def glyph_riteseas2():
+    """Rite of the Seas (221) v2 (2026-10-17, user: v1 'looks janky'): redrawn clean at 4x supersampling (smooth curves,
+    uniform stroke widths, bold cut-outs that survive 40x35) after art import export/rite of the seas.jpg: a tall curved
+    mainsail carved with a bold spiral, a small sail either side of it (dark gaps keep all three separate), a pennant
+    at the masthead, a deep solid crescent hull, the spiral sun with six rays and two smooth wavelets."""
+    import math
+    from PIL import Image, ImageDraw
+    K = 4; im = Image.new("L", (W * S * K, H * S * K), 0); dr = ImageDraw.Draw(im)
+    U = S * K
+    P = lambda pts: [(x * U, y * U) for x, y in pts]
+    def bez(p0, p1, p2, n=28):
+        return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+                 (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]) for t in [i / n for i in range(n + 1)]]
+    def spiral(cx, cy, r0, r1, turns, a0=0.0, n=120):
+        return [(cx + (r0 + (r1 - r0) * i / n) * math.cos(a0 + 2 * math.pi * turns * i / n),
+                 cy + (r0 + (r1 - r0) * i / n) * math.sin(a0 + 2 * math.pi * turns * i / n)) for i in range(n + 1)]
+    def stroke(pts, w, fill):
+        dr.line(P(pts), fill=fill, width=max(1, int(w * U)), joint="curve")
+        for x, y in (pts[0], pts[-1]):
+            dr.ellipse([(x - w / 2) * U, (y - w / 2) * U, (x + w / 2) * U, (y + w / 2) * U], fill=fill)
+    # tall mainsail: straight mast edge at x 21, convex leading edge
+    dr.polygon(P([(21.0, 2.4)] + bez((21.0, 2.4), (12.2, 11.0), (13.6, 21.8)) + [(21.0, 21.8)]), fill=255)
+    stroke(spiral(17.8, 15.0, 0.35, 3.3, 1.6, a0=0.9), 1.1, 0)           # bold spiral carved into it
+    # small left sail (gap >= 1 unit from the mainsail's leading edge)
+    dr.polygon(P([(11.6, 10.0)] + bez((11.6, 10.0), (7.0, 15.0), (6.6, 21.8)) + [(12.4, 21.8)]), fill=255)
+    stroke(bez((10.6, 19.6), (9.0, 17.6), (10.6, 15.6)), 0.9, 0)          # a curl cut into it
+    # small jib right of the mast
+    dr.polygon(P([(22.4, 7.2)] + bez((22.4, 7.2), (27.8, 14.0), (29.4, 21.8)) + [(22.4, 21.8)]), fill=255)
+    # pennant streaming left from the masthead
+    dr.polygon(P([(21.0, 1.6)] + bez((21.0, 1.6), (17.0, 0.4), (14.0, 2.0)) + bez((14.0, 2.0), (17.6, 2.2), (21.0, 3.6))), fill=255)
+    # deep solid crescent hull
+    top = bez((5.6, 23.2), (20.0, 25.4), (34.6, 22.6)); bot = bez((34.6, 22.6), (21.0, 33.4), (5.6, 23.2))
+    dr.polygon(P(top + bot[1:]), fill=255)
+    # spiral sun with six rays
+    cx, cy, r = 33.0, 7.4, 4.5
+    dr.ellipse([(cx - r) * U, (cy - r) * U, (cx + r) * U, (cy + r) * U], fill=255)
+    stroke(spiral(cx, cy, 0.3, 2.8, 1.35, a0=3.4), 0.95, 0)
+    for k in range(6):
+        a = math.radians(-160 + k * 42); c, s_ = math.cos(a), math.sin(a)
+        stroke([(cx + c * (r + 1.2), cy + s_ * (r + 1.2)), (cx + c * (r + 2.7), cy + s_ * (r + 2.7))], 1.0, 255)
+    # two wavelets under the hull
+    for y0, x0, x1 in ((31.2, 8.0, 32.0), (33.8, 12.0, 28.0)):
+        n = 60; pts = [(x0 + (x1 - x0) * i / n, y0 + 0.65 * math.sin(i / n * 3 * math.pi)) for i in range(n + 1)]
+        stroke(pts, 1.0, 255)
+    return im.resize((W * S, H * S), Image.LANCZOS).point(lambda v: 255 if v >= 128 else 0)
+---- end ----
+
+== 3. Flash Flood (223): glyph_flashflood - replace its return line with ==
+  (new mask patch scripts\flashflood2_user_mask.png, tmp\icons6\ff.py + ff2.py variant "g13": the reference cut at the
+   tower's colour change (full-res y 642, just under the cloud) - cloud, white lighthouse top and beam all gone - the
+   tower top capped with a crenellated parapet (corbel band 22 px wider each side + 4 merlons), bottom-aligned; the
+   inner white details (door, wave curl, water lines) widened 13 px at source res so they survive 40x35; old mask kept)
+---- code ----
+    return _user_mask_glyph("flashflood2_user_mask.png")    # v2 10/17: bottom half only (tower from its colour change down) + parapet
+---- end ----
+
+== 4. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 220 / 221 / 223 redrawn; no pipeline / DLL change)

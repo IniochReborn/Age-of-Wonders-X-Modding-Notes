@@ -1,0 +1,65 @@
+ROYAL AMBITION (230) round 4 (2026-10-18, fork).  NOTHING applied live, no shared builder edited.
+Builders: icons LF, sfx CRLF - detect the newline per file; ast.parse after editing.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition4_user_mask.png")    # v4 10/18 (user: LINE-ART like the source, thicker lines, no noise): clean redraw of the source's contours (happy mask upper right with laughing eye arcs + toothy grin, sad mask lower left with sloping eyes, tear, frown), uniform ~2.2 px strokes at 40x35, pair tilted -20 deg to fill the icon (tmp royal4/mk_royal4_mask.py)
+---- end ----
+  (new file already written: patch scripts/royalambition4_user_mask.png; v2/v3 masks kept.  No 'art import export/royalambition.png'
+   exists -> no override.)
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_ROYAL.WAV" entry AND its comment lines above it with ==
+---- code ----
+    # Royal Ambition v4 (2026-10-18, user: "terrible - and that was DECLARE WAR; the peace offer is Message2.wav; similar
+    # but not too recognizable, more extravagant, magical"): Events/Message2 (the peace-offer motif G-G-G-E-G-C, ~+48 c sharp
+    # of concert C) reversed+slowed as an in-draw, then slowed 2x (an octave down) and doubled by brass on the same notes
+    # over a G string bed; a G2 timpani roll + a soft cymbal swell into a big C arrival (C2/C3 timpani, crash wash, C-E-G
+    # brass triad, strings, choir, drone) crowned by a rising C-E-G bell arpeggio, shimmer and high sparkles. All synths
+    # tuned x1.028 to the sample; no DRIVE (no tanh distortion); 4.75 s, whole-mix FADE_OUT 1.2.
+    "DUALCO_ROYAL.WAV":     [("Events/Message2.wav", 0.2, 0.0, 0.75, 0.1, -0.6, 0.45),
+                             ("synth:subswell:33.62:67.24:1.80", 0.3, 0.0, None, 0.25),
+                             ("Events/Message2.wav", 0.75, 0.55, None, 0.6, 0.5),
+                             ("synth:horn:201.49:201.49:0.52", 0.34, 0.55, None, 0.08),
+                             ("synth:horn:169.42:169.42:0.24", 0.3, 1.11, None, 0.08),
+                             ("synth:horn:201.49:201.49:0.28", 0.32, 1.43, None, 0.08),
+                             ("synth:strings:100.74:1.25", 0.32, 0.55, None, 0.35, 1.0, 0.15),
+                             ("synth:drum:100.74:0.45", 0.1, 1.2, None, 0.2),
+                             ("synth:drum:100.74:0.45", 0.14, 1.268, None, 0.2),
+                             ("synth:drum:100.74:0.45", 0.18, 1.3359999999999999, None, 0.2),
+                             ("synth:drum:100.74:0.45", 0.22, 1.404, None, 0.2),
+                             ("synth:drum:100.74:0.45", 0.26, 1.472, None, 0.2),
+                             ("synth:drum:100.74:0.45", 0.30000000000000004, 1.54, None, 0.2),
+                             ("synth:drum:100.74:0.45", 0.33999999999999997, 1.608, None, 0.2),
+                             ("synth:drum:100.74:0.45", 0.38, 1.676, None, 0.2),
+                             ("synth:hiss:1.6", 0.55, 0.3, 1.45, 0.1, 1.0, 1.3),
+                             ("synth:drum:67.24:1.4", 0.75, 1.75, None, 0.6),
+                             ("synth:drum:134.47:1.2", 0.35, 1.75, None, 0.6),
+                             ("synth:hiss:2.4", 0.45, 1.75, None, 1.2, 1.0, 0.0, 0.0, 1.6),
+                             ("synth:horn:268.96:268.96:1.9", 0.24, 1.75, None, 1.0, 1.0, 0.03, 0.0, 1.5),
+                             ("synth:horn:338.86:338.86:1.9", 0.18, 1.75, None, 1.0, 1.0, 0.03, 0.0, 1.5),
+                             ("synth:horn:402.98:402.98:1.9", 0.17, 1.75, None, 1.0, 1.0, 0.03, 0.0, 1.5),
+                             ("synth:horn:134.47:134.47:1.9", 0.16, 1.75, None, 1.0, 1.0, 0.03, 0.0, 1.5),
+                             ("synth:strings:134.47:2.6", 0.3, 1.75, None, 1.2, 1.0, 0.0, 0.0, 1.4),
+                             ("synth:strings:268.96:2.6", 0.2, 1.8, None, 1.2, 1.0, 0.0, 0.0, 1.4),
+                             ("synth:choir:268.96:2.6", 0.3, 1.85, None, 1.3, 1.0, 0.0, 0.0, 1.4),
+                             ("synth:drone:67.24:3.0", 0.18, 1.75, None, 1.5, 1.0, 0.1, 0.0, 1.3),
+                             ("synth:bell:537.9:1.5", 0.22, 1.85, None, 0.6),
+                             ("synth:bell:677.72:1.5", 0.20500000000000002, 1.9600000000000002, None, 0.6),
+                             ("synth:bell:805.94:1.5", 0.19, 2.0700000000000003, None, 0.6),
+                             ("synth:bell:1075.8:1.5", 0.175, 2.18, None, 0.6),
+                             ("synth:bell:1355.42:1.5", 0.16, 2.29, None, 0.6),
+                             ("synth:bell:1611.9:1.5", 0.14500000000000002, 2.4000000000000004, None, 0.6),
+                             ("synth:bell:2151.6:1.5", 0.13, 2.5100000000000002, None, 0.6),
+                             ("synth:shimmer:2.8", 0.75, 1.8, None, 0.0),
+                             ("synth:bell:2710.84:1.0", 0.06, 2.95, None, 0.5),
+                             ("synth:bell:3223.81:1.0", 0.06, 3.2, None, 0.5),
+                             ("synth:bell:2151.6:1.0", 0.06, 3.42, None, 0.5)],
+---- end ----
+  DRIVE dict: REMOVE the "DUALCO_ROYAL.WAV": 1.2 key (or set it to 1.0) - no soft-clip drive.   FADE_OUT: "DUALCO_ROYAL.WAV": 1.2 (unchanged).
+  Scratch render: C:/Users/<user>/.claude/jobs/47241cad/tmp/royal4/DUALCO_ROYAL_v4.wav (4.75 s, no clipping); old live v3 for comparison: DUALCO_ROYAL_old_v3.wav.
+  Message2 analysed: fundamentals G4 400 Hz (x3), E4 337, G4 401, C5 540 (held) = C major ~+48 cents.
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  No pipeline / DLL change.

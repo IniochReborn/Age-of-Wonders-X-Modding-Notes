@@ -1,0 +1,14 @@
+ROYAL AMBITION (230) icon v10 - 2026-10-18 (user: "very slightly raise the mouth and lower the eyebrows so they're not touching the edge").
+New mask (already written): patch scripts\royalambition10_user_mask.png = v9 with ONLY three cut-outs moved (mask px; 8 = 1 icon px):
+  sad mask brows  (2 holes)  down 6 px   -> edge clearance 4.1/6.0 -> ~9.8/12.0, brow-eye gap 14 -> ~9
+  sad mask mouth  (frown)    up 10 px    -> edge clearance 3.6 -> 7.6 (eyes still 33 px away)
+  (the happy mask's brows/mouth already had 12-16 px clearance; untouched)
+Made by C:\Users\<user>\.claude\jobs\47241cad\tmp\royal10\mk10.py; preview icon_v9_vs_v10.png (top 40x35, bottom full).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition10_user_mask.png")    # v10 10/18: v9 with the sad brows lowered 6 px and the sad frown raised 10 px (off the mask edge)
+---- end ----
+
+== 2. Apply (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply

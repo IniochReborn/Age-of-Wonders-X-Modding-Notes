@@ -1,0 +1,56 @@
+CROSSWIND (213) v6 - smooth ramp in / out, more + smaller particles (2026-10-16, fork; nothing below is applied live)
+=====================================================================================================================
+
+ENGINE: patch_tc_crosswind_fx_v1.py v6 (upgrades the live v5 in place; header 'XXW6'):
+  * particle count per wave from NTAB (3 at tick 0 -> 24 by tick 24, full to tick 66, back to 3 at tick 96);
+    cloud count per wave from CTAB (1,1,2,2,3,...,3,2,2,1,1 for ticks 0,4,..52 - no 9-cloud burst at tick 0);
+  * every particle FADES IN (LF hook @0x42F68F in the particle draw 0x42F618: spell-213 fx -> L = min(L, tick*10));
+  * particles tagged spell 213 (were Winds of Fury's 0x7E) -> they draw 213 slot 0 = the small orbs below;
+  * movement / reversal profile unchanged.  Zone 4 0x446400-0x446800 (LF cave + NTAB/CTAB; verified zero, reloc-free).
+
+---- 1. build_dual_sphere_fx_v1.py: function (before def build()) + group-table row ----
+def xwind_dust():
+    """Crosswind (213) slot 0 v6 (2026-10-16, user: MORE particles but SMALLER): Winds of Fury's own PARTICLE.ILB 18-20
+    (19x19 blue-white glow orbs) scaled 0.6x to 11x11, on black.  Drawn by the wash's kind-0x1F particles (tagged 213 by
+    patch_tc_crosswind_fx_v1 v6) through the same GFXE Intensity table as a genuine Winds of Fury particle (kind 0x1F
+    ignores the image's own blend), so they look identical, just smaller.  Entry [3600, 3601, 3602, 3601] at -5/-5."""
+    lib = ilbcodec.read(PARTICLE); out = []
+    for src in (18, 19, 20):
+        im, r = raw_pixels(lib, src)
+        bg = Image.new("RGB", im.size, (0, 0, 0)); bg.paste(im.convert("RGB"), mask=im.split()[3])
+        out.append(bg.resize((11, 11), Image.LANCZOS).convert("RGBA"))
+    return out
+
+              (3600, xwind_dust(), "AIxwdst%d.BMP", 770, 50, 0x0000),   # Crosswind (213) v6 slot 0: small (0.6x) Winds of Fury orbs for the wash particles
+
+---- 2. patch_dual_sphere_spells_v1.py: entry 213 - REPLACE slots 0, 2, 3, 4 (keep 1 and 5) ----
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [3600, 3601, 3602, 3601], -5, -5, f20=1),   # v6: the wash particles (small WoF orbs; kind 0x1F tagged 213)
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", [3300, 3300, 3303, 3303, 3306, 3306, 3309, 3309, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3309, 3309, 3306, 3306, 3303, 3303, 3300, 3300], -100, -53, f18=2, f20=2),   # v6 cloud 0: fade in / out over 8 frames each (24 ticks), hold 14
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", [3301, 3301, 3304, 3304, 3307, 3307, 3310, 3310, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3310, 3310, 3307, 3307, 3304, 3304, 3301, 3301], -95, -53, f18=2, f20=2),
+              4: G.seq_entry("EFFECTS\\DUALDF.ILB", [3302, 3302, 3305, 3305, 3308, 3308, 3311, 3311, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3311, 3311, 3308, 3308, 3305, 3305, 3302, 3302], -97, -56, f18=2, f20=2),
+  (slot 1 and slot 5 lines unchanged.)
+
+---- APPLY ORDER (game + editor closed) ----
+  1. build_dual_sphere_fx_v1.py --apply        (DualDF 3600-3602)
+  2. patch_dual_sphere_spells_v1.py --apply     (213 slots 0/2/3/4)
+  3. py -3.10 patch_tc_crosswind_fx_v1.py --apply   (dry-run on live: 'v5 build found -> upgrading to v6', Dry run OK)
+  4. VEH startup check
+  Apply 1-3 together: with only step 3 the particles (now tagged 213) would draw the OLD slot 0 (3100.. air curls).
+  Revert: patch_tc_crosswind_fx_v1.py --revert (restores LF, all hooks, zeroes all 4 zones; byte-identical to the v5
+  script's own --revert of the live DLL - verified).  The v5 script copy: C:\Users\<user>\.claude\jobs\47241cad\tmp\xwind7\patch_tc_crosswind_fx_v1_v5.py
+
+---- CHAIN CONSEQUENCES ----
+  LF 0x42F68F was vanilla (no other script owns it).  Otherwise unchanged (Bloodbath aura TK OTHER; oil gush / Ashes
+  see NF/SHOW as foreign).
+
+---- SCRATCH TESTS (C:\Users\<user>\.claude\jobs\47241cad\tmp\xwind7, copies of the LIVE AoWTCPCK.dll) ----
+  upgrade written; re-apply 'already applied'; revert written then 'already reverted'; v6 revert of the upgraded copy ==
+  v5 script's revert of the live copy (byte-identical); fresh apply on the reverted copy == the upgrade (byte-identical);
+  --dis: LF cave + call @0x42F68F (+2 nop, jge intact), pwave NTAB lookup, tk CTAB lookup checked.  xwind_dust preview
+  through the GFXE Intensity formula: dust.png (small orbs = the WoF look, smaller).
+
+---- IN-GAME TESTS ----
+  1. The wash builds up over ~0.8 s (a few particles, one cloud, growing) - no sudden burst; each particle brightens in.
+  2. Many more, smaller particles; same speed / reversal as v5.
+  3. It thins out smoothly at the end (fewer particles, clouds fading through 24 / 18 / 12 / 6).
+  4. Frame rate on a big field (peak ~24 particles x 18 live waves ~ 430 particles; lower NPF if needed).

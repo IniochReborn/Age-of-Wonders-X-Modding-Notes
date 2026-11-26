@@ -1,0 +1,63 @@
+SUSPEND (214) - smooth cast -> 'Suspended' overlay hand-off (2026-10-16, fork; nothing applied live)
+==================================================================================================
+
+FINDINGS (ticks = the cast's kind-7 TfxHS tick [fx+0x10]):
+  * Class-7 cast effect = TfxHS kind 7 (NextStrike class-7 case 0x40D93C..0x40D9D5: one path point HXtoHP(target)+16,
+    [fx+0x2C] = the target cu).  NewFrame kind 4/7 0x42D2EF: tick +1 per tick; at tick = GetTotalSequenceFrames(slot 0)
+    - 1 = 96 x (f18 0 + 1) - 1 = 95 (mod cave 0x43B560 -> 0x43B653) it plays sound cue 1 and sets done [fx+0xC].
+    Show draws frame tick/(f18+1) = frame i at tick i.  So the 96-frame tornado plays exactly ticks 0..95.
+  * The TE then makes/executes the CA for the done effect -> 0xC3 granted (+ implied Flying) at ~tick 96 = the moment
+    the cast animation ends.  The overlay can only appear from then on.
+  * Overlay frame = GetFrameIndex(seq, battle clock [[0x46E8D4]]+0x40, phase (hs>>2)&0xFFFF) -> per-unit, clock-driven;
+    the copy baked into the cast (frame i % 100) can NEVER be phase-matched -> the motes/ring JUMP at the hand-off.
+  * Brightness jump: the copy is drawn at the cast row's 770/90 with pixels x1.15, the overlay at its row's 770/60
+    -> the beam drops (or pops) when the overlay takes over.
+  * Lift (patch_tc_suspend_lift_v1 v1) skipped DONE effects -> between tick 95 (done) and the grant the fly offset
+    fell back to 0 for a frame -> the unit dipped and jumped.  The unit-body lift/shake timing itself is right (DUR 96).
+
+ENGINE (scratch-tested, NOT applied live):
+  * patch_tc_suspend_lift_v1.py v2 (in-place upgrade): the scan accepts the done effect (t clamped to DUR = -8 until the
+    grant).  Live dry-run: 'older build of this patch detected -> rewriting the zone in place'.
+  * NEW patch_tc_suspend_fadein_v1.py: hook 0x422880 (overlay draw `mov ebx,[eax] / call [ebx+0x84]`, vanilla, no
+    relocs) -> cave 0x446C10 (zone 0x446C00..0x447000, 227 B; BSS table 0x46CFA0..0x46CFE8 = 6 x {cu, t0, last}).
+    For overlay 0xC3 only: first time a unit's overlay is drawn (or after GAP 30 ticks unseen) t0 = clock; while
+    age < N = 24 ticks it draws through the Intensity table at L = 12 + 48*age/24 (VMT+0x94 ShowBlended, the
+    particle recipe), then the vanilla 770/60 draw.  All other overlays untouched.
+
+ART (parent: build_dual_sphere_fx_v1.py, suspend_lift) - make the cast's copy match the overlay's level and DIP OUT at
+the end so the fade-in overlay rises from the same low level (phase difference hidden):
+  REPLACE
+        fin = min(1.0, max(0.0, (t - 0.35) / 0.5))   ...
+        if fin > 0:
+            st = np.asarray(status[i % len(status)].convert("RGB"), np.float32) * fin
+            a_ = np.asarray(im, np.float32); a_[:H - OVY, 24:24 + 48] = np.maximum(a_[:H - OVY, 24:24 + 48], st[OVY:] * 1.15)   ...
+  WITH
+        fin = min(1.0, max(0.0, (t - 0.35) / 0.35)) * (1.0 - 0.65 * min(1.0, max(0.0, (t - 0.85) / 0.15)))   # in 35-70 %, dip to 0.35 over the last 15 %
+        if fin > 0:
+            st = np.asarray(status[i % len(status)].convert("RGB"), np.float32) * fin
+            a_ = np.asarray(im, np.float32); a_[:H - OVY, 24:24 + 48] = np.maximum(a_[:H - OVY, 24:24 + 48], st[OVY:] * 0.75)   # 0.75 at the lift's 770/90 ~ the overlay's 770/60
+  (0.75 and the 0.35 end level pair with the fade-in script's L1 60 / L0 12; tune together.)
+
+APPLY ORDER (game + editor closed):
+  1. art change above -> build_dual_sphere_fx_v1.py --apply
+  2. py -3.10 patch_tc_suspend_lift_v1.py --apply      (v1 -> v2 upgrade)
+  3. py -3.10 patch_tc_suspend_fadein_v1.py --apply    (new; backup .bak_suspfadein)
+  4. VEH startup check
+  Revert: fadein --revert (byte-exact), lift --revert.
+
+CHAIN: fadein's site was vanilla; nothing else touches 0x422880.  patch_tc_suspend_overlay_v1 still reports 'already
+applied' with both on (checked on scratch).
+
+SCRATCH TESTS (C:\Users\<user>\.claude\jobs\47241cad\tmp\susp7, copies of the LIVE AoWTCPCK.dll):
+  fadein: dry-run OK; apply; re-apply 'already applied'; revert byte-identical to live; 2nd revert 'already reverted';
+  re-apply; cave disassembly checked (stack: [ret][tables][surface] for VMT+0x94, tail-jumps keep the caller's
+  stack contract).  lift v2: upgrade; 'already applied'; v2 --revert == v1 script's own --revert; fresh apply on the
+  reverted copy == the upgrade.  Both together + overlay script: all 'already applied'.
+
+IN-GAME TESTS:
+  1. Suspend a ground unit: the beam/motes build inside the tornado, dip softly in the last ~0.5 s, and the Suspended
+     overlay then rises over ~0.8 s - no pop, no brightness jump, no position jump; the unit stays at flying height.
+  2. Two units Suspended at once: each fades in on its own.
+  3. Recast on the same unit after it expires: fades in again.
+  4. Enemy resists: the unit settles back to the ground (no overlay).
+  5. Other status overlays (Burning, Static Shield, Crosswind, Fire Halo ...) unchanged.

@@ -1,0 +1,63 @@
+TECTONIC SHIFT (219) round 6 - fog flicker + hex glow v4 (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+User: "fog of war flickers (darker) when the spell is cast. also the hex glows have weird green hexagons, get rid of those,
+and make the particles slightly more subtle."  Builders may be CRLF - detect the newline per file before editing.
+
+== 1. build_dual_sphere_fx_v1.py - add this function before `def build():` (tectonic_glow3 stays, unused) ==
+---- code ----
+def tectonic_glow4(n=48):
+    """Tectonic Shift (219) slot 3 v4 (2026-10-17, user: "the hex glows have weird green hexagons, get rid of those, and
+    make the particles slightly more subtle"): glow3's hex RIM is gone; what is left is a very soft round ground wash
+    (breathing once per loop) under four green motes rising out of the hex, easing out and fading at their peak - motes
+    ~10 % dimmer than glow3 (0.95 -> 0.86, whiter core 0.75 -> 0.65).  Same canvas / anchor / timing as glow2-3 (32x40,
+    anchor (-16, -31), 48 frames x 2 ticks = 2.8 s seamless loop; same ids 4750-4797), additive, played at blend 65."""
+    W, H = 32, 40; cx, cy = 16.0, 30.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    wash = np.exp(-(((xx - cx) / 8.5) ** 2 + ((yy - cy) / 4.6) ** 2) * 1.6)      # round, soft, no edge
+    #        x0     y0    rise  sway  sway-ph  sigma  phase
+    motes = [(12.0, 32.5, 13.0, 0.8, 0.10, 1.00, 0.00),
+             (19.5, 29.5, 12.0, 0.7, 0.55, 0.90, 0.25),
+             (15.0, 34.0, 14.5, 0.9, 0.30, 0.95, 0.50),
+             (21.5, 33.0, 11.5, 0.6, 0.80, 0.85, 0.75)]
+    peak = (0.82 ** 1.6)
+    frames = []
+    for i in range(n):
+        t = i / float(n); b = 0.5 + 0.5 * math.cos(2 * math.pi * t)
+        a = wash * (0.10 + 0.03 * b); hot = np.zeros_like(a)
+        for x0, y0, rise, sway, sph, sig, ph in motes:
+            u = (t + ph) % 1.0
+            y = y0 - rise * (1.0 - (1.0 - u) ** 2)                          # ease-out: slows as it nears the peak
+            x = x0 + sway * math.sin(2 * math.pi * (u + sph))
+            br = min(1.0, u / 0.18) ** 1.5 * (1.0 - u) ** 1.6 / peak          # fades in fast, fades out toward the top
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * sig * sig)) * br * 0.86
+            a = a + g; hot = hot + g * 0.65
+        a = np.clip(a, 0, 1); hot = np.clip(hot, 0, 1)
+        r = 40 * a + 130 * hot; g_ = 215 * a + 40 * hot; bl = 90 * a + 80 * hot
+        frames.append(Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(g_, 0, 255), np.clip(bl, 0, 255),
+                                                 255 * (a > 0.012)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - REPLACE the (4750, tectonic_glow3(), ...) row with (same ids 4750-4797 -> no pipeline change) ==
+---- code ----
+              (4750, tectonic_glow4(), "ERtgv%02d.BMP", 770, 65, 0x0000),        # 219 slot 3 v4: per-hex glow, NO hex rim (soft round wash + rising motes, ~10 % dimmer than v3; 32x40, 48 x 2 ticks)
+---- end ----
+
+== 2. Engine: patch_tectonic_shake_v1.py upgraded IN PLACE to v3.2 (exe cave only; AoWEPACK half byte-identical) ==
+  The camera shake no longer moves the map engine's view: ShowScene gets the TRUE scene origin and only its screen
+  DESTINATION is offset by (DX, DY) (clamped to [0, dest]).  See the v3.2 docstring.
+
+== 3. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF 4750-4797 re-rendered: glow v4)
+  py -3.10 patch_tectonic_shake_v1.py                 (dry run: "101 bytes change", AoWx.exe only)
+  py -3.10 patch_tectonic_shake_v1.py --apply         (backup backup\AoWx.exe.bak_tshake5 = the v3.1 exe)
+  VEH startup check.  No pipeline / Spells.pfs / patch_tectonic_v1.py change.
+  Revert: patch_tectonic_shake_v1.py --revert (exact; restores both ShowScene calls from the stored originals).
+
+== 4. Tests (scratch, tmp	fx6\) ==
+  * live copies: dry run 101 B; --apply; re-run "already applied (v3.2)"; --revert == the v3.1 script's own --revert
+    (DLL + exe byte-identical); fresh apply on the reverted copy == the in-place upgrade; AoWEPACK.dll unchanged.
+  * emu.py (Unicorn, the real patched exe cave, ShowScene stubbed): idle -> plain call (dest unchanged); shaking ->
+    ShowScene(viewer, dest x + DX, dest y + DY, surface) with |DX| <= 4, |DY| <= 2, clamp at dest 2/1 -> 0; expired ->
+    plain; viewer origin [+0x30]/[+0x34] never touched; ebx/esi/edi/ebp preserved, ret 4 balanced.
+  * glow4: preview glow4_vs3.png (top glow3 @ blend 70, bottom glow4 @ 65 on grass / desert / snow / dirt / cave dirt);
+    max per-pixel frame-to-frame change 75 (glow3 85), seamless loop.

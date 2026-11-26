@@ -1,0 +1,24 @@
+WATER ICONS v3 (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+User: "crashing wave icon, bottom left looks weird, fix it" / "flash flood icon, make the tower parapet have fewer but bigger blocks".
+New masks (already written in patch scripts\; old ones kept):
+  crashingwave3_user_mask.png  - bottom-left: v2's long hairline streak + split sliver bands erased (x<172, y>165) and the
+                                 three base bands continued as clean tapered crescents with rounded tips, stepping
+                                 shorter top->bottom (tips at x 80 / 112 / 142) - no thin streak at 40x35.
+  flashflood3_user_mask.png    - parapet: 4 thin merlons -> 3 big ones (16x16 px = 2x2 icon px each, 1-icon-px gaps),
+                                 drawn on the 8-px icon grid so they stay crisp; band 2 icon px tall (x 96-159, y 64-79).
+Previews: C:\Users\<user>\.claude\jobs\47241cad\tmp\icons7\cw3_old_vs_new.png, ff3_old_vs_new.png
+(top row = 320x280 masks old|new, bottom row = the 40x35 downsample old|new, upscaled 8x).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_crashingwave: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("crashingwave3_user_mask.png")    # v3 10/17: bottom-left tail = 3 clean tapered bands (no hairline streak)
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py - glyph_flashflood: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("flashflood3_user_mask.png")    # v3 10/17: parapet = 3 big merlons on the icon grid
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 220 / 223 redrawn; no pipeline / DLL change)
+  (art import export\ has no crashingwave.png / flashflood.png -> no icon-override trap.)

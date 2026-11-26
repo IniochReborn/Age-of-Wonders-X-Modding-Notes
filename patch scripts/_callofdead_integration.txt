@@ -1,0 +1,74 @@
+CALL OF THE DEAD (spell 211, Death tier 4) - integration snippets (2026-10-16, fork; nothing below is applied live)
+======================================================================================================================
+
+IDS / ROOM CLAIMED:
+  spell 211 (pfs key 221) . raised unit = Unitres 201 "Undead Draugr" (level 1, already in the data - nothing to add) .
+  DualDF 3000-3002 (corpse twinkle) -> next free 3003 . SpellIcn id 211 (key 'callofdead', mask file
+  patch scripts\callofdead_user_mask.png = the user's reference 'art import export\call of the dead.jpg' traced; no
+  'art import export\callofdead.png' override exists) . sfx Sfx\Zsp\DUALDE_CALLDEAD.WAV (new file - ship it) .
+  AoWEPACK zone 0x5586A000-0x5586A800 (105 B used) + LATCH dword 0x558FAE80 (BSS page slack) .
+  AoWTCPCK zone 0x442000-0x442400 (342 B used).  No new ability, no Ability.pfs record, no alias-table entry.
+
+---- 1. patch_dual_sphere_spells_v1.py: SPELLS entry (single-sphere block, after the 210 / Undying entry or after 209) ----
+  DONOR "TAnimateDead" already exists ((0x557F68CC, 0x557FA3BC), Harvest's donor) - no new DONOR line.  Its Create sets
+  range 0xFF (infinite) and 1 shot, so no pokes.
+    dict(id=211, name="Call of the Dead", sphere=2, tier=4, mana=7, research=250,
+         donor="TAnimateDead", pfs_donor=140, tc_type=0x27, icon=211,    # patch_callofdead_v1.py + patch_tc_callofdead_v1.py: EVERY corpse on the field rises as an Undead Draugr (unit 201)
+         desc="The dead answer your call: every corpse on the battlefield, friend or foe, rises as an Undead Draugr under your command.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [3000, 3001, 3002, 3001], -17, -18, f20=2)},   # Animate Dead's corpse twinkle (2x, same anchor/timing) in grave-green
+         sfx=["SFX\\ZSP\\DUALDE_CALLDEAD.WAV"]),
+
+---- 2. build_dual_sphere_icons_v1.py ----
+  ICONS[211] = "callofdead"     CLOUDS["callofdead"] = 20 (Death cloud, like wither/harvest)     GLYPHS["callofdead"] = glyph_callofdead
+def glyph_callofdead():
+    """Call of the Dead (211, Death tier 4, 2026-10-16): the user's reference (art import export/call of the dead.jpg -
+    a zombie hand clawing up out of a grave mound beside a headstone) TRACED -> callofdead_user_mask.png (binarised,
+    thin crease / crack lines closed with an 11 px max/min filter at full size, fitted to 40x35 at 97 %, bottom-aligned)."""
+    return _user_mask_glyph("callofdead_user_mask.png")
+
+---- 3. build_dual_sphere_fx_v1.py: function (before def build()) + group-table row (e.g. after Harvest's 334 row) ----
+              (3000, deadcall_sparkles(), "DEcall%d.BMP", 770, 50, 0x0000),   # Call of the Dead (211) slot 0: grave-green corpse twinkle (3 frames, 38x38)
+def deadcall_sparkles():
+    """Call of the Dead (211) slot 0 (2026-10-16): Animate Dead's own PARTICLE.ILB 15-17 twinkle (the 18 sparkles each
+    corpse spawns at the FX stage) at 2x like Harvest's, inverted for the additive (770) mode and tinted a cold,
+    sickly grave-green - every corpse on the field twinkles before it rises."""
+    lib = ilbcodec.read(PARTICLE); out = []
+    for src in (15, 16, 17):
+        im, r = raw_pixels(lib, src); im = im.convert("RGBA")
+        im = im.resize((im.width * 2, im.height * 2), Image.BICUBIC)
+        p = im.load()
+        for y in range(im.height):
+            for x in range(im.width):
+                r_, g_, b_, a_ = p[x, y]; v = 1.0 - max(r_, g_, b_) / 255.0
+                p[x, y] = (int(255 * min(1.0, 0.35 * v + 0.3 * v ** 3)), int(255 * min(1.0, 1.0 * v)), int(255 * min(1.0, 0.45 * v + 0.25 * v ** 3)), 255)
+        out.append(im)
+    return out
+
+---- 4. build_dual_sphere_sfx_v1.py: MIXES entry + DRIVE["DUALDE_CALLDEAD.WAV"] = 1.8 + FADE_OUT["DUALDE_CALLDEAD.WAV"] = 1.5 ----
+    # Call of the Dead (211, Death T4 2026-10-16): epic and necromantic, built on synths (no stock sample leads): a deep
+    # swell rising from the ground and a creepy minor drone, a dark sung A-minor chord (doubled an octave down) swelling
+    # in, two bone-rattle trains as the dead stir, a slowed low moan, with the Death cast and the crypt's air under it.
+    "DUALDE_CALLDEAD.WAV":  [("synth:subswell:28:50:4.2", 0.6, 0.00, None, 1.4, 1.0, 0.6),
+                             ("synth:drone:55:4.6", 0.7, 0.00, None, 1.6, 1.0, 0.8),
+                             ("Attack/m_Death.wav", 0.45, 0.05, 3.0, 1.2, 0.72, 0.4),
+                             ("synth:choir:110:4.0:minor", 0.8, 0.40, None, 1.4, 1.0, 1.0),
+                             ("synth:choir:55:4.0:minor", 0.55, 0.60, None, 1.4, 1.0, 1.0),
+                             ("synth:rattle:14:7:1.4", 0.45, 1.20, None, 0.5),
+                             ("synth:rattle:11:6:1.6", 0.35, 2.30, None, 0.6),
+                             ("synth:glide:Zu/WraithDeath.wav:0.62:0.5:3.0:0.8", 0.3, 1.00, None, 1.2),
+                             ("Places/Crypt.WAV", 0.3, 0.00, 4.4, 1.5, 0.9, 0.8)],
+  (tested through mix(): 4.6 s, peak 0.95 before normalise, RMS ~0.35 sustained 0.4-3.2 s then a 1.5 s fade.)
+
+---- APPLY ORDER (game closed) ----
+  a. fx builder --apply (DualDF 3000-3002), sfx builder --apply, icons builder --apply (SpellIcn 211)
+  b. patch_dual_sphere_spells_v1.py --apply      (registers 211, SpellTypes[211] = 0x27, Spells.pfs key 221)
+  c. patch_callofdead_v1.py --apply              (AoWEPACK; backup .bak_callofdead)
+  d. patch_tc_callofdead_v1.py --apply           (AoWTCPCK; backup .bak_callofdead)
+  e. VEH startup check
+  REVERT: d, c (each restores exactly what it found - verified byte-identical on scratch copies).
+
+---- CHAIN CONSEQUENCES (while applied) ----
+  * patch_tc_miracle_v1.py dry-run -> T1/T2 'prev' + "ABORT: zone holds our code but the sites do not all point at it"
+    (we sit in front of its 0x40BB26 / 0x423FDB caves).  Expected; revert d first to touch Miracle's TCPCK half.
+  * patch_tc_repent_harvest_v1.py already ABORTs (bcast/switch OTHER since Miracle) - unchanged.
+  * AoWEPACK: nothing else owns 0x557FA304 (vanilla) or 0x557FA346 (the mod's undead-pick jmp, no script) - no reports.

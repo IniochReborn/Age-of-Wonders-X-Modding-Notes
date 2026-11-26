@@ -1,0 +1,92 @@
+Tame Animal v5 paw (2026-10-19, fork; NOTHING applied live, no shared builder edited).
+User: "I don't like how it looks - use the new image (art import export\tamed.jpg): BLACK with a GREEN GLOW around it,
+maybe partial transparency, a little smaller than the current one.  The bear-paw should be part of the ability GFX like
+the Dominate eyeball, then 'stick' if it lands.  Make sure it fades in and out smoothly."
+
+HOW DOMINATE DOES IT: record 0x1C's slot-0 chain layer f8 6 = COMBAT.ILB [99, 99, 130 x8] at -32/-44 (2 blank lead-in
+frames, then the eye); the Dominated status record (0x96) shows the SAME image at the SAME anchor as its overhead
+overlay -> the overlay takes over under the cast's eye and it "sticks".  All chain layers play together.
+v5 = the same trick: one paw sprite for both the cast mark (211 f8 6) and the overhead overlay (212); the mark fades
+IN with per-record blend values (18/38/60/80), holds on the badge frames (88), then fades OUT (66/44/24/8) - on success
+the overlay (same sprite, same spot) is already under it so the paw stays; on a failed roll it just fades away.
+a tester = 14 frames x 2 ticks = 28 <= the twinkle's 30, so the effect length (and the CA midpoint where Tamed is applied)
+is unchanged.
+
+ART: tamed.jpg traced (ink < 128) -> tamed_paw_user_mask.png (214x320); paw 20 px tall x ~14 px wide (~20 x 24 incl. glow) (v3 badge was ~27 x
+24), near-black body, the gaps between toes / claw marks / pad SEE-THROUGH, soft green glow round the outer outline
+only; ALPHA 258/88 = partly transparent.  Overhead loop pulses the glow 0.82..1.0.  Previews: tmp\tame7\
+preview_paw7.png (row 1: eye | v3 badge | v5 loop; rows 2-4: the 12-step mark envelope) and preview_context_2x.png
+(game scale x2: eye | v3 badge | v5 badge on grass / sand / grey).
+
+APPLY ORDER (game + editor closed):
+  1. copy tmp\tame7\tamed_paw_user_mask.png -> patch scripts\  (the builder loads it next to itself)
+  2. paste the code block below before `def build():` in build_dual_sphere_fx_v1.py, and the 9 rows right after the
+     (7290, tame_castfade(), ...) row
+  3. py -3.10 build_dual_sphere_fx_v1.py --apply                     (DualDF.ILB + 7300..7311, 7320..7327)
+  4. copy tmp\tame7\patch_tame_ability_pfs_v5.py -> patch scripts\, py -3.10 patch_tame_ability_pfs_v5.py --apply
+  5. VEH check.  Ship Release\Ability.pfs + DualDF.ILB.
+REVERT: pfs v5 --revert (exact v4 bytes) before pfs v4.  Keep 7242..7249 / 7260..7271 in the builder (v4 points at them).
+NOTE: the overlay itself cannot fade when Tamed ENDS (end of combat / death) - the engine just stops drawing it.
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` ----
+TAME_PAW_MASK = "tamed_paw_user_mask.png"      # art import export/tamed.jpg traced (ink < 128 -> white), 214x320
+
+
+def _tame_paw7(glow=1.0, BH=20.0):
+    """Tame Animal v5 paw (2026-10-19; user: 'use the new image I uploaded (art import export/tamed.jpg); BLACK with a
+    GREEN GLOW around it, maybe partial transparency; a little smaller than the current one'): the user's bear-paw
+    print TRACED (TAME_PAW_MASK) at BH px tall x ~14 px wide (the v3 badge was ~27 x 24 px), centred at (32, 32) of a
+    64x64 canvas - the Dominated eye's anchor (xs -32 / ys -44).  Near-black body; the gaps between the toes / claw
+    marks / pad stay SEE-THROUGH (the glow only hugs the paw's outer outline = the shape closed by ~2 px, so the print
+    reads); outside it a soft green glow ring, bright leaf green at the edge fading to deep green, alpha falling off
+    (dithered at game scale).  Drawn ALPHA 258 with blendValue < 100 = the whole sprite partly see-through.
+    glow scales the ring (the overhead pulse)."""
+    from PIL import ImageFilter
+    SS = 8; SZ = 64
+    m = Image.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), TAME_PAW_MASK)).convert("L")
+    h = int(round(BH * SS)); w = int(round(m.width * h / m.height))
+    big = Image.new("L", (SZ * SS, SZ * SS), 0)
+    big.paste(m.resize((w, h), Image.LANCZOS), (int(32 * SS - w / 2), int(32 * SS - h / 2)))
+    hull = big.filter(ImageFilter.MaxFilter(2 * 2 * SS + 1)).filter(ImageFilter.MinFilter(2 * 2 * SS + 1))
+    cov = np.asarray(big.resize((SZ, SZ), Image.BOX), np.float32) / 255.0
+    hcov = np.asarray(hull.resize((SZ, SZ), Image.BOX), np.float32) / 255.0
+    body = cov >= 0.5; inside = hcov >= 0.5
+    sil = Image.fromarray((hcov * 255).astype(np.uint8), "L")
+    g1 = np.asarray(sil.filter(ImageFilter.GaussianBlur(1.2)), np.float32) / 255.0
+    g2 = np.asarray(sil.filter(ImageFilter.GaussianBlur(2.7)), np.float32) / 255.0
+    gl = np.clip((0.8 * g1 + 0.8 * g2) * 2.1 * glow, 0, 1)
+    ring = ~inside & (gl > 0.05)
+    t = np.clip(gl, 0, 1) ** 0.8
+    lo = np.array([24, 110, 30], np.float32); hi = np.array([125, 252, 105], np.float32)
+    col = lo + (hi - lo) * t[..., None]
+    rgb = np.zeros((SZ, SZ, 3), np.float32); a = np.zeros((SZ, SZ), np.float32)
+    al = np.clip(gl * 1.7, 0, 1); al[al < 0.22] = 0                 # no lone speckles far out
+    rgb[ring] = col[ring]; a[ring] = al[ring]
+    rgb[body] = np.array([8, 16, 10], np.float32); a[body] = 1.0
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.clip(a * 255, 0, 255)]).astype(np.uint8), "RGBA")
+
+
+def tame_badge7(n=12):
+    """Tamed (0xCA) v5 overhead badge (record 212): the traced black paw, its green glow gently pulsing (0.82..1.0)
+    over the 12-frame loop; ALPHA 258/88 (partly transparent).  Frame 0 = the mean glow (also the cast mark's hold)."""
+    return [_tame_paw7(0.91 + 0.09 * math.cos(2 * math.pi * i / n)) for i in range(n)]
+
+
+def tame_mark7():
+    """Tame Animal (0xC9) v5 cast mark (record 211 f8 6, like Dominate's eye in COMBAT.ILB 130): the SAME paw sprite
+    as the overhead badge at the same anchor, so on success the Tamed overlay continues it seamlessly ('sticks').
+    One frame (the badge's mean glow); the fade in / out is done with per-record blend values (separate rows), so
+    the colours stay identical and only the opacity ramps."""
+    return [_tame_paw7(0.91)]
+---- end ----
+---- rows: build_dual_sphere_fx_v1.py build() - add right after the (7290, tame_castfade(), ...) row ----
+              (7300, tame_badge7(), "TAbdg7_%02d.BMP", 258, 88, KEY),          # Tamed (0xCA) v5 overhead badge: user-traced BLACK paw + pulsing green glow (12-frame loop 64x64, ALPHA 258/88; Ability.pfs 212)
+              (7320, tame_mark7(), "TApf7a%d.BMP", 258, 18, KEY),              # Tame Animal (0xC9) v5 cast mark fade-in: the badge sprite at blend 18 (record 211 f8 6 fade-in)
+              (7321, tame_mark7(), "TApf7b%d.BMP", 258, 38, KEY),              # Tame Animal (0xC9) v5 cast mark fade-in: the badge sprite at blend 38 (record 211 f8 6 fade-in)
+              (7322, tame_mark7(), "TApf7c%d.BMP", 258, 60, KEY),              # Tame Animal (0xC9) v5 cast mark fade-in: the badge sprite at blend 60 (record 211 f8 6 fade-in)
+              (7323, tame_mark7(), "TApf7d%d.BMP", 258, 80, KEY),              # Tame Animal (0xC9) v5 cast mark fade-in: the badge sprite at blend 80 (record 211 f8 6 fade-in)
+              (7324, tame_mark7(), "TApf7e%d.BMP", 258, 66, KEY),              # Tame Animal (0xC9) v5 cast mark fade-out: the badge sprite at blend 66 (record 211 f8 6 fade-out)
+              (7325, tame_mark7(), "TApf7f%d.BMP", 258, 44, KEY),              # Tame Animal (0xC9) v5 cast mark fade-out: the badge sprite at blend 44 (record 211 f8 6 fade-out)
+              (7326, tame_mark7(), "TApf7g%d.BMP", 258, 24, KEY),              # Tame Animal (0xC9) v5 cast mark fade-out: the badge sprite at blend 24 (record 211 f8 6 fade-out)
+              (7327, tame_mark7(), "TApf7h%d.BMP", 258, 8, KEY),               # Tame Animal (0xC9) v5 cast mark fade-out: the badge sprite at blend 8 (record 211 f8 6 fade-out)
+---- end ----

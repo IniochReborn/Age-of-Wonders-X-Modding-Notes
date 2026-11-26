@@ -1,0 +1,119 @@
+SUSPEND (spell 214, Air tier 3) - integration snippets (2026-10-16, fork; nothing below is applied live)
+=====================================================================================================
+
+IDS / ROOM CLAIMED: spell 214 (pfs key 224, SpellIcn id 214) . ability 0xC3 'Suspended' (Ability.pfs record 205; record
+204 = Crosswind 0xC2 must be applied first) . DualDF 3150-3181 (32 frames; 3182-3199 unused) . AoWEPACK zone
+0x5586C000-0x5586C800 (559 B used; the first 0x40 B = the site bytes found at apply time -> exact --revert) . no TCPCK
+code . sound Sfx\Zsp\DUALAI_SUSPEND.WAV (new prefix DUALAI_ -> add to the ship list) . icon mask
+patch scripts\suspend_user_mask.png (generator suspend_mask_build.py; traced from the user's art import export\suspend.jpg -
+a .jpg, so no <key>.png override trap).
+
+ENGINE (patch_suspend_v1.py, AoWEPACK only):
+  0xC3 = plain TDurationAbility in MODE 2 (combat-round duration): the combat new-turn TE 0x5572A308 ticks every
+  object's abilities (CU VMT+0xF0 -> 0x5574FE68 -> TDurationAbility VMT+0xF8 0x55764D8C) - record[+0xC] counts down on
+  turns of the side record[+0xD]; at 0 the unit loses it.  The grant sets +0xC = 3 and +0xD = combatdata[+0x31] (the
+  current turn = the caster's side, as vanilla does \0x55781FA9) -> an enemy target stays suspended through its next 3
+  turns; removed at the start of the caster's 3rd turn after the cast.  CombatDone (mod cave 0x55862130) removes modes
+  2/3 at combat end.
+  Flying = implied through the GetAbilityEnabled 'not present' tails (t1 0x5574FD98 owner path / t2 0x5577F612 unit
+  path), chained IN FRONT of Undying's caves -> the hover draw, can-strike rules, movement types and every HasAbility(1)
+  see a flyer at once.
+  Movement = TAbstractUnit.CreateMovePointTable (0x5577FDC4) \0x5577FE13: a unit holding 0xC3 gets an all-0xFF
+  (impassable) per-terrain cost table -> no hex is reachable; its move points are untouched, so shooting / casting
+  (full-MP gates) still work.  The vanilla 'locked' state (GetLocked 0x55724BA4: Webbed etc.) was NOT used - it blocks
+  ALL actions ("It cannot perform actions").
+  Grant = TRemedy.ExecuteSpell 0x557E736C (chained in front of Second Wind's cave), tactical path only (return address
+  0x558166D3 = the caster-cost cave on TUnitSpell CA.Execute, esi = caster CU); ValidTarget 0x557E7434 = TUnitSpell
+  base check (refuses machines only) -> friend or foe, re-cast refreshes to 3.  reg = splice of the `call` \0x557BCF6E
+  (in front of Sanctify's 0x55868050 -> Second Wind's -> RegisterAbility).
+  AI: TRemedy has empty AI valuers -> the AI never casts it; fast combat: no effect (no CU path).
+
+---- 1. patch_dual_sphere_spells_v1.py: SPELLS entry (single-sphere block, with 212/213/215; Air = sphere 4) ----
+    dict(id=214, name="Suspend", sphere=4, tier=3, mana=7, research=140,
+         donor="TRemedy", pfs_donor=45, tc_type=7, icon=214,          # TRemedy range 12 = long; patch_suspend_v1.py: ability 0xC3 = Flying + cannot move, 3 turns
+         pokes=[(0x22, 1, 0), (0x0C, 1, 2), (0x3B, 1, 3)],            # combat spell + combat-only context (as Second Wind) + target side mask 3 = own units AND enemies
+         desc="Howling winds lift the target unit, friend or foe, into the air: for 3 turns it counts as flying but cannot move.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(3150, 3182)), -48, -86, f20=2, f18=1)},   # rising wind helix around the unit (96x96)
+         sfx=["SFX\\ZSP\\DUALAI_SUSPEND.WAV"]),
+
+---- 2. ceilings: append 0xC3 to LADDER in patch_tcablist_ceiling_v1.py and patch_aowx_banner_ceilings_v1.py
+        (bound -> 0xC4) and re-run both AFTER the Ability.pfs record is in (Crosswind's 0xC2 goes in first).
+
+---- 3. build_dual_sphere_icons_v1.py ----
+  ICONS[214] = "suspend"      CLOUDS["suspend"] = 0 (Air cloud, as the Air pair entries use)      GLYPHS["suspend"] = glyph_suspend
+def glyph_suspend():
+    """Suspend (214, Air tier 3, 2026-10-16): the user's reference art import export/suspend.jpg - a figure arched
+    backward, floating - traced across the upper icon, three curling wind streaks beneath holding it aloft (dark gap
+    round the body) -> suspend_user_mask.png (generator suspend_mask_build.py)."""
+    return _user_mask_glyph("suspend_user_mask.png")
+
+---- 4. build_dual_sphere_fx_v1.py: function (before def build()) + group-table row ----
+              (3150, suspend_lift(), "AIsusp%02d.BMP", 770, 90, 0x0000),   # Suspend (214) slot 0: rising wind helix (96x96, additive)
+def suspend_lift(n=32):
+    """Suspend (214) slot 0 (2026-10-16): 96x96 additive, anchor -48/-86 like Second Wind (centre column x 48, the
+    unit's feet ~y 86): pale-cyan wind ribbons spiralling UP around the unit, lifting it - three helical streaks rising
+    from a ground swirl, motes carried upward, a soft updraft glow; fades out over the last third."""
+    W = H = 96; cx = 48.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); rnd = random.Random(2140)
+    motes = [(rnd.uniform(0, 6.28), rnd.uniform(10, 22), rnd.uniform(0, 1)) for _ in range(26)]
+    out = []
+    for i in range(n):
+        t = i / (n - 1.0); fade = 1.0 if t < 0.66 else max(0.0, 1 - (t - 0.66) / 0.34); grow = min(1.0, t / 0.2)
+        acc = np.zeros((H, W, 3), np.float32)
+        glow = np.exp(-((xx - cx) / 16.0) ** 2) * np.clip((yy - 20) / 66.0, 0, 1) * 0.22 * grow * fade
+        for c, cv in enumerate((150, 210, 255)): acc[..., c] += glow * cv
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB"); dr = ImageDraw.Draw(im)
+        for k in range(3):
+            pts = []
+            for s in range(40):
+                u = s / 39.0; y = 88 - u * 70 * grow; ph = 6.28 * (u * 1.6 + t * 1.4) + k * 2.09
+                r = 20 - 8 * u; x = cx + r * math.cos(ph); y += 0.25 * r * math.sin(ph)
+                pts.append((x, y, math.sin(ph)))
+            for a, b in zip(pts, pts[1:]):
+                lv = (0.55 + 0.45 * (a[2] > 0)) * fade
+                dr.line([a[:2], b[:2]], fill=(int(170 * lv), int(225 * lv), int(255 * lv)), width=2)
+        for a0, r, ph in motes:
+            u = (t * 1.3 + ph) % 1.0; y = 88 - u * 76; x = cx + r * (1 - 0.4 * u) * math.cos(a0 + 6 * u)
+            lv = fade * math.sin(math.pi * u)
+            dr.point((x, y), fill=(int(220 * lv), int(245 * lv), int(255 * lv)))
+        out.append(im.convert("RGBA"))
+    return out
+
+---- 5. build_dual_sphere_sfx_v1.py: MIXES + DRIVE ----
+    # Suspend (214, Air T3 2026-10-16): a rising wind (Wind slowed -> sped up), a slowed Tornado swirl, a light air
+    # whoosh and a faint enchant shimmer as the unit is lifted.
+    "DUALAI_SUSPEND.WAV":   [("synth:glide:Attack/Wind.WAV:0.7:1.15:2.2:0.8", 0.8, 0.00, None, 0.8),
+                             ("Attack/Tornado.wav", 0.35, 0.10, 2.0, 0.9, 0.8, 0.4),
+                             ("Moves/Air1.wav", 0.5, 0.30, None, 0.3, 0.9),
+                             ("Attack/EnchP01.WAV", 0.3, 0.40, 1.6, 0.8, 1.3, 0.3)],
+  DRIVE += {"DUALAI_SUSPEND.WAV": 1.6}
+  (tested through mix(): 2.20 s, peak 0.92 before normalise; scratch render tmp\susp\DUALAI_SUSPEND.WAV)
+
+---- APPLY ORDER (game + editor closed) ----
+  a. icons / fx / sfx builders --apply, then patch_dual_sphere_spells_v1.py --apply (registers 214, Spells.pfs key 224)
+  b. Crosswind's Ability.pfs record 204 first, then patch_suspend_ability_pfs_v1.py --apply (record 205)
+  c. ceilings (LADDER += 0xC3) -> patch_tcablist_ceiling_v1.py --apply, patch_aowx_banner_ceilings_v1.py --apply
+  d. patch_suspend_v1.py --apply   (decodes whatever sits at its 6 sites at that moment; if another new script was
+     applied to the same chains before it, it simply sits in front of that one)
+  e. VEH startup check (a 216 / "ability already registered" at startup = reg collision)
+  REVERT: patch_suspend_v1.py --revert (restores the 6 sites byte-exact from its zone header; refuses if anything was
+  chained in front of it since), then patch_suspend_ability_pfs_v1.py --revert.
+
+---- CHAIN CONSEQUENCES (while applied) ----
+  * patch_secondwind_v1.py dry-run -> ex/vt (and the reg call, via Sanctify) see OTHER -> ABORT.  Expected.
+  * patch_sanctify_v1.py dry-run -> reg 'OTHER' -> ABORT.  Expected.  (The Sanctify rule stands: never apply
+    patch_lifeair_v1.py while Sanctify is applied.)
+  * patch_undying_v1.py dry-run -> t1/t2 'OTHER' -> ABORT.  Expected.
+  * To touch any of them: revert Suspend first, re-apply after.  The 0x5577FE13 site was vanilla (no other owner).
+
+---- IN-GAME TESTS ----
+  1. Research list: Suspend under Air tier 3 (140 research), cast 7; combat book only.
+  2. Cast on an enemy at long range and on a friendly unit: rising wind fx + sound; the unit panel shows 'Suspended'
+     (check the duration text the banner prints for a mode-2 duration ability) and the unit is drawn hovering.
+  3. The suspended unit cannot move at all (no reachable hexes, the AI does not move it) but can still shoot / cast and
+     attack an ADJACENT enemy - unverified whether melee into an adjacent hex needs a reachable path; if melee is
+     refused too, report it.
+  4. Ground units melee it as a flyer; Tremors-type effects skip it (flyer).
+  5. Duration: an enemy target stays suspended through its next 3 turns and is free at the start of the caster's 3rd
+     turn after the cast; a re-cast refreshes it; the battle's end clears it.
+  6. Second Wind / Sanctify / Undying / Angel Wings still work; no startup error.
+  7. LAN / replay: same result on both peers (all changes happen inside the recorded combat action / turn TE).

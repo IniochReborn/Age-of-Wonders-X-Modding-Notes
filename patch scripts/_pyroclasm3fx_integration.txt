@@ -1,0 +1,87 @@
+PYROCLASM (227) v3 FX - map-wide particles + shake (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+User: "pyroclasm gfx: add more particles, and add a shake".
+Engine: NEW patch scripts\patch_pyroclasm_fx_v1.py (AoWEPACK zone 0x55874400..0x55874C00, 1634 B; backup .bak_pyrofx).
+  Chains IN FRONT of the Air Mastery draw-callback entry 0x557F050C (currently -> patch_tectonic_shake_v1.py's cb cave
+  0x55874110): spell 227 -> its own callback `pyro`, everything else -> the previous owner (or the vanilla prologue).
+  `pyro`: haze (slot 7, 4/6/10) + rising embers (slot 4, 50/100/180) + drifting ash (slot 5, 30/60/110) + lava-spark arcs
+  (slot 6, 12/24/40, from tick 46) per detail 0/1/2; drawn on EVERY level; own local LCG (never the synced RNG); per-
+  element cycle envelopes + a global smoothstep fade (in 0-16, out 110-170; Free at 170) through K=8 brightness levels;
+  one shake request at tick 46 = 2.4 s, peak 3 px (gentler/longer than Tectonic's 1.8 s / 4 px), written to the exe shake
+  vars owned by patch_tectonic_shake_v1.py (even offsets enforced by that exe cave; map view only).  Only after a real
+  cast (the callback exists only after TGlobalEnchantment.Cast).
+DualDF ids 5950-5981 (free; live max was 5900).  Previews: C:\Users\<user>\.claude\jobs\47241cad\tmp\pyro3\
+  particles_sheet.png (the 4 particles x 8 levels), pyro_v3_ticks.png (640x360 view at ticks 20 / 60 / 100 / 150, det 2).
+Insert ONLY the code blocks; ast.parse each edited builder (fx builder = LF, pipeline = CRLF - detect per file).
+
+== 1. build_dual_sphere_fx_v1.py - functions before `def build():` ==
+---- code ----
+PYRO_K = 8
+
+
+def _pyro_levels(img, K=PYRO_K, gamma=1.2):
+    """Pyroclasm (227) v3 fx: one particle image as K brightness levels (level k = (1 - k/K)^1.2, k = K-1 a faint
+    ghost) - patch_pyroclasm_fx_v1.py picks the level per draw through Show's time argument (kind 4, f18 0)."""
+    a = np.asarray(img.convert("RGB"), np.float32)
+    return [Image.fromarray(np.clip(a * (1.0 - k / float(K)) ** gamma, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+            for k in range(K)]
+
+
+def _pyro_blob(W, H, cx, cy, sx, sy, cols, core=0.0):
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    d2 = ((xx - cx) / sx) ** 2 + ((yy - cy) / sy) ** 2
+    g = np.exp(-d2 * 1.6); c = np.exp(-d2 * 6.0) * core
+    rgb = np.zeros((H, W, 3), np.float32)
+    for k in range(3): rgb[..., k] = g * cols[0][k] + c * cols[1][k]
+    return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
+
+
+def pyro_particles():
+    """Pyroclasm (227) v3 (2026-10-17, user: "pyroclasm gfx: add more particles, and add a shake"): the four particle
+    types of 227's own map-wide callback, each a PYRO_K-level ladder (additive, black = invisible):
+      slot 4 ember  (11x11, anchor -5/-5): a glowing orange ember with a yellow-white core;
+      slot 5 ash    ( 9x9, anchor -4/-4): a pale, warm-grey ash fleck (kept dim - additive grey only lightens);
+      slot 6 spark  (13x13, anchor -6/-6): a hot yellow-white lava spark with an orange halo;
+      slot 7 haze   (72x44, anchor -36/-22): a big dim red-orange lava-light glow (pulsed by the callback)."""
+    ember = _pyro_blob(11, 11, 5.0, 5.0, 4.0, 4.0, ((235, 110, 25), (255, 225, 140)), core=1.0)
+    ash = _pyro_blob(9, 9, 4.0, 4.0, 3.0, 2.6, ((125, 112, 100), (50, 45, 40)), core=0.6)
+    spark = _pyro_blob(13, 13, 6.0, 6.0, 4.4, 4.4, ((255, 120, 20), (255, 245, 190)), core=1.3)
+    haze = _pyro_blob(72, 44, 36.0, 22.0, 30.0, 16.0, ((92, 30, 8), (40, 18, 4)), core=0.5)
+    out = []
+    for im in (ember, ash, spark, haze): out += _pyro_levels(im)
+    return out
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - group row right after the (5853, pyro_glow(), ...) row ==
+---- code ----
+              (5950, pyro_particles(), "FRpyroP%02d.BMP", 770, 80, 0x0000),       # Pyroclasm (227) v3 slots 4-7: ember / ash / spark / haze x 8 brightness levels (5950-5981)
+---- end ----
+
+== 2. patch_dual_sphere_spells_v1.py, entry 227 - the gfx dict: the slot-3 line loses its closing `}` and these 4 lines follow (the last closes the dict) ==
+---- code ----
+              4: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5950, 5958)), -5, -5, f20=0),          # v3: ember x 8 levels (frame = level via Show's time; patch_pyroclasm_fx_v1.py)
+              5: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5958, 5966)), -4, -4, f20=0),          # v3: ash fleck x 8 levels
+              6: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5966, 5974)), -6, -6, f20=0),          # v3: lava spark x 8 levels
+              7: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5974, 5982)), -36, -22, f20=0)},       # v3: lava-light haze x 8 levels
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 5950-5981)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 227 slots 4-7 - MUST precede the engine patch: the callback draws slots 4-7)
+  py -3.10 patch_pyroclasm_fx_v1.py                    (dry run: "zone zero (1634 B) | CB site free (prev chain -> 0x55874110)")
+  py -3.10 patch_pyroclasm_fx_v1.py --apply
+  VEH startup check.
+
+== 4. Chain / LIFO ==
+  * CB 0x557F050C: patch_pyroclasm_fx_v1 -> patch_tectonic_shake_v1 cb (219) -> vanilla.  While applied, the shake script's
+    dry run / apply reports the callback site as OTHER and ABORTS: revert patch_pyroclasm_fx_v1 first, run the shake
+    script, re-apply this (it re-reads whatever owns the site).  --revert is exact (stored original 6 bytes).
+  * Independent of patch_pyroclasm_v1.py (terrain; different sites/zone) - either order.
+  * The shake only happens if patch_tectonic_shake_v1.py is applied (its exe vars/magic); otherwise the request is skipped.
+
+== 5. Tests (scratch, tmp\pyro3\) ==
+  * script: dry run / apply / "already applied" / revert md5-identical to the live copy; fresh apply == apply; same on a
+    copy with the CB site vanilla (prev = replayed prologue); the shake script then sees its site as OTHER (expected).
+  * emu.py (Unicorn, the real patched DLL at 0x55700000 and rebased to 0xCB0000; W x H 640x400 / 1024x640 / 1280x657 /
+    1920x1040, detail 0 / 1 / 2): every tick 0..171 - all Show calls (slot, x, y, level, list, target) identical to the
+    Python mirror; levels < 8; shake request written exactly once (tick 46, 0x00300960); Free exactly at tick >= 170;
+    stack (ret 8) and ebx/esi/edi/ebp preserved.  Max draws/tick 88 / 172 / 306 (det 0 / 1 / 2).  ALL OK.

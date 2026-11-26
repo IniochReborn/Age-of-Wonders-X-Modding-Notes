@@ -1,0 +1,173 @@
+TAME ANIMAL v2 (ability 0xC9 + status 0xCA 'Tamed') - 2026-10-18 fork delivery.  NOTHING applied live, no shared
+builder edited.  Scripts in C:\Users\<user>\.claude\jobs\47241cad\tmp\tame2\ (copy the two patch_* into patch scripts\):
+  patch_tame_animal_v2.py       engine (AoWEPACK + AoWTCPCK), upgrades v1 IN PLACE
+  patch_tame_ability_pfs_v2.py  Ability.pfs: record 211 gfx/sfx + new record 212 'Tamed'
+  emu_tame2.py                  Unicorn test (py -3.10 emu_tame2.py <patched AoWEPACK copy> <patched AoWTCPCK copy>)
+  art_tame.py / prev_art.py / preview_twinkle.png / preview_paw.png / render_sfx.py / TAME_ANIMAL.WAV (preview)
+
+USER: (1) Tame Animal should set its own status 'Tamed', not Dominated; (2) own gfx/sfx; (3) AI uses it like
+Seduce/Charm/Dominate; (4) preview ATK shows '-'.
+
+(1) 'Tamed' 0xCA = a second instance of Dominated's class (TDominatedAbility VMT 0x557206F0, cell 0x557206B0, Create
+    0x55770528), registered from the same reg-chain cave as Tame Animal; Tame's instance gets [+0x28] := 0xCA (the
+    granted-status field - every reader is generic: TCommandAbility 0x5576FE71..0x5576FF5B create/register/test/remove
+    the enchantment via GetAbility([+0x28])).  Combat overlay: the TCombatUnit status draw only knows vanilla ids ->
+    hook 0x5578175B adds a 0xCA block (draws GetAbility(0xCA)+0x1C = record 212's overlay).  Record 212 = Dominated's
+    record shape, description "The creature has been tamed and loyally follows its new master.", mask 0 (never offered).
+(2) record 211: tag 7 -> SFX\ZSP\TAME_ANIMAL.WAV; tag 8 -> Dominate's chain re-pointed at DualDF (same f8/f18/f20/xs/ys
+    and frame counts = Dominate's timing): TWINKGR 220+k -> 7200+k (tame_twinkle: leaf-green motes + little leaves
+    spiralling in, a glowing paw print with amber glints, drifting away), 99 -> 340 blank, COMBAT 130 (Dominate's dark
+    mark) -> paw mark 7230.. (tame_paw).  Tamed overlay = paw loop 7230-7241 above the head (Charmed's layout).
+    Tags 5/6/9 of 211 kept (live tag 6 = 6, apparently an editor edit of v1's 12 - kept).
+    Sound: a wary growl (MONSTER1 slowed) easing into a new 'purr' synth (low pulsed rumble, two breaths), a soft slowed
+    CHARM shimmer at low gain and the Earth sphere cast (m_Earth); ping metric 30 (seeker v2 was 20-32), no bells.
+(3) AI (TCPCK): phase-1 offensive scan (ids 1..0xA9) gets one extra pass for 0xC9 after the loop (hook 0x418D1F,
+    13 B -> cave 0x450D00); the touch handler's no-retaliation ladder includes 0xC9 (hook 0x416F0B, 6 B -> cave
+    0x450D40).  The rest is the generic touch evaluation Dominate/Charm/Seduce use (CanTouch filter, DV = curHP x 200 x
+    chance(our ATK), AddMove type 1, executed via AbilTypes = 4).  Ids 0xAA..0xC8 stay unscanned (stale AbilTypes bytes).
+(4) Dominate VMT +0x104 GetCombatInfo -> cave: for 0xC9, record byte 1 (attack) := 0xFF -> AoWx.exe combat ability
+    panel prints '-' (0x434273 `cmp byte,0 / jle '-'`); the AoWEPACK description builder skips its 'Attack:' line.
+
+ZONES (verified zero + reloc-free in the LIVE dlls at delivery): AoWEPACK 0x55818100..0x558184F0 (997 B of
+0x55818100-0x55819000; 0x55818000 left free - 'statdouble marker' note in build_los_terrain.py), TCPCK 0x450D00..0x450D62
+(of 0x450D00-0x450E00; shockwave push v2 owns 0x450C00-0x450C40).  v1's zone 0x5588B000-0x5588B400 is CLEARED on upgrade.
+DualDF ids 7200-7226 (twinkle) + 7230-7241 (paw) - free at delivery; blank = 340.
+
+TESTS: scratch copies of the live (v1-applied) dlls: dry-run "upgrading v1 -> v2 in place" -> apply -> re-run "already
+applied" -> revert = byte-identical to v1's own --revert (pre-Tame) -> fresh apply from there = byte-identical to the
+in-place upgrade.  emu_tame2.py: 16/16 AoWEPACK at 0x55700000 AND rebased 0x01170000 (filter/ATK for 11 units, combat
+info byte, reg cave creates + registers 0xC9 [+0x28 = 0xCA] and 0xCA 'Tamed' with the Dominated class, ICO hook with/
+without the status), 11/11 TCPCK at 0x400000 AND 0x02A00000 (scan loop/0xC9 pass/disabled/exit, ladder).  pfs: apply ->
+"already applied" -> revert = byte-identical to the live file.
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` ----
+def _tame_paw_field(xx, yy, cx, cy, s):
+    """soft paw-print field (0..1): a rounded heel pad + four oval toes in an arc above it; s = scale (1.0 ~ 16 px)."""
+    f = np.zeros_like(xx)
+    pad = (((xx - cx) / (4.6 * s)) ** 2 + ((yy - (cy + 3.2 * s)) / (3.6 * s)) ** 2)
+    f = np.maximum(f, np.clip(1.4 - pad, 0, 1))
+    for dx, dy, rx, ry in ((-5.2, -1.6, 1.7, 2.1), (-2.0, -4.6, 1.8, 2.3), (2.0, -4.6, 1.8, 2.3), (5.2, -1.6, 1.7, 2.1)):
+        toe = (((xx - (cx + dx * s)) / (rx * s)) ** 2 + ((yy - (cy + dy * s)) / (ry * s)) ** 2)
+        f = np.maximum(f, np.clip(1.4 - toe, 0, 1))
+    return np.clip(f, 0, 1)
+
+
+def _tame_leaf(dr, x, y, ang, L, col):
+    """a small pointed leaf (two arcs) of length L at (x, y), pointing along ang."""
+    ux, uy = math.cos(ang), math.sin(ang); px, py = -uy, ux; w = 0.32 * L
+    pts = [(x - ux * L / 2, y - uy * L / 2), (x + px * w, y + py * w), (x + ux * L / 2, y + uy * L / 2), (x - px * w, y - py * w)]
+    dr.polygon(pts, fill=col)
+
+
+def tame_twinkle(n=27):
+    """Tame Animal (ability 0xC9) v2 cast twinkle (2026-10-18; user: own gfx, beast-calming): Dominate's TwinkRed
+    timing (27 frames 64x64, additive 770/80, id k <-> TWINKGR 220+k) in a nature palette - leaf-green motes and
+    small green leaves spiralling IN (0-11), a soft paw print glowing up in the middle with amber glints (12-16 =
+    the loop frames), then the leaves drifting up and out as the glow settles (17-26)."""
+    SZ = 64; cx, cy = 32.0, 34.0; yy, xx = np.mgrid[0:SZ, 0:SZ].astype(np.float32); rnd = random.Random(2010)
+    motes = [(rnd.uniform(0, 6.283), rnd.uniform(14, 26), rnd.uniform(0.9, 1.6), rnd.random() < 0.3) for _ in range(16)]
+    leaves = [(rnd.uniform(0, 6.283), rnd.uniform(12, 22), rnd.uniform(5.0, 7.5)) for _ in range(6)]
+    out = []
+    for i in range(n):
+        g = np.zeros((SZ, SZ), np.float32); amb = np.zeros_like(g)
+        if i < 12:   u = i / 11.0; R = 1.0 - 0.75 * u; spin = 2.2 * u; paw = 0.6 * u * u; fade = 0.35 + 0.65 * u
+        elif i < 17: u = (i - 12) / 4.0; R = 0.25; spin = 2.2 + 0.6 * u; paw = 0.75 + 0.25 * math.sin(u * math.pi); fade = 1.0
+        else:        u = (i - 17) / 9.0; R = 0.25 + 0.9 * u; spin = 2.8 + 0.8 * u; paw = 0.9 * (1 - u) ** 1.5; fade = (1 - u) ** 1.2
+        pf = _tame_paw_field(xx, yy, cx, cy - 2, 1.0)
+        g += paw * (0.85 * pf + 0.35 * np.exp(-((xx - cx) ** 2 + (yy - cy + 2) ** 2) / 90.0))
+        amb += paw * 0.5 * pf
+        for a0, r0, sz, isamb in motes:
+            a = a0 + spin; r = r0 * R; x = cx + r * math.cos(a); y = cy + 0.7 * r * math.sin(a) - (6 * u if i >= 17 else 0)
+            m = fade * np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (sz * sz))
+            g += 0.9 * m
+            if isamb: amb += 0.9 * m
+        f = np.clip(g, 0, 1); a_ = np.clip(amb / np.maximum(g, 1e-3), 0, 1)
+        r = (90 + 165 * a_) * f; gg = (210 + 30 * a_) * f; b = (80 - 50 * a_) * f
+        im = Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(gg, 0, 255), np.clip(b, 0, 255), np.where(f > 0.03, 255, 0)]).astype(np.uint8), "RGBA")
+        dr = ImageDraw.Draw(im)
+        for a0, r0, L in leaves:
+            a = a0 - 1.6 * spin; r = r0 * R; x = cx + r * math.cos(a); y = cy + 0.7 * r * math.sin(a) - (8 * u if i >= 17 else 0)
+            k = fade * 0.9; _tame_leaf(dr, x, y, a + 1.2, L * (0.7 + 0.3 * fade), (int(60 * k), int(200 * k), int(50 * k), 255))
+        out.append(im)
+    return out
+
+
+def tame_paw(n=12):
+    """Tamed (status 0xCA) overlay + Tame Animal success mark (2026-10-18): Charmed's layout (64x64, glyph above the
+    unit's head at xs -31 / ys -50, 12-frame loop) - a small glowing green paw print with an amber rim that gently
+    bobs and pulses, two tiny leaves circling it.  Additive 770/80."""
+    SZ = 64; cx, cy = 30.0, 32.0; yy, xx = np.mgrid[0:SZ, 0:SZ].astype(np.float32); out = []
+    for i in range(n):
+        t = i / float(n); bob = 1.2 * math.sin(2 * math.pi * t); pulse = 0.78 + 0.22 * math.sin(2 * math.pi * t + 0.8)
+        pf = _tame_paw_field(xx, yy, cx, cy + bob, 0.70)
+        rim = np.clip(_tame_paw_field(xx, yy, cx, cy + bob, 0.83) - pf, 0, 1)
+        halo = 0.28 * np.exp(-((xx - cx) ** 2 + (yy - cy - bob) ** 2) / 60.0)
+        g = np.clip(pulse * (0.95 * pf + 0.7 * rim + halo), 0, 1); amb = np.clip(rim * 1.4, 0, 1)
+        r = (80 + 175 * amb) * g; gg = (215 - 20 * amb) * g; b = (70 - 40 * amb) * g
+        im = Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(gg, 0, 255), np.clip(b, 0, 255), np.where(g > 0.04, 255, 0)]).astype(np.uint8), "RGBA")
+        dr = ImageDraw.Draw(im)
+        for k in range(2):
+            a = 2 * math.pi * (t + 0.5 * k); x = cx + 11.0 * math.cos(a); y = cy + bob + 4.5 * math.sin(a)
+            _tame_leaf(dr, x, y, a + 1.57, 4.2, (50, 185, 45, 255))
+        out.append(im)
+    return out
+---- end ----
+---- rows: build_dual_sphere_fx_v1.py build() groups - add (anywhere in the list) ----
+              (7200, tame_twinkle(), "TAtwink%02d.BMP", 770, 80, 0x0000),       # Tame Animal (0xC9) v2: Ability.pfs 211 chain (Dominate's TwinkRed timing, 27 frames 64x64)
+              (7230, tame_paw(), "TApaw%02d.BMP", 770, 80, 0x0000),             # Tamed (0xCA) overlay + Tame success mark: green paw loop (12 frames 64x64)
+---- end ----
+---- code: build_dual_sphere_sfx_v1.py - synth kind, insert before `    if kind == "bell":` (inside synth()) ----
+    if kind == "purr":
+        # 'purr:f0:seconds' -> Tame Animal (2026-10-18): a big cat's contented PURR - a low rumble (f0 ~ 26 Hz pulse
+        # train of soft noise bursts through a ~260 Hz low-pass, with a faint f0*3 / f0*5 tonal body so it reads as a
+        # voice, not wind), breathing in two cycles (inhale softer and slightly higher, exhale fuller), 150 ms attack,
+        # dying away over the last 40 %
+        f0, secs = float(parts[1]), float(parts[2]); n = int(secs * RATE); out = [0.0] * n; rnd = random.Random(2618)
+        lp = lp2 = 0.0; a = 1 - math.exp(-2 * math.pi * 260 / RATE); ph = 0.0
+        for i in range(n):
+            t = i / RATE; u = t / secs
+            breath = 0.5 + 0.5 * math.sin(2 * math.pi * (u * 2.0) - math.pi / 2)        # 2 breaths over the clip
+            f = f0 * (1.0 + 0.08 * (1 - breath)); ph += f / RATE
+            pulse = max(0.0, math.sin(2 * math.pi * ph)) ** 3                              # the purr's rapid pulses
+            lp += a * ((rnd.random() * 2 - 1) - lp); lp2 += a * (lp - lp2)
+            body = 0.35 * math.sin(2 * math.pi * 3 * ph) + 0.15 * math.sin(2 * math.pi * 5 * ph)
+            env = min(1.0, t / 0.15) * (1.0 if u < 0.6 else max(0.0, 1 - (u - 0.6) / 0.4) ** 1.4) * (0.55 + 0.45 * breath)
+            out[i] = env * pulse * (2.6 * lp2 + body)
+        return out
+---- end ----
+---- MIXES: build_dual_sphere_sfx_v1.py - insert before `    "DUALEW_OVERGROWTH.WAV":` ----
+    # Tame Animal v2 (ability 0xC9, 2026-10-18; user: own sfx): a low wary growl (vanilla MONSTER1 slowed) easing into a
+    # contented purr (new 'purr' synth), a soft slowed CHARM shimmer at low gain, the Earth sphere's cast for nature and a
+    # short sub swell.  No bell / tine layers, no DRIVE.
+    "TAME_ANIMAL.WAV":      [("Attack/Monster1.WAV", 0.40, 0.00, 0.70, 0.45, 0.78),
+                             ("synth:purr:27:2.0", 0.95, 0.35, None, 0.6, 1.0, 0.35),
+                             ("Attack/Charm.WAV", 0.22, 0.10, 2.0, 0.8, 0.80, 0.30),
+                             ("Attack/m_Earth.wav", 0.32, 0.00, 2.2, 0.9, 1.05, 0.15),
+                             ("synth:subswell:55:70:0.6", 0.25, 0.0, None, 0.3)],
+---- end ----
+---- FADE_OUT: add  "TAME_ANIMAL.WAV": 0.6,  to the FADE_OUT dict ----
+
+APPLY ORDER (game + editor closed)
+  1. py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 7200-7226, 7230-7241)
+  2. py -3.10 build_dual_sphere_sfx_v1.py --apply         (Sfx\Zsp\TAME_ANIMAL.WAV)
+  3. py -3.10 patch_tame_animal_v2.py --apply             ("upgrading v1 -> v2 in place"; backups .bak_tame2)
+  4. py -3.10 patch_tame_ability_pfs_v2.py --apply        (211 rewritten, 212 appended; safety copy .bak_tame2)
+  5. LADDER += 0xCA in patch_aowx_banner_ceilings_v1.py AND patch_tcablist_ceiling_v1.py
+       sed -i 's/0xC8, 0xC9)/0xC8, 0xC9, 0xCA)/' patch_aowx_banner_ceilings_v1.py patch_tcablist_ceiling_v1.py
+     then py -3.10 patch_aowx_banner_ceilings_v1.py --apply ; py -3.10 patch_tcablist_ceiling_v1.py --apply  (bound 0xCA -> 0xCB)
+  6. VEH startup check; editor: 'Tamed' must NOT be offered (mask 0), 'Tame Animal' still listed.
+  Ship: AoWEPACK.dll, AoWTCPCK.dll, AoWx.exe (ceiling), Release\Ability.pfs, DualDF.ILB; --add Sfx\Zsp\TAME_ANIMAL.WAV.
+
+TEST IN GAME
+  * tame a creature: green twinkle + paw on cast, TAME_ANIMAL sound, the unit shows a small green paw over its head and
+    'Tamed' (not 'Dominated') in its abilities; a non-creature / excluded / Fearless target is still refused.
+  * the combat ability panel shows ATK '-' for Tame Animal; its description no longer has an 'Attack:' line.
+  * AI armies with a Tame Animal unit use it on creatures (like Dominate), not on humanoids/excluded/Fearless.
+
+REVERT / LIFO
+  * pfs v2 --revert (removes 212, restores 211's v1 gfx/sound), engine v2 --revert (back to PRE-Tame vanilla; re-run
+    patch_tame_animal_v1.py --apply if v1 is wanted).  Ceilings: leaving the bound at 0xCB is harmless.
+  * v1 scripts refuse to run while v2 is applied (expected).  The reg chain head @0x557BCF6E stays ours -> revert v2 before
+    patch_reversal_v1.py.  Record 212 must stay the largest Ability.pfs key; later ability records (0xCB+) go after it.
+  * patch_lifefire (Cleansing Flame) removes/tests only 0x30/0x95/0x96 - it does NOT clear 'Tamed' (not asked; one more
+    id in its two caves if wanted).

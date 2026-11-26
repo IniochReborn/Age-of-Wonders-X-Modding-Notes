@@ -1,0 +1,31 @@
+SMOKESCREEN (225) v3.5 - underground earth walls = TIsometricCombatHexagon (2026-10-17, fork; NOTHING applied live)
+
+LIVE FINDING (coordinator listing): v3.4's TCombatHexagon earth test matched 0 objects (all 48x32 H_DR floors).  The earth walls
+are STATIC TIsometricCombatHexagon (VMT 0x43386C preferred base; resource TIsometricCombatHexagonResource; seq item-0 library =
+H_EARTH image 0 86x107).  RE: their visible art is drawn by ShowDynamic = VMT+0x124 (TCPCK override 0x433B34, mirror of HSEPack
+TUpperIsometricHexagon.ShowDynamic 0x55619F18): black top 0x28+(flags>>6) at (HP.x-8, HP.y)-view, cliff faces 0x12.. at
+y-0x26-...; content spans ~-35..+50 px around the hex top-left.  Their plain Show (+0xA8) draws nothing while [obj+0x10] != 0.
+
+FIX (patch_tc_smokescreen_v1.py v3.5, zone 2 only: 2534 of 2560 B; no site changes)
+- post pass: static TIsometricCombatHexagon (exact VMT, rebase-safe via the TCPCK delta in ebx), confirmed by ehtest (library
+  image 0 >= 100 px), within NEAR_E 3 of a bank centre -> cshow MODE 2: re-drawn through VMT+0x124 (cshow keeps the slot in
+  [ebp-0x70]; 0xA8 for modes 0/1), clipped per 8-px column at HP.y - view + EARTH_CUT_ISO 40 (+ wave, soft 555/565 blend).
+  The black top and the cliff faces protrude; the faces' lowest few px (+34..+50) and the floor stay smoked.
+- v3.4's TCombatHexagon earth branch (d_eh) removed (dead; freed the bytes).  Everything else unchanged (structures, pillars,
+  H_EARTH-sized IL tiles mode 1, TALLH 100, overlays, orb/HP replay).
+- tunables: EARTH_CUT_ISO (bigger = smoke lower on the faces), NEAR_E, EH_H.
+
+APPLY (game + editor closed)
+  py -3.10 patch_tc_smokescreen_v1.py            (dry run: "zone2 ours(old) ... v3.5 upgrade")
+  py -3.10 patch_tc_smokescreen_v1.py --apply    (backup backup\AoWTCPCK.dll.bak_smokescreen35 = the v3.4 state)
+  VEH startup check.
+NEXT TEST (game running; read-only):  py -3.10 smoke_shot.py 3 2   and   py -3.10 combat_objects_probe.py
+  (the probe's earth list now counts TIsometricCombatHexagon - what v3.5 lifts out of the smoke)
+
+TESTS (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\smoke7\)
+- script on a copy of the live v3.4 DLL (83b48446): in-place upgrade, "already applied (v3.5)", --revert md5 4dbbf03d (same as
+  the v3.2/v3.3/v3.4 reverts), fresh apply == upgrade (add5b0ba).
+- emu35.py (Unicorn, cshow/iltall/ehtest, 0x400000 + 0xA00000, 565 + 555): ALL OK incl. mode 2 pixel-exact line
+  (EARTH_CUT_ISO) and every draw through +0x124, mode 1 through +0xA8, ret 4, regs.
+- emu35_dds.py: 30/30 PASS - near iso earth hex re-drawn via ShowDynamic (27 column draws, never via +0xA8); iso hex 4 away /
+  far / 48x32-library iso hex not; TCombatHexagon with a 107 lib no longer re-shown; wall 4 away still re-shown; all old scenarios.

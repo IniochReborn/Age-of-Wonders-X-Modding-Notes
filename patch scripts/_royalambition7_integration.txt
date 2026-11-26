@@ -1,0 +1,44 @@
+ROYAL AMBITION (230) round 7 - icon v7 (clean mouths + new sad eyes) + a NEW sound (2026-10-18, fork; NOTHING applied).
+Builders: sfx = CRLF, icons = LF - detect the newline per file; ast.parse after editing.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition7_user_mask.png")    # v7 10/18: v6 with clean single-shape mouths (hairlines/teeth dropped) + redrawn downturned almond sad eyes (brows dropped)
+---- end ----
+(new file patch scriptsoyalambition7_user_mask.png, made by tmpoyal7\mk_mask7.py: source holes labelled, happy mouth = main
+ mouth hole closed/filled/smoothed (teeth bar + slit + chin/cheek hairlines dropped), happy brows/eyes kept smoothed; sad mouth
+ = single filled frown; sad brows + wrinkle lines dropped; sad eyes = two symmetric almonds, inner corners high, outer low;
+ holes widened like v6 (2 px).  Preview: tmpoyal7\icon_preview.png = source | v6 | v7 (+ 40x35 of v6 / v7).)
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_ROYAL.WAV" entry AND its comment lines above it with ==
+---- code ----
+    # Royal Ambition v7 (2026-10-18, user: "sfx sucks, scrap it, come up with something new"): HERALD & CHOIR - a court
+    # herald's horn call (D4 D4 | A4 held, doubled an octave down) answered at 0.95 s by a D-major choir "ahh" over
+    # strings, a soft D2 timpani and a stately low D bell toll (second toll on A3 at 1.65 s), crowned by a magical
+    # shimmer and rising sparkle bells D6 F#6 A6 D7.  Exact D major, no drive, smooth 0.8 s whole-mix fade.
+    "DUALCO_ROYAL.WAV":     [("synth:horn:293.66:293.66:0.40", 0.50, 0.00, 0.14, 0.05),
+                             ("synth:horn:146.83:146.83:0.40", 0.22, 0.00, 0.14, 0.05),
+                             ("synth:horn:293.66:293.66:0.40", 0.50, 0.17, 0.10, 0.04),
+                             ("synth:horn:146.83:146.83:0.40", 0.22, 0.17, 0.10, 0.04),
+                             ("synth:horn:440.00:440.00:0.90", 0.55, 0.30, 0.62, 0.30),
+                             ("synth:horn:220.00:220.00:0.90", 0.26, 0.30, 0.62, 0.30),
+                             ("synth:drum:73.42:1.2", 0.55, 0.95, None, 0.5),
+                             ("synth:bell:146.83:2.2", 0.34, 0.95, None, 1.2),
+                             ("synth:strings:146.83:2.2", 0.30, 0.90, None, 1.0, 1.0, 0.25),
+                             ("synth:choir:146.83:2.1", 0.48, 0.95, None, 1.0),
+                             ("synth:bell:220.00:1.6", 0.20, 1.65, None, 1.0),
+                             ("synth:shimmer:1.8", 0.22, 1.15, None, 0.9, 1.0, 0.3),
+                             ("synth:bell:1174.66:1.0", 0.12, 1.35, None, 0.7),
+                             ("synth:bell:1479.98:1.0", 0.10, 1.50, None, 0.7),
+                             ("synth:bell:1760.00:1.0", 0.09, 1.65, None, 0.7),
+                             ("synth:bell:2349.32:1.0", 0.07, 1.80, None, 0.7)],
+---- end ----
+  DRIVE dict: "DUALCO_ROYAL.WAV" stays 1.0.   FADE_OUT dict: "DUALCO_ROYAL.WAV": 0.9 -> 0.8
+  Renders (tmpoyal7\): DUALCO_ROYAL_v7_A_herald.wav (RECOMMENDED, 3.25 s, peak 0.82 pre-normalise),
+  DUALCO_ROYAL_v7_B_processional.wav (alternative: IV->I choir over swelling strings + low gong toll, 3.45 s),
+  DUALCO_ROYAL_old_v6.wav (current live).
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  No pipeline / DLL change.

@@ -1,0 +1,98 @@
+CROSSWIND (spell 213, Air tier 2) - integration snippets (2026-10-16, fork; nothing below is applied live)
+=====================================================================================================
+
+IDS / ROOM CLAIMED:
+  spell 213 (pfs key 223, SpellIcn id 213) . ability 0xC2 'Crosswind' (Ability.pfs record 204; 203 Undying must be
+  present) . DualDF 3100-3102 (motes) + 3103-3126 (gust) -> next free in my range 3127 . AoWEPACK zone 0x5586B800-
+  0x5586C000 (463 B used; verified zero, reloc-free) . RegisterAbility site 0x557BCE30 (was vanilla/free - the last
+  free one I know of) . TCPCK: NOTHING needed (High Prayer's class 0x25 is already a vanilla instant class: SetSpell
+  0x4233B0 fires it with no targeting step) . Sound Sfx\Zsp\DUALAI_CROSSWIND.WAV (new prefix DUALAI_ -> ship list).
+  Icon mask patch scripts\crosswind_user_mask.png (traced from art import export\crosswind.jpg by
+  patch scripts\crosswind_mask_build.py: lines thickened, wrist closed + palm filled, dust dots dropped; .jpg = no
+  override trap).
+
+DESIGN / ENGINE (patch_crosswind_v1.py, AoWEPACK only):
+  * 213 = THighPrayer clone (instant, infinite range).  TC makes one TTacticalCombatHighPrayerCA per FRIENDLY unit; our
+    `hx` (chained in front of Life/Air's hx on the CA Execute slot 0x557F4520) runs instead of the High Prayer body
+    (no heal / no 0x64 blessing): parent exec 0x557F6C84, then walks the combat object list ([[ctx+0xC]+0x34]+8) and
+    ExpandAbility(0xC2) on every living (([+0x47]&9)==0) TCombatUnit of ANOTHER combat player ([+0x45]) than the
+    caster whose unit lacks 0xC2 - idempotent, so the N friendly CAs give one effect.  Machines included.
+  * 0xC2 = a THIRD TBurningAbility instance (Rot's recipe): mode 2 combat rounds, duration 3, combat-only, own round
+    countdown/removal; `tk` (chained in front of Rot's def cave at 0x557BA459) skips Burning's 1-damage roll for 0xC2.
+  * -2 ranged ATK: `ra` on both GetAttackRA epilogues (0x5576E68E / 0x5576E6A5): unit holds 0xC2 (VMT+0x88, guarded
+    [esi+4]) -> bl -= 2 (floor 0).  Melee (TUnit.GetAttack) and spells untouched; the unit panel's ranged value shows it.
+  * fh / ai: THighPrayer VMT+0xD8 / +0xD0 chained (in front of Life/Air's): 213 is never auto-cast in fast combat and
+    never cast by the tactical AI (same as Heavenly Chorus).
+
+---- 1. patch_dual_sphere_spells_v1.py: SPELLS entry (single-sphere block, after 211 Call of the Dead) ----
+    dict(id=213, name="Crosswind", sphere=4, tier=2, mana=5, research=80,
+         donor="THighPrayer", pfs_donor=112, tc_type=0x25, icon=213,     # patch_crosswind_v1.py: enemies get 0xC2 'Crosswind' (-2 ranged ATK, 3 rounds)
+         desc="Fierce crosswinds sweep the battlefield: for 3 turns every enemy unit's ranged attacks suffer -2 attack.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [3100, 3101, 3102, 3101], -8, -8),                 # per friendly unit (High Prayer's twinkle slot): little air curls
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(3103, 3127)), -41, -61, f20=2, f18=1)},  # High Prayer's dome slot (MAGIC 89-109 at -41/-61): a gust sweeping across
+         sfx=["SFX\\ZSP\\DUALAI_CROSSWIND.WAV"]),
+  NOTE: High Prayer's visuals play on the caster's OWN units (that is who the CAs are for); the effect itself lands on
+  the enemies.  Re-targeting the TC CA list to enemies would be TC work (not done).
+
+---- 2. patch_tc_spell_alias_v1.py ----
+  ALIAS += {213: 0x66}        # Crosswind -> High Prayer (like Heavenly Chorus 308)
+
+---- 3. ceilings: append 0xC2 to LADDER in patch_tcablist_ceiling_v1.py and patch_aowx_banner_ceilings_v1.py
+        (bound 0xC2 -> 0xC3), re-run both after the Ability.pfs record is in.
+
+---- 4. build_dual_sphere_icons_v1.py ----
+  ICONS[213] = "crosswind"     CLOUDS["crosswind"] = 0 (Air cloud, SpellIcn image 0)     GLYPHS["crosswind"] = glyph_crosswind
+def glyph_crosswind():
+    """Crosswind (213, Air tier 2, 2026-10-16): the user's reference art import export/crosswind.jpg - a hand held up
+    against swirling gusts - traced by crosswind_mask_build.py (lines thickened 7 px, wrist closed so the palm fills
+    solid, dust dots dropped, fit 98 %%) -> crosswind_user_mask.png."""
+    return _user_mask_glyph("crosswind_user_mask.png")
+
+---- 5. build_dual_sphere_fx_v1.py: group-table rows + functions (before def build()) ----
+              (3100, crosswind_motes(), "AIxwmote%d.BMP", 770, 60, 0x0000),    # Crosswind (213) slot 0: small air curl (16x16)
+              (3103, crosswind_gust(), "AIxwgust%02d.BMP", 770, 90, 0x0000),   # Crosswind (213) slot 1: gust sweep (82x72, 24 frames)
+  (functions: copy crosswind_motes() and crosswind_gust() verbatim from
+   C:\Users\<user>\.claude\jobs\47241cad\tmp\xwind\fx_crosswind.py - both use only np / math / random / Image /
+   ImageDraw / ImageFilter, already imported by the builder; rendered + previewed)
+
+---- 6. build_dual_sphere_sfx_v1.py: MIXES + DRIVE + FADE_OUT ----
+    # Crosswind (213, Air T2 2026-10-16): the Air sphere's cast, a long slowed gust and a synth wind rising under it,
+    # and a thin falling whistle as the crosswind sweeps the field.
+    "DUALAI_CROSSWIND.WAV": [("Attack/m_Air.wav", 0.7, 0.00, 2.4, 0.8),
+                             ("Attack/Wind.WAV", 0.9, 0.05, 2.6, 1.0, 0.85, 0.3),
+                             ("synth:wind:2.6", 0.5, 0.00, None, 0.8, 1.0, 0.3),
+                             ("synth:whistle:1100:600:1.4", 0.22, 0.50, None, 0.5)],
+  DRIVE["DUALAI_CROSSWIND.WAV"] = 1.6     FADE_OUT["DUALAI_CROSSWIND.WAV"] = 0.6
+  (tested through mix(): 2.65 s, peak 0.92 before normalise; render tmp\xwind\DUALAI_CROSSWIND.WAV)
+
+---- APPLY ORDER (game + editor closed) ----
+  a. fx / sfx / icons builders --apply, then patch_dual_sphere_spells_v1.py --apply (213 = THighPrayer clone, class 0x25)
+     and patch_tc_spell_alias_v1.py --apply (ALIAS 213 -> 0x66)
+  b. patch_crosswind_ability_pfs_v1.py --apply      (record 204; needs 203)
+  c. ceilings (LADDER += 0xC2) -> patch_tcablist_ceiling_v1.py --apply, patch_aowx_banner_ceilings_v1.py --apply
+  d. patch_crosswind_v1.py --apply                  (AoWEPACK; backup .bak_crosswind)
+  e. VEH startup check (startup 216 / "ability already registered" = reg site collision)
+  REVERT: d, then b.
+
+---- CHAIN CONSEQUENCES (while applied) ----
+  * patch_lifeair_v1.py: hx / fh / ai slots now point at OUR caves.  Its dry-run (verified on the scratch copy) says
+    "older build detected -> rewriting ... Dry run OK" - !! NEVER --apply it while Crosswind is applied (it would chain
+    in front of us with OUR cave as its 'previous', whose previous is lifeair's own cave -> endless jmp loop).  Same
+    rule as Sanctify: revert Crosswind (and Sanctify) first, re-apply after.
+  * patch_rotaway_v1.py: its `def` site 0x557BA459 now calls our tk cave -> its dry-run will report the site as not
+    its own (expected); revert Crosswind before touching Rot Away.
+  * GetAttackRA epilogues 0x5576E68E / 0x5576E6A5 were vanilla (no other script).  Reg site 0x557BCE30 was vanilla.
+
+---- KNOWN LIMITS ----
+  * AI never casts it; fast combat never casts it (High Prayer's fast-combat CA would bless instead).
+  * If ALL friendly units are filtered out of High Prayer's target list (no CA at all) nothing happens - should not
+    occur (the caster counts as friendly); unverified whether THighPrayer's ValidTarget skips already-blessed units.
+  * The countdown uses Burning's round owner (rec+0xD); expected 3 of the owning player's rounds like Burning / Rot.
+
+---- IN-GAME TESTS ----
+  1. Research list: Crosswind under Air tier 2 (80 research), cost 5.  Picking it in the combat book casts at once.
+  2. Every enemy unit shows "Crosswind" in its panel; an enemy archer's ranged attack value is 2 lower; melee unchanged;
+     your own units unaffected.
+  3. After 3 rounds it disappears; no damage ticks (it is not Burning); it is gone after combat.
+  4. Re-cast while active: no stacking (already-held units are skipped).
+  5. Heavenly Chorus (308) and Rot Away / Burning still behave; High Prayer still heals + blesses.

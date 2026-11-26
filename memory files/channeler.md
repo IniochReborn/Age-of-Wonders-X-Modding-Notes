@@ -1,0 +1,8 @@
+---
+name: channeler
+description: 2026-10-18 new multilevel ability Channeler I/II/III (0xCB, record 213): max casting points ×1.3/×1.5/×2 via THero.GetCastingPointsMax hook; unit-window label switches to Age10s for ≥6 chars; LADDER → 0xCB (bound 0xCC)
+metadata:
+  type: project
+---
+`THero.GetCastingPointsMax` 0x55788614 (slot +0x128, THero+TLeader) = 10 × Spell Casting level; all readers (refill 0x55788741, SetCastingPoints clamp 0x5578864C, exe UI, TCPCK) go through it. `patch_channeler_v1.py` (AoWEPACK zone 0x55819000–0x55819141 'CHN1'): registration hook 0x557BCF6E now heads the chain (calls Tame v2 0x55818470) building 0xCB (cap 3, costs 10/10/10, mask 0x3FE); max hook ×13/10, ×15/10, ×2, clamp 127. `patch_channeler_ability_pfs_v1.py` record 213 (Evoker clone; must be reverted before Tame's pfs v2). `patch_exe_channeler_label_v1.py`: TUnitWindow Mana label +0x70 SetGText 0x408824 → .xtut +0x400 (0x634410; .xtut raw 0x400→0x800; +0x800 free) switches to FontModule.Age10s (+0x50) when text ≥6 chars, y+2. Revert order: ceilings, exe label (before tutorial), pfs, engine (before Tame v2/Reversal). AI never picks it; spellbook labels unchecked. APPLIED 10/18, VEH 6, untested. Next ability id 0xCC.
+**v2 10/18 (user: Age10s looks janky):** `patch_font_age15_condensed_digits_v1.py` adds condensed 0-9 and / glyphs at ids 0x10–0x1A to Int\Fonts\Age15WhGr.ILB (columns dropped, lossless; `.bak_cdigits`); `patch_exe_channeler_label_v2.py` (same cave, CHL2) remaps digits/slash to those ids when text ≥6 chars + font AoW15WhiteGrey + refcount 1; 100/100 = 48 px. Revert label v2 before the font script. Ship --add Int\Fonts\Age15WhGr.ILB. APPLIED.

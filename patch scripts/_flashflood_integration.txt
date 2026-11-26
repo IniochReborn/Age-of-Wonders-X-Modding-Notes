@@ -1,0 +1,130 @@
+FLASH FLOOD (223, Water L4, 2026-10-17, fork) - integration snippets (CODE ONLY between the ---- code ---- / ---- end ----
+markers; nothing applied live, no shared builder edited).  Detect the newline per builder (sfx builder + pipeline = CRLF,
+fx + icons builders = LF) and ast.parse each edited builder afterwards.
+Engine: patch scripts\patch_tc_flashflood_v1.py (AoWTCPCK zone 0x44B000..0x44C000, 2305 B; sites TEK 0x40BA8C, NF 0x42D83E,
+both vanilla today; backup .bak_flashflood).  New file (already written): patch scripts\flashflood_user_mask.png.
+Previews (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\flood\): particles_sheet.png, flood_preview.gif / flood_mid.png
+(the EXACT particle field the caves spawn - an emulator cross-check matched all 1392 paths - over a fake 1280x720 view,
+right half darkened), icon_preview.png (40x35 on a blue cloud + the 320x280 mask), DUALWT_FLASHFLOOD_test.wav.
+
+== 1. patch_dual_sphere_spells_v1.py - DONORS: add (next to the other combat donors) ==
+---- code ----
+    "TTremors":          (0x557F50C0, 0x557F8C74),   # site 0x557FA698 (id 0x70 Tremors: class 29 all-units camera-shake spell; Create ATK 3 DMG 8 types 0x180, 1 shot, range 0xFF) - Flash Flood 223 (patch_tc_flashflood_v1.py)
+---- end ----
+
+== 1b. patch_dual_sphere_spells_v1.py - SPELLS: the Water single-sphere block (with 220 / 221), after the last entry ==
+---- code ----
+    dict(id=223, name="Flash Flood", sphere=6, tier=4, mana=6, research=200,
+         donor="TTremors", pfs_donor=122, tc_type=0x1D, icon=223,      # class 29 = Tremors' TE + kind-29 carrier; patch_tc_flashflood_v1.py: flood damage + displacement + particles + gentle shake
+         pokes=[(0x34, 1, 8), (0x35, 1, 5), (0x36, 2, 0x80)],          # ATK 8 / DMG 5 / Physical (range 0xFF, 1 shot inherited)
+         desc="A raging flash flood sweeps the whole battlefield: every unit that is not flying, floating, sailing or wind walking is struck (attack 8, damage 5, physical) and swept up to 4 hexes away in a random direction. Swimmers, water walkers, swamp walkers and liquid-form units take half damage.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [5400, 5401, 5402], -28, -12, f20=0)},   # the kind-0x1F flood particles (frame = particle address mod 3)
+         sfx=["SFX\\ZSP\\DUALWT_FLASHFLOOD.WAV"]),
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py ==
+  ICONS:   223: "flashflood"        CLOUDS:  "flashflood": 100        GLYPHS:  "flashflood": glyph_flashflood
+  function (next to the other _user_mask_glyph users):
+---- code ----
+def glyph_flashflood():
+    """Flash Flood (223, Water L4, 2026-10-17): the user's reference art import export/flash flood (...).jpg edited as its
+    file name asks (tmp/flood/mk_icon.py): the lighthouse top inside the storm cloud (white tower, lantern, light beam)
+    filled into the cloud, the cloud's flat cut-off bottom rounded into puffs, the lower tower shortened and capped with a
+    crenellated parapet (corbel band + 4 merlons) - a storm cloud over a sea tower on its rock, struck by a curling wave
+    -> TRACED (trace_ref.py fill 0.97, thicken 2) -> flashflood_user_mask.png."""
+    return _user_mask_glyph("flashflood_user_mask.png")
+---- end ----
+  (no art import export\flashflood.png exists -> no icon-override trap.)
+
+== 3. build_dual_sphere_fx_v1.py - function before `def build():` + group row (with the 5200 / 5300 water rows) ==
+---- code ----
+def flood_particles():
+    """Flash Flood (223) slot 0 (2026-10-17): the three kind-0x1F flood particles (frame = particle address mod 3), drawn
+    through GFXE's intensity table (additive; black = invisible), 56x24, centre (28, 12), flowing RIGHT:
+      0 a breaking crest - a long low deep-blue swell whose top carries a foam line brightening towards the front,
+        where it curls over into a bright cyan-white lip, with spindrift flecks thrown ahead;
+      1 a rolling swell - a broader, lower swell with two foam streaks combed back along its back;
+      2 spray - a spread of white-cyan droplets over a faint blue wash and a short foam streak."""
+    W, H = 56, 24; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+
+    def blob(cx, cy, rx, ry, a=1.0):
+        return a * np.exp(-(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2))
+
+    def line(y0, k, x0, x1, w, a, xc):
+        yc = y0 + k * (xx - xc) ** 2
+        ramp = np.clip((xx - x0) / max(1.0, x1 - x0), 0, 1) * (xx <= x1)
+        return a * np.exp(-((yy - yc) / w) ** 2) * ramp
+
+    def to_img(body, foam):
+        body = np.clip(body, 0, 1); foam = np.clip(foam, 0, 1)
+        r = 18 * body + 205 * foam; g = 66 * body + 228 * foam; b = 150 * body + 242 * foam
+        return Image.fromarray(np.clip(np.dstack([r, g, b]), 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+
+    # 0 breaking crest
+    body = blob(26, 15.5, 22, 5.5, 0.85) * np.clip(xx / 18.0, 0.25, 1) + blob(40, 12.5, 6, 4.5, 0.55)
+    ang = np.arctan2(yy - 12.0, xx - 41.0); rad = np.hypot((xx - 41.0) / 1.3, yy - 12.0)
+    lip = np.exp(-((rad - 4.6) / 1.1) ** 2) * np.clip(np.cos(ang + 1.6) * 1.5, 0, 1)
+    foam = line(9.5, 0.006, 6, 40, 0.95, 0.85, 40) + lip + blob(48, 8.5, 1.5, 1.3, 0.9) + blob(51.5, 11.5, 1.1, 1.0, 0.75)         + blob(46, 5.5, 1.0, 0.9, 0.6)
+    out.append(to_img(body, foam))
+    # 1 rolling swell
+    body = blob(28, 15.5, 24, 5.0, 0.7)
+    foam = line(11.5, 0.004, 8, 44, 0.85, 0.75, 44) + line(14.0, 0.003, 14, 38, 0.75, 0.45, 38)
+    out.append(to_img(body, foam))
+    # 2 spray
+    body = blob(26, 15, 16, 4.0, 0.35)
+    foam = (blob(18, 13, 1.6, 1.3) + blob(24, 10, 1.3, 1.2, 0.95) + blob(30, 12, 1.5, 1.3, 0.9) + blob(36, 8.5, 1.0, 1.0, 0.8)
+            + blob(27, 6.5, 0.9, 0.9, 0.7) + blob(41, 12, 0.9, 0.9, 0.7) + blob(45, 9, 0.8, 0.8, 0.6)
+            + line(14.0, 0.0, 12, 30, 0.8, 0.7, 30))
+    out.append(to_img(body, foam))
+    return out
+---- end ----
+---- code ----
+              (5400, flood_particles(), "WTflod%d.BMP", 770, 80, 0x0000),       # Flash Flood (223) slot 0: kind-0x1F flood particles (56x24; crest / swell / spray)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py - MIXES entry (before "DUALEW_OVERGROWTH.WAV") ==
+---- code ----
+    # Flash Flood (223, Water L4 2026-10-17): a deep rising groan (sub swell + Tremors' rumble slowed far down, quiet), two
+    # layers of slowed rushing water building through the hover of the flood, the Water cast slowed under a soft hiss,
+    # then the surge as the flood hits (~2.4-3.1 s = kind-29 ticks 84-104): two synth splashes, slaps and a slowed swim
+    # plunge, and the water draining away.
+    "DUALWT_FLASHFLOOD.WAV": [("synth:subswell:32:58:3.0", 0.55, 0.00, None, 0.8),
+                             ("Attack/Earth.WAV", 0.40, 0.05, 3.0, 0.9, 0.55),
+                             ("Moves/waterlg.WAV", 0.85, 0.00, 3.4, 1.0, 0.62, 0.6),
+                             ("Moves/waterlg.WAV", 0.55, 0.45, 3.2, 1.0, 0.78, 0.5, 0.3),
+                             ("synth:hiss:3.2", 0.22, 0.20, None, 0.6),
+                             ("Attack/m_Water.WAV", 0.45, 0.15, 2.2, 0.8, 0.7),
+                             ("synth:splash:1.4", 0.9, 2.40, None, 0.3),
+                             ("Moves/SlimeS1.WAV", 0.5, 2.50, None, 0.2, 0.8),
+                             ("Moves/M_Swim1.WAV", 0.6, 2.56, None, 0.3, 0.75),
+                             ("Moves/SlimeS3.WAV", 0.45, 2.70, None, 0.2, 0.7),
+                             ("synth:splash:1.2", 0.55, 2.85, None, 0.3),
+                             ("Moves/SlimeS2.WAV", 0.35, 3.05, None, 0.2, 0.9),
+                             ("Moves/waterlg.WAV", 0.5, 3.00, 1.5, 0.9, 0.9)],
+---- end ----
+---- code ----
+"DUALWT_FLASHFLOOD.WAV": 1.35,
+---- end ----   (DRIVE dict)     and FADE_OUT dict:  "DUALWT_FLASHFLOOD.WAV": 0.9,
+  (test mix: 4.3 s, RMS builds 0.12 -> 0.27 peak at 2.25-2.5 s, gone by ~3.8 s.)
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 223)
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF 5400-5402)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (Sfx\Zsp\DUALWT_FLASHFLOOD.WAV - NEW file: release zip --add)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (Spells.pfs 223 + SpellTypes[223] = 0x1D)
+  py -3.10 patch_tc_flashflood_v1.py                  (dry run: "zone zero ... sites TEK/NF vanilla", 1996 bytes change)
+  py -3.10 patch_tc_flashflood_v1.py --apply
+  VEH startup check.  The engine patch is inert until a spell 223 exists (it only acts on [fx+0x18] == 223).
+  Revert: patch_tc_flashflood_v1.py --revert (exact; refuses if a later patch chained in front of TEK / NF - LIFO).
+
+== 6. Notes / open (not seen in game) ==
+ * Timing: cue 0 plays from the caster's cast animation (223 is not in the castsnd exclusion list; Tremors 0x70 is).  The
+   flood hits at kind-29 tick 0x59 (~2.6 s), like Tremors' own damage tick; particles 0.06-2.8 s (+ ~1.1 s life), shake
+   0.17-3.0 s (+-2 px, +-4 px surge 2.4-2.8 s, EVEN offsets only, origin restored at tick 104), carrier ends at tick 112.
+ * Walls / gates / buildings are NOT hit (Tremors damages them via map msg 0x31004; the flood never sends it).
+ * Unit eligibility: movement bit 0x02 clear (Grounded flyers count as walkers, like Tremors) and no Sailing; units on
+   water hexes ARE hit (Tremors skips terrain 0 / 9 hexes; a flood shouldn't).  Half damage = [ca+0x10] - [ca+0x10]/2.
+ * No per-unit hit sound (the chassis has none; 30+ simultaneous splashes would drown the mix) - the WAV's surge covers it.
+ * Displacement = Void Step's warp (instant) at the hit tick, amid the particles; units do not slide.
+ * Particle cost: ~10 spray + 18 crest every 4 ticks = ~14.5 particles/tick, ~570 alive at the peak, ~540 TXYZ points
+   allocated per tick for 96 ticks; if the frame rate suffers, lower N_SPRAY / BAND_N in the script and re-apply.

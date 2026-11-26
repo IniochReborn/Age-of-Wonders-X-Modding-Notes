@@ -1,0 +1,82 @@
+SUMMON SEA SERPENT (222, Water L3) - integration snippets (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----) and ast.parse each edited builder afterwards.
+Line endings: patch_dual_sphere_spells_v1.py + build_dual_sphere_sfx_v1.py = CRLF; fx + icons builders = LF (detect per file).
+
+UNIT: no new unit needed - the vanilla Sea Serpent already exists = Unitres child 218 (gfx 219, its own sprite + portrait):
+  ATK 6 / DEF 3 / DMG 8 / HP 15 / MV 40 / RES 3, level 3, cost 105, "Sea Serpents live strictly in the water".  A level-3
+  unit for a tier-3 summon, untouched (no Unitres/Unitgfx/ILB edits).  Summon pattern = TSummonMermaid clone (pfs donor 211
+  = the Mermaid summon record) with summon_unit=218, exactly like Crocodile 381 / Hydra 343 / Phoenix 362 (upkeep = the
+  entry's upkeep field, as every other summon).  No engine patch, no AoWEPACK cave used.
+  Scratch check: a copy of the pipeline with the entry inserted dry-runs OK ("rebuilding 74 owned records, 186 records").
+
+== 1. build_dual_sphere_icons_v1.py ==
+  ICONS: add   222: "seaserpent"      CLOUDS: add   "seaserpent": 100   (Water cloud)      GLYPHS: add   "seaserpent": glyph_seaserpent
+  function (next to the other _user_mask_glyph users, e.g. before glyph_mendwalls):
+---- code ----
+def glyph_seaserpent():
+    """Summon Sea Serpent (222, Water L3, 2026-10-17): the user's reference art import export/sea serpent.jpg (a coiled
+    horned serpent rising from two wave lines) TRACED -> seaserpent_user_mask.png (median 3, ink < 128, watermark row
+    cropped, fitted 95 %); the two thin source waves redrawn as two clean 15 px sine bands so they survive 40x35."""
+    return _user_mask_glyph("seaserpent_user_mask.png")
+---- end ----
+  (new file already written: patch scripts\seaserpent_user_mask.png; made by tmp\serpent	race.py + mk4.py 0.  Previews:
+   tmp\serpent\icon_preview3.png row m4 = the chosen one.  No "seaserpent.png" exists in art import export\ - no override.)
+
+== 2. build_dual_sphere_fx_v1.py - function before `def build():` + group row (with the 5200/5300/5400 water rows) ==
+---- code ----
+def sea_summon():
+    """Summon Sea Serpent (222) slot 0: the Mermaid's summon glow (MAGIC.ILB 20-31, the rising column) tinted deep
+    sea-teal with white foam at its brightest - the Phoenix / Earth-Death summon recipe, 12 frames."""
+    lib = ilbcodec.read(MAGIC); out = []
+    for src in range(20, 32):
+        im, r = raw_pixels(lib, src); a = np.array(im.convert("RGBA")).astype(np.float32)
+        lum = np.max(a[:, :, :3], axis=2); foam = np.clip((lum - 170.0) / 85.0, 0, 1)
+        a[:, :, 0] = np.clip(lum * 0.30 + 200 * foam, 0, 255); a[:, :, 1] = np.clip(lum * 0.78 + 60 * foam, 0, 255)
+        a[:, :, 2] = np.clip(lum * 1.00 + 20 * foam, 0, 255)
+        out.append(Image.fromarray(a.astype(np.uint8), "RGBA"))
+    return out
+---- end ----
+---- code ----
+              (5600, sea_summon(), "WTserp%02d.BMP", 770, 50, 0x0000),          # Summon Sea Serpent (222) slot 0: summon glow tinted sea-teal + foam (12 frames)
+---- end ----
+
+== 3. build_dual_sphere_sfx_v1.py - MIXES entry (before "DUALEW_OVERGROWTH.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # Summon Sea Serpent (222, Water L3 2026-10-17): the sea drawing back (reversed slowed wash) over a deep sub swell,
+    # the serpent BREACHING (heavy splash + slowed churning swim), then its long hiss over a low throat-growl and a deep
+    # slowed breath, and the wash settling.  3.3 s.
+    "DUALWT_SERPENT.WAV":   [("Moves/waterlg.WAV", 0.55, 0.00, 1.0, 0.1, -0.72, 0.3),
+                             ("synth:subswell:34:58:1.3", 0.6, 0.00, None, 0.3),
+                             ("synth:splash:1.0", 0.85, 0.95, None, 0.0),
+                             ("Moves/M_Swim1.WAV", 0.5, 1.00, 1.2, 0.5, 0.62),
+                             ("Attack/A_Monst2.WAV", 0.32, 1.15, 1.3, 0.6, 0.5),
+                             ("synth:hiss:1.5", 0.5, 1.20, None, 0.0),
+                             ("Attack/DBreath.WAV", 0.22, 1.25, 1.1, 0.6, 0.55, 0.15),
+                             ("Moves/waterlg.WAV", 0.45, 1.70, 1.6, 0.8, 0.8, 0.0, 0.4)],
+---- end ----
+  DRIVE dict: add   "DUALWT_SERPENT.WAV": 1.3,      FADE_OUT dict: add   "DUALWT_SERPENT.WAV": 0.7,
+  (scratch render tmp\serpent\DUALWT_SERPENT_test.wav: 3.30 s, peak 0.86 before normalise, RMS peak at the breach ~1.0 s.)
+
+== 4. patch_dual_sphere_spells_v1.py - SPELLS entry: Water single-sphere block, right BEFORE dict(id=223 (Flash Flood) ==
+---- code ----
+    dict(id=222, name="Summon Sea Serpent", sphere=6, tier=3, mana=40, research=140, upkeep=5,
+         donor="TSummonMermaid", pfs_donor=211, tc_type=0, icon=222,
+         desc="Summons a Sea Serpent, a great serpent of the deep that rises from the waves to drag ships and swimmers below.",
+         summon_unit=218,                                                 # vanilla Sea Serpent (Unitres 218, gfx 219): ATK 6 DEF 3 DMG 8 HP 15 MV 40 RES 3, level 3, strictly aquatic
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5600, 5612)), -31, -116, f20=1, f18=1)},    # the Mermaid summon glow tinted deep sea-teal + white foam
+         sfx=["SFX\ZSP\DUALWT_SERPENT.WAV"]),
+---- end ----
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply     (SpellIcn 222)
+  py -3.10 build_dual_sphere_fx_v1.py --apply        (DualDF 5600-5611)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply       (Sfx\Zsp\DUALWT_SERPENT.WAV - NEW file: ship via build_release_zip --add)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply    (Spells.pfs key for 222 + registration; SpellTypes[222] = 0 like other summons)
+  VEH startup check.
+
+== 6. Open / not seen in game ==
+  * The Sea Serpent is strictly aquatic.  The summon machinery is the generic TSummonSpellTE (same as Summon Mermaid
+    219, also "strictly aquatic", user-confirmed working 8/10) - but where it places a water-only unit when the casting
+    hero/city has no adjacent water is unverified; if the summon fails or the serpent lands stranded on land, the fix is a
+    placement rule (summon onto the nearest water hex) in a small engine patch (AoWEPACK 0x5587A000-0x5587A800 reserved).
+  * AI may cast it like other summons (AI priority untouched).

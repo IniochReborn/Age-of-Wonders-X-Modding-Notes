@@ -1,0 +1,52 @@
+Tame Animal v4 (2026-10-19, fork; NOTHING applied live, no shared builder edited).
+User: "(1) Tame Animal HIT gfx ends too abruptly - have it fade out. (2) No overhead paw above the tamed unit; the unit
+panel says Tamed though."
+
+ROOT CAUSE (2): tactical combat draws status overlays in TCPCK TTacticalCombatUnitHS.Show @0x4227AA..0x4228A2 from a
+fixed id TABLE (relocated by patch_tc_suspend_overlay_v1.py to 0x444010: 95 96 30 5C..62 6B A3 7F 22 B5 C3 C4 C2,
+loop 18, bound 0..17).  0xCA was never in it.  v2's ICO hook @0x5578175B sits in AoWEPACK's TAbstractUnit overlay
+routine, which the tactical draw never calls (only overland/autocombat), so the badge art (record 212 = DualDF
+7260..7271, correct, Charmed-shaped single slot) was simply never asked for.  Unicorn (emu_overlay_v4.py): live DLL
+asks 18 ids without CA (FAIL); v4 asks 19 ending in CA (PASS).
+
+(1) Record 211 slots f8 2 / f8 5 (10-frame peak loop 7212..7216 x2) and f8 1 (ended on gathering frame 7208) still cut
+at full strength; f8 6 (tame_mark) / f8 8 (tail) already fade.  New art fades the last frames; frame counts kept.
+
+APPLY ORDER (game + editor closed):
+  1. paste the code block below before `def build():` in build_dual_sphere_fx_v1.py, and the two rows right after the
+     (7260, tame_badge(), ...) row
+  2. py -3.10 build_dual_sphere_fx_v1.py --apply                     (DualDF.ILB + 7280..7293)
+  3. copy tmp\tame6\patch_tame_ability_pfs_v4.py -> patch scripts\, py -3.10 patch_tame_ability_pfs_v4.py --apply
+  4. copy tmp\tame6\patch_tc_suspend_overlay_v1.py OVER patch scripts\patch_tc_suspend_overlay_v1.py (v4: ADD += 0xCA),
+     py -3.10 patch_tc_suspend_overlay_v1.py --apply    ("older build ... upgrading in place", 3 bytes)
+  5. VEH check.  Ship AoWTCPCK.dll, Release\Ability.pfs, DualDF.ILB.
+REVERT: pfs v4 --revert before pfs v3; overlay script --revert (exact pre-table state; re-applying the OLD v3 script
+would silently drop 0xCA again - keep the v4 file).
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` (uses tame_twinkle) ----
+def _tame_dim(im, k):
+    """Scale an additive RGBA frame's colour by k (alpha re-keyed on what is still visible)."""
+    a = np.asarray(im.convert("RGBA")).astype(np.float32)
+    rgb = a[..., :3] * k
+    vis = (rgb.max(axis=2) > 6) & (a[..., 3] > 0)
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), np.where(vis, 255, 0)]).astype(np.uint8), "RGBA")
+
+
+def tame_hitfade(n=10):
+    """Tame Animal (0xC9) v4 hit loop (2026-10-19; user: 'the hit gfx ends too abruptly - have it fade out'): the
+    record-211 slots f8 2 / f8 5 played the twinkle's peak loop (frames 12-16) twice at full strength and then cut.
+    Same 10 frames (timing kept), the second pass fading out: envelope 1,1,1,1,1, .80,.58,.38,.20,.07.  770/80."""
+    tw = tame_twinkle(); env = [1, 1, 1, 1, 1, 0.80, 0.58, 0.38, 0.20, 0.07]
+    return [_tame_dim(tw[12 + (i % 5)], env[i]) for i in range(n)]
+
+
+def tame_castfade(n=4):
+    """Tame Animal (0xC9) v4: the cast slot f8 1 ended on the gathering frame 8 at ~70 % strength; its last four
+    frames are now twinkle frames 5-8 fading out (.75, .50, .28, .10)."""
+    tw = tame_twinkle(); env = [0.75, 0.50, 0.28, 0.10]
+    return [_tame_dim(tw[5 + i], env[i]) for i in range(n)]
+---- end ----
+---- rows: build_dual_sphere_fx_v1.py build() - add right after the (7260, tame_badge(), ...) row ----
+              (7280, tame_hitfade(), "TAhitf%d.BMP", 770, 80, 0x0000),           # Tame Animal (0xC9) v4: record 211 f8 2/5 peak loop, second pass fades out (10 frames 64x64)
+              (7290, tame_castfade(), "TAcastf%d.BMP", 770, 80, 0x0000),         # Tame Animal (0xC9) v4: record 211 f8 1 tail - twinkle 5-8 fading (4 frames 64x64)
+---- end ----

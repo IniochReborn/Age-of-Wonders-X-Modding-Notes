@@ -1,0 +1,28 @@
+TECTONIC SHIFT (219) v3.3 - fog flicker fix (2026-10-17, fork; NOTHING applied live, no shared builder edited)
+
+ROOT CAUSE: the hovering-mote TWINKLE in `tect` (patch_tectonic_shake_v1.py), not the engine / shake / glow.
+  Every map-wide mote cluster was dimmed by TW_DIM = 5 of the 10 brightness levels (~half) for 6 of every 32 ticks - a
+  hard ~1 Hz blink, staggered over 24-80 clusters.  The motes draw in GFXE Intensity (770): out = d + 1.75*f*s^2/(s+d),
+  barely visible over bright terrain but at FULL strength over dark pixels - fogged / unexplored hexes and the dark
+  underground - so over fog the mote haze blinked ~50 % darker several times a second ("the fog flickers darker").
+  v3.1 (no surface-only gate) put the motes over the dark underground, which is where it became obvious.
+  Ruled out by RE: DrawFog 0x55772EB8 runs after the dynamic scene each frame on a fully re-blitted background
+  (ShowScene 0x5560F000); it picks FogHex image 3/1 from [field+0x18] explored bits and [map+0xA5] (seated player) -
+  nothing `tect` writes; [map+0x88] IS the viewed level (DrawFog / UpdateDynamicScene use it as the level index);
+  map-wide TAnimations are 'user' HS ([map+0x28]) drawn on every level, which is why vanilla Air Mastery gates on it.
+
+FIX (v3.3, AoWEPACK zone only, in-place upgrade; exe untouched): smooth twinkle - a 64-tick triangular dim of 0..1
+  level added in sixteenths BEFORE the >>4 (with each cluster's 0..15 dither), clamped to the dimmest level; a cluster
+  now changes by at most 1 level per step (~3.4 changes in the 84 steady ticks vs 6.2 jumps of up to 6 levels before).
+  Base brightness, fade in/out, fissure, gap, shake, hex glow and sound unchanged.
+
+TESTS (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\tfx7\): live copies -> dry-run 275 bytes (in-place v2 -> v3);
+  --apply; re-run "already applied (v3.3)"; v3.3 --revert == the v3.2 script's own --revert (dll + exe identical);
+  fresh apply on the reverted copy == the upgrade (dll + exe).  emu_tw.py (Unicorn, the patched block of the real dll,
+  all ticks 0..183 x 48 cluster seeds): 0 mismatches vs the Python model, ebp/esp/esi/edi/ebx preserved.
+  v3.2 script kept as tmp\tfx7\patch_tectonic_shake_v1.v32.py.
+
+APPLY (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0):
+  py -3.10 patch_tectonic_shake_v1.py            (dry run: 275 bytes change, in-place upgrade)
+  py -3.10 patch_tectonic_shake_v1.py --apply    (backup backup\AoWEPACK.dll.bak_tshake6 = v3.2 state)
+  VEH startup check.  No builder / pipeline / Spells.pfs change.

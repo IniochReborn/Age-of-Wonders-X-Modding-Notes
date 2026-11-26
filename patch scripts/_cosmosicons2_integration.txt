@@ -1,0 +1,29 @@
+COSMOS ICONS v2 (2026-10-18, fork) - four new masks in patch scripts\ (old masks kept), made by
+C:\Users\<user>\.claude\jobs\47241cad\tmp\cosicons\mk_cosicons2.py.  NOTHING applied live, no shared builder edited.
+Previews (old full | old 40x35 | new full | new 40x35): tmp\cosicons\all_old_vs_new.png (+ one per icon *_old_vs_new.png).
+Icon-override trap checked: no art import export\{magicmissile,cityspy,royalambition,essenceshift}.png.
+
+== 1. build_dual_sphere_icons_v1.py - four return-line swaps (LF file) ==
+  glyph_magicmissile:   return _user_mask_glyph("magicmissile_user_mask.png")
+  ->
+---- code ----
+    return _user_mask_glyph("magicmissile2_user_mask.png")    # v2 10/18: three clean bolts with clear gaps (tapered streaks + split tails, middle largest)
+---- end ----
+  glyph_cityspy:        return _user_mask_glyph("cityspy_user_mask.png")
+  ->
+---- code ----
+    return _user_mask_glyph("cityspy2_user_mask.png")    # v2 10/18: the hooded watcher looming above Warmonger's city skyline (vanilla SpellIcn 71 layout)
+---- end ----
+  glyph_royalambition:  return _user_mask_glyph("royalambition_user_mask.png")
+  ->
+---- code ----
+    return _user_mask_glyph("royalambition2_user_mask.png")    # v2 10/18: happy mask kept (stray top line removed) + own SAD inverse mask (solid, cut-outs), enlarged
+---- end ----
+  glyph_essenceshift:   return _user_mask_glyph("essenceshift_user_mask.png")
+  ->
+---- code ----
+    return _user_mask_glyph("essenceshift2_user_mask.png")    # v2 10/18: centre star x0.74, elements x1.06 about their centroids, whole x0.88 (margins)
+---- end ----
+
+== 2. Apply (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 228-231).  No pipeline / DLL change.

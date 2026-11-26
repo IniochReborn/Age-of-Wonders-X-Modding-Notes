@@ -1,0 +1,29 @@
+MAGIC MISSILE (228) SFX v6 (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+User: "sfx sucks. make the ice shards more subtle and the magic bolts more prominent. make it more like the original
+Magic Bolts, except a different tone/pitch."
+Design: the launch IS Magic Bolt (Attack/MagicA04.WAV) at near-original character, pitched up ~+3 semitones (speed 1.19)
+with a slightly detuned (1.205), 9 ms-late double at a third of the level for a thicker "chorus" tone; Ice.WAV only as a
+faint glassy sparkle (20 % of the bolt, sped up 2.1x = high-passed, short); a whisper of shimmer.  No DRIVE (gains set so
+the peak lands at 0.86 without soft-clipping).  Hit: a short, quieter (+5 st) slice of the same bolt + a tiny ice tick.
+Previews: C:\Users\<user>\.claude\jobs\47241cad\tmp\mm6\ DUALCO_MMISSILE_v6.wav (0.50 s), DUALCO_MMHIT_v6.wav (0.17 s),
+preview_3bolts_v6.wav (3 launches 10 ticks apart + hits), vanilla_MagicA04.wav (reference).
+
+== 1. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_MMISSILE.WAV" and "DUALCO_MMHIT.WAV" entries (and their comment lines) with ==
+---- code ----
+    # Magic Missile v6 (2026-10-18, user: "make the ice shards more subtle and the magic bolts more prominent - like the
+    # original Magic Bolts but a different tone/pitch"): Magic Bolt (MagicA04) pitched up ~3 semitones with a detuned,
+    # 9 ms-late double for a thicker tone; Ice.WAV only as a faint sped-up glassy sparkle; a whisper of shimmer.  No DRIVE.
+    "DUALCO_MMISSILE.WAV":  [("Attack/MagicA04.WAV", 2.00, 0.000, 0.50, 0.22, 1.19, 0.003, 0.0, 1.5),
+                             ("Attack/MagicA04.WAV", 0.68, 0.009, 0.46, 0.22, 1.205, 0.004, 0.0, 1.5),
+                             ("Attack/Ice.WAV", 0.40, 0.020, 0.18, 0.12, 2.10, 0.004, 0.0, 1.6),
+                             ("synth:shimmer:0.40", 0.16, 0.040, None, 0.25)],
+    # per landing (cue 1, x3): a short higher slice of the same bolt + a tiny ice tick (0.17 s, peak ~0.29, no DRIVE)
+    "DUALCO_MMHIT.WAV":     [("Attack/MagicA04.WAV", 0.62, 0.000, 0.17, 0.10, 1.45, 0.003, 0.06, 1.5),
+                             ("Attack/Ice.WAV", 0.13, 0.004, 0.10, 0.07, 2.30, 0.002, 0.0, 1.6)],
+---- end ----
+  DRIVE dict:    "DUALCO_MMISSILE.WAV": stays 1.0 (no soft clip).
+  FADE_OUT dict: "DUALCO_MMISSILE.WAV": 0.14 -> 0.16,   "DUALCO_MMHIT.WAV": 0.08 -> 0.10
+
+== 2. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  (no icon / pipeline / DLL change; patch_tc_magicmissile_v1.py v3 per-bolt cue + 10-tick spacing unchanged)

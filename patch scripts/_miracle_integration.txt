@@ -1,0 +1,83 @@
+=== Miracle (209, Life tier 4) - integration notes (fork, 2026-10-16) ===
+Engine scripts (scratch-cycled, NOT applied live): patch_miracle_v1.py (AoWEPACK) + patch_tc_miracle_v1.py (AoWTCPCK).
+
+--- 1. patch_dual_sphere_spells_v1.py ---
+(a) DONOR table, add:
+    "TRecallSpirit":     (0x557F66D0, 0x557FA19C),   # site 0x557FA7F1 (id 0x81 Recall Spirit: vmtSelfPtr 0x557F66D0 / Create 0x557FA19C; class 0x27 corpse spell, CreateCA 0x557FA29C -> TRecallSpiritCA [+0x18] = spell id) - Miracle 209 (patch_miracle_v1.py + patch_tc_miracle_v1.py)
+(b) SPELLS entry (next to Repent 206 / Harvest Souls 207, the single-sphere block):
+    dict(id=209, name="Miracle", sphere=1, tier=4, mana=7, research=250,
+         donor="TRecallSpirit", pfs_donor=139, tc_type=0x27, icon=209,     # pfs 139 = Recall Spirit's record; SpellTypes 0x27 corpse spell
+         desc="A fallen friendly unit rises again where it fell, with 30 to 100% of its hit points and a random share of its movement. The miracle lasts only until the end of the battle. Heroes cannot be raised.",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", [2960, 2961, 2962, 2961], -17, -18, f20=2)},   # gold PARTICLE twinkle at the corpse (Harvest's slot-0 anchor/timing)
+         sfx=["SFX\ZSP\DUALLI_MIRACLE.WAV"]),
+    (Recall Spirit's Create sets range 0xFF / 1 shot; no pokes needed.  If the pipeline wants an explicit target side, Recall's
+     targeting is "any hex" - Miracle refuses enemy corpses in the engine, not in the cursor.)
+
+--- 2. build_dual_sphere_icons_v1.py ---
+    ICONS += 209: "miracle";  CLOUDS += "miracle": 80  (Life cloud, like rejuvenate/repent);  GLYPHS += "miracle": glyph_miracle
+    (key "miracle" - check there is no art import export/miracle.png override)
+
+def glyph_miracle():
+    """Miracle (209, Life tier 4; 2026-10-16): a fallen warrior rising again - the corpse from ANIMATE HERO (icon 86)
+    stays on the ground as a faint shadow while the same figure stands up out of it in full ink, arms spread, under a
+    halo, with three soft rays of light falling on it from above."""
+    im = canvas(); dr = ImageDraw.Draw(im)
+    body = vanilla_ink(86).crop((3, 20, 35, 35)).point(lambda v: int(v * 0.45))                     # the corpse, faded
+    paste_max(im, body.resize((32 * S, 12 * S), Image.BICUBIC), (4 * S, 23 * S))
+    rays = Image.new("L", (W * S, H * S), 0); rd = ImageDraw.Draw(rays)
+    for x0, x1 in ((20.0, 20.0), (12.0, 15.0), (28.0, 25.0)):
+        rd.polygon([((x0 - 0.9) * S, -1 * S), ((x0 + 0.9) * S, -1 * S), ((x1 + 2.2) * S, 26 * S), ((x1 - 2.2) * S, 26 * S)], fill=120)
+    rays = rays.filter(ImageFilter.GaussianBlur(0.9 * S)); paste_max(im, rays)
+    fig = Image.new("L", (W * S, H * S), 0); fd = ImageDraw.Draw(fig)
+    def P(pts): fd.polygon([(x * S, y * S) for x, y in pts], fill=255)
+    cx = 20.0
+    fd.ellipse([(cx - 2.1) * S, 6.6 * S, (cx + 2.1) * S, 10.8 * S], fill=255)                          # head
+    P([(cx - 2.6, 11.4), (cx + 2.6, 11.4), (cx + 2.0, 19.4), (cx + 3.4, 27.0), (cx + 1.0, 27.0), (cx, 21.0),
+       (cx - 1.0, 27.0), (cx - 3.4, 27.0), (cx - 2.0, 19.4)])                                          # torso + legs
+    P([(cx - 2.4, 11.6), (cx - 2.0, 13.6), (cx - 8.6, 9.0), (cx - 9.4, 6.4), (cx - 8.0, 6.2)])          # left arm raised
+    P([(cx + 2.4, 11.6), (cx + 2.0, 13.6), (cx + 8.6, 9.0), (cx + 9.4, 6.4), (cx + 8.0, 6.2)])          # right arm raised
+    ring = Image.new("L", (W * S, H * S), 0); stroke_ellipse(ImageDraw.Draw(ring), ((cx - 3.4) * S, 2.6 * S, (cx + 3.4) * S, 5.0 * S), int(0.8 * S), 255)
+    im.paste(0, mask=fig.filter(ImageFilter.MaxFilter(int(1.0 * S) | 1)))                            # dark outline so it reads over the rays
+    paste_max(im, fig); paste_max(im, ring)
+    return im
+
+--- 3. build_dual_sphere_fx_v1.py ---
+    group-table row (after Harvest's rows):
+              (2960, miracle_sparkles(), "LImirac%d.BMP", 770, 50, 0x0000),   # Miracle (209) slot 0: gold PARTICLE twinkle (3 frames, 38x38)
+    function (needs PARTICLE / raw_pixels / ilbcodec already in that module):
+
+def miracle_sparkles():
+    """Miracle (209) slot 0 (2026-10-16): Animate Dead's PARTICLE.ILB 15-17 twinkle (the 18 sparkles the corpse spawns
+    at the FX stage) at 2x, inverted and tinted warm gold-white for the additive (770) mode - like Harvest Souls'
+    purple_sparkles, but holy light."""
+    lib = ilbcodec.read(PARTICLE); out = []
+    for src in (15, 16, 17):
+        im, r = raw_pixels(lib, src); im = im.convert("RGBA")
+        im = im.resize((im.width * 2, im.height * 2), Image.BICUBIC)
+        p = im.load()
+        for y in range(im.height):
+            for x in range(im.width):
+                r_, g_, b_, a_ = p[x, y]; v = 1.0 - max(r_, g_, b_) / 255.0
+                p[x, y] = (int(255 * min(1.0, 1.05 * v)), int(255 * min(1.0, 0.88 * v + 0.1 * v ** 3)), int(255 * min(1.0, 0.45 * v + 0.4 * v ** 3)), 255)
+        out.append(im)
+    return out
+
+--- 4. build_dual_sphere_sfx_v1.py ---
+    # Miracle (209, Life T4 2026-10-16): the vanilla resurrection (Attack/Ressur.WAV - Recall Spirit's own cast sound) under a
+    # rising sung C-major swell and a soft bright shimmer.
+    "DUALLI_MIRACLE.WAV":   [("Attack/Ressur.WAV", 1.0, 0.00, 3.2, 1.0),
+                             ("synth:choir:261.6:2.4", 0.4, 0.20, None, 0.0),
+                             ("Attack/MagicC01.WAV", 0.3, 0.40, 2.0, 0.8, 1.2, 0.4)],
+    (DRIVE optional ~1.3; ship Sfx\Zsp\DUALLI_MIRACLE.WAV)
+
+--- Apply order (game closed) ---
+  1. build_dual_sphere_fx_v1.py --apply      (DualDF 2960-2962)
+  2. build_dual_sphere_sfx_v1.py --apply
+  3. build_dual_sphere_icons_v1.py --apply   (SpellIcn 209)
+  4. patch_dual_sphere_spells_v1.py --apply  (registers 209, SpellTypes[209] = 0x27, Spells.pfs key 219)
+  5. patch_miracle_v1.py --apply             (AoWEPACK: zone 0x5584E000-0x5584E1E8, TAB 0x558E9FC0-0x558EA000)
+  6. patch_tc_miracle_v1.py --apply          (AoWTCPCK: zone 0x440C00-0x440D33, latch 0x46BFB0)
+  7. VEH startup check.
+  Chain consequences: after 6, patch_tc_repent_harvest_v1.py dry-run reports bcast/switch OTHER -> ABORT (expected; revert
+  patch_tc_miracle_v1 first to touch it).  patch_miracle_v1 chains in front of the mod's Recall Spirit / Animate-Dead puppet
+  hooks 0x5580D98D / 0x5580C6D2 (owned by no current script) - nothing else reports.

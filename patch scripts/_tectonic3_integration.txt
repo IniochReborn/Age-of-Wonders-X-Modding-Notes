@@ -1,0 +1,75 @@
+TECTONIC SHIFT v3 (spell 219) - integration snippets for the SHARED files (2026-10-17, fork; NOTHING applied live)
+Engine: patch scripts\patch_tectonic_v1.py upgraded in place to v3 (v2 copy kept at tmp\tecto3\patch_tectonic_v1.v2.py).
+Insert ONLY the code lines between the ---- code ---- / ---- end ---- markers and ast.parse each edited builder.
+
+== 1. build_dual_sphere_fx_v1.py - the per-hex glow (DualDF 4650-4661 of the reserved 4650-4699) ==
+  function (before `def build():`; uses the module's np / math / Image):
+---- code ----
+def tectonic_glow(n=12):
+    """Tectonic Shift (219) slot 3 (2026-10-17; user: a very subtle green hex glow on every spawned terrain change,
+    similar to but different from the others): drawn per TFrozenWaterHS marker by patch_tectonic_v1.py v3's glow cave
+    (pure frame pick, 4 ticks/frame, additive 770).  32x24 like the Overgrowth / Drought glows, but instead of their
+    breathing haze it is a faint emerald HEX RIM (a flattened hexagon traced just inside the hex) with a dim inner
+    wash, and one brighter spark that runs once round the rim per cycle - like a seam of earth-magic settling - plus a
+    single tiny grit speck rising from the middle."""
+    W, H = 32, 24; cx, cy, rx, ry = 16.0, 12.5, 12.5, 7.5
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    verts = [(cx + rx * math.cos(math.radians(a)), cy + ry * math.sin(math.radians(a))) for a in range(0, 360, 60)]
+    def seg_d(px, py, a, b):
+        ax, ay = a; bx, by = b; vx, vy = bx - ax, by - ay
+        t = np.clip(((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy), 0, 1)
+        return np.hypot(px - (ax + t * vx), py - (ay + t * vy))
+    rim_d = np.min([seg_d(xx, yy, verts[k], verts[(k + 1) % 6]) for k in range(6)], axis=0)
+    rim = np.exp(-(rim_d / 0.9) ** 2)
+    wash = np.exp(-(((xx - cx) / 10.0) ** 2 + ((yy - cy) / 5.5) ** 2) * 1.4)
+    perim = [(verts[k], verts[(k + 1) % 6]) for k in range(6)]
+    frames = []
+    for i in range(n):
+        t = i / float(n); b = 0.5 + 0.5 * math.sin(2 * math.pi * t)
+        k = int(t * 6) % 6; u = t * 6 - int(t * 6)
+        (ax, ay), (bx, by) = perim[k]; sx, sy = ax + (bx - ax) * u, ay + (by - ay) * u
+        spark = np.exp(-((xx - sx) ** 2 + (yy - sy) ** 2) / (2 * 1.1 ** 2)) * 0.55
+        uu = t; gy = cy + 3 - 9 * uu; grit = np.exp(-((xx - cx - 1) ** 2 + (yy - gy) ** 2) / (2 * 0.6 ** 2)) * math.sin(math.pi * uu) * 0.5
+        a = np.clip(rim * (0.26 + 0.08 * b) + wash * (0.10 + 0.04 * b) + spark + grit, 0, 1)
+        hot = np.clip(spark * 1.4 + grit, 0, 1)
+        r = 40 * a + 150 * hot; g = 215 * a + 40 * hot; bl = 90 * a + 70 * hot
+        frames.append(Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(g, 0, 255), np.clip(bl, 0, 255),
+                                                 255 * (a > 0.015)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+  group row (right after the `(4300, tectonic_dust(), ...` row):
+---- code ----
+              (4650, tectonic_glow(), "ERtglw%02d.BMP", 770, 45, 0x0000),            # Tectonic Shift (219) slot 3: subtle green hex-rim glow on every changed hex (32x24, per marker, patch_tectonic_v1.py v3)
+---- end ----
+  Preview (scratch): C:\Users\<user>\.claude\jobs\47241cad\tmp\tecto3\glow_sheet.png (12 frames on grass / desert / snow /
+  dirt, additive at blend 45).  Lower the 45 if it reads too strong, raise towards 60 if it vanishes on snow.
+
+== 2. patch_dual_sphere_spells_v1.py - entry 219 ==
+  a) add gfx slot 3 as the LAST entry of the gfx dict (keep whatever slots 0-2 the particle fork leaves there; move
+     the dict's closing `}` to this line):
+---- code ----
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(4650, 4662)), -16, -14, f20=0)},   # v3: per-hex glow (patch_tectonic_v1.py v3 glow cave draws slot 3 per marker, 4 ticks/frame)
+---- end ----
+  b) replace the desc line:
+---- code ----
+         desc="The ground heaves and shifts across the whole world: each turn hills rise from the land, hills harden into mountains and mountains grow ever larger - even out into the shallows - while underground new tunnels wind through the rock and old ones fill in, more so the deeper you go. Changed land glows faintly. Cities, structures, roads and units are never buried, and no passage is ever cut off. When the spell ends the land slowly settles back.",
+---- end ----
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF += 4650-4661)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 219: slot 3 + desc)
+  py -3.10 patch_tectonic_v1.py                        (dry run, live 10/17: "zone ours(old: v2) ... glow free (prev e8a0b10f00
+                                                         9090909090)", 6 sites ours, chained to Overgrowth's caves)
+  py -3.10 patch_tectonic_v1.py --apply                (in-place v2 -> v3; backup backup\AoWEPACK.dll.bak_tectonic3)
+  VEH startup check.  Revert: patch_tectonic_v1.py --revert (exact: 6 sites + glow site restored, zones A/B/C zeroed).
+  No new WAV / ILB file besides DualDF.ILB (already shipped).
+
+== 4. Chain / LIFO notes ==
+  * NEW hooked site: TFrozenWaterHS.Show 0x55764C5B (`call` -> our glow cave, in FRONT of patch_drought_glow_v1.py's
+    cave 0x5585FE00).  While v3 is applied, patch_drought_glow_v1.py sees its site as OTHER and aborts: revert tectonic,
+    re-run drought glow, re-apply tectonic.  Same for patch_overgrowth_v1.py (CE/MM/NT/AC/DE/CHK, unchanged from v2).
+  * patch_tectonic_shake_v1.py hooks other sites (CE VMT slot 0x557EDF80, NewTurn 0x557569DA) - independent, any order.
+  * Markers: Tectonic's are TFrozenWaterHS with [+0xE] = 0x20|code (bits 0xC0 clear) and owner byte 0x40|player -
+    Drought (0x80), Overgrowth (0x40), Ice Age (0xC0), raise-terrain (<= 0xD) and the vanilla melt tick all ignore
+    them; Overgrowth / World Healer / Ice Age / Drought refuse hexes carrying any marker, so Tectonic hexes are left
+    alone by them while changed.  Raise Terrain cast on a Tectonic hex re-uses its marker (that hex's revert is lost).

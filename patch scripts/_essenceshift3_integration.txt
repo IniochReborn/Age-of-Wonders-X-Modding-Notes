@@ -1,0 +1,131 @@
+ESSENCE SHIFT (231) v3 - targeting only valid nodes, the transform actually works, smooth fade-out, icon reverted
+(2026-10-18, fork; NOTHING applied live, no shared builder edited).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----) and ast.parse each edited builder afterwards.
+Builders: the pipeline + sfx builder are CRLF, fx + icons builders LF - detect the newline per file.
+
+ROOT CAUSE "nothing happens to nodes": v2's exec cave compared the node owner [node+0x30] with byte [te+0x14] as the
+casting player's index - but the TE init 0x55779884 stores [te+0x10] = spell id, [te+0x14] = [spell+0x14] = the
+spell's MANA value (50), byte [te+0x18] = the player's index ([player+0x24]), [te+0x1C] = [player+0x18].  50 never
+equals an owner byte -> every cast bailed out before the transform (the vanilla cast fx/sfx still played).  v3 reads
+[te+0x18].  (v1 had no owner check in exec; the v2 emulator wrote the index into +0x14, which hid the bug.)
+The rest of the transform path was re-verified against the vanilla code: level / field lookup as in
+TGlobalTargetSpell.ShowTargetSelection 0x5579E390; the resource list [[0x558FA044]+0x24] is THSSet's
+TMapObjectResourceList (HSEngine.TMapObject.GetResourceList = [map+0x38]->+0x24; FindMOR walks the same [+8] list),
+so node resources ARE in it; PlaceResourceUser 0x55761A9C argument order matches; [player+0xD4] = the leader
+(TPlayer.GetLeaderLocation), [leader+0xA0] = the sphere picks (TLeader.GetSpheres / GetSphereCount).
+
+TARGETING: TGlobalTargetSpell's click handler (VMT+0xA0 0x5579E4E0, state 2) asks only VMT+0xAC before casting, and
+TRejuvenate's +0xAC is the inherited always-TRUE 0x5579E4DC - the per-hex predicate +0xB0 only colours the preview,
+so a red hex could still be clicked.  v3 re-points the TRejuvenate VMT slot +0xAC (0x5579D5C0, relocated, shared by
+every TRejuvenate clone) to a cave `clk`: id 231 -> the field of the selection ([sel+0x39]/[sel+0x3A]/[sel+0x3B] =
+x/y/level, bounds-checked) -> the spell's own +0xB0 predicate (the base explored check + our pred); any other id
+(Rejuvenate 204 / Wither 205 / Scorch 0x29) -> the previous slot value (vanilla always-true, unchanged).
+RAZED: pred and exec now also refuse a node whose GetRazed (VMT+0x150: TPowerNode [obj+0x3C] & 1, elemental nodes
+[obj+0x48] == 1) is true.  Valid target = owned by the caster + not razed + its sphere differs from the caster's best set.
+
+== 1. Engine: patch scripts\patch_essenceshift_v1.py upgraded IN PLACE to v3 ==
+  header 'ESSHIFT3' (v1/v2 accepted); the previous +0xAC value is stored at header +0x44 (zero padding in v1/v2
+  zones).  Upgrade from the live v2 backs up to .bak_essence3; --revert from v3 restores the exact pre-v1 bytes
+  (incl. the +0xAC slot); from a v1/v2 zone it reverts as before.  v2 script copy: tmp\essence3\patch_essenceshift_v1.v2.py
+
+== 2. build_dual_sphere_fx_v1.py (LF) - add this function before `def build():` (essence_swirl stays, unused) ==
+---- code ----
+def essence_swirl2(n=44):
+    """Essence Shift (231) slot 0 v3 (2026-10-18, user: "really good but needs a smooth fade out, it ends abruptly").
+    essence_swirl's first 28 frames unchanged in look and speed (t = i / 27: six elemental motes spiral in, the
+    white-violet core flashes at t 0.55, the starlight ring bursts), then 16 more frames of tail: the ring keeps
+    EXPANDING while it fades on a smoothstep (no retract), the cosmic halo and a soft afterglow ease out, the sparkles
+    dim with them; every term reaches exactly 0 with zero slope at the last frame (96x96, additive, 44 x 2 ticks)."""
+    def sst(a, b, x):
+        u = min(1.0, max(0.0, (x - a) / (b - a))); return u * u * (3 - 2 * u)
+    W = H = 96; cx, cy = 48.0, 52.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    cols = ((255, 240, 190), (190, 120, 255), (235, 170, 80), (170, 235, 255), (255, 140, 50), (80, 150, 255))
+    rnd = random.Random(2310); sparks = [(rnd.uniform(0, 6.283), rnd.uniform(10, 40), rnd.uniform(0, 1)) for _ in range(14)]
+    T_END = (n - 1) / 27.0
+    out = []
+    for i in range(n):
+        t = i / 27.0; acc = np.zeros((H, W, 3), np.float32)
+        tc = min(1.0, t / 0.55)
+        halo = 0.35 * (math.sin(math.pi * min(1.0, t / 0.8)) if t < 0.4 else 1.0 - sst(0.4, T_END, t))
+        g = np.exp(-((xx - cx) ** 2 + ((yy - cy) / 0.8) ** 2) / (2 * 18.0 ** 2)) * halo
+        acc += g[..., None] * np.array((150, 110, 230), np.float32)
+        if t < 0.6:
+            for k, c in enumerate(cols):
+                for tail in range(6):
+                    tt = max(0.0, tc - tail * 0.025)
+                    r = 34 * (1 - tt) ** 1.3 + 2
+                    a = k * math.pi / 3 + 5.0 * tt
+                    x = cx + r * math.cos(a); y = cy + 0.7 * r * math.sin(a)
+                    s = (2.6 - tail * 0.3)
+                    amp = (1.0 - tail / 6.0) * (0.9 if t < 0.52 else 0.9 * (0.6 - t) / 0.08)
+                    gg = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * s * s)) * max(0.0, amp)
+                    acc += gg[..., None] * np.array(c, np.float32)
+        core = math.exp(-((t - 0.55) / 0.09) ** 2)
+        gc = np.exp(-((xx - cx) ** 2 + ((yy - cy) / 0.85) ** 2) / (2 * 6.5 ** 2)) * core * 1.6
+        acc += gc[..., None] * np.array((240, 225, 255), np.float32)
+        glow = sst(0.5, 0.65, t) * (1.0 - sst(0.65, T_END, t)) * 0.45                 # soft afterglow easing out
+        gg2 = np.exp(-((xx - cx) ** 2 + ((yy - cy) / 0.85) ** 2) / (2 * 11.0 ** 2)) * glow
+        acc += gg2[..., None] * np.array((200, 180, 255), np.float32)
+        if t > 0.5:
+            u = (t - 0.5) / (T_END - 0.5); rr = 4 + 40 * u ** 0.7                       # keeps expanding to the end (stays inside the 96 px canvas)
+            d = np.sqrt((xx - cx) ** 2 + ((yy - cy) / 0.7) ** 2)
+            ring = np.exp(-((d - rr) / 2.2) ** 2) * (1 - u) ** 1.2 * (1.0 - sst(0.45, 1.0, u)) * 0.9
+            acc += ring[..., None] * np.array((205, 190, 255), np.float32)
+        fs = math.sin(math.pi * min(t, 0.5)) * (1.0 - sst(0.7, T_END, t))
+        for a0, r0, ph in sparks:
+            tw = max(0.0, math.sin(2 * math.pi * (t * 1.5 + ph))) ** 3 * fs
+            x = cx + r0 * math.cos(a0); y = cy + 0.7 * r0 * math.sin(a0)
+            sp = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 1.2) * tw * 0.9
+            acc += sp[..., None] * np.array((235, 225, 255), np.float32)
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+---- end ----
+
+== 2b. build_dual_sphere_fx_v1.py - REPLACE the (6200, essence_swirl(), ...) row with ==
+---- code ----
+              (6200, essence_swirl2(), "COess%02d.BMP", 770, 90, 0x0000),      # Essence Shift (231) v3 slot 0: cast swirl + smooth fade-out tail (96x96, additive, 44 x 2 ticks; DualDF 6200-6243)
+---- end ----
+
+== 3. patch_dual_sphere_spells_v1.py (CRLF), entry 231 - replace the desc line and the gfx line with ==
+---- code ----
+         desc="Reshape the essence of a magic node you own: the target node (a mana node or an elemental node that is not razed, on the surface, underground or in the depths) becomes the elemental node of the sphere you are most devoted to (a tie is decided at random). Its guards remain.",
+---- end ----
+---- code ----
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(6200, 6244)), -60, -85, f18=1)},   # v3: cosmic six-colour swirl + starlight ring, smooth fade-out tail (96x96, 44 x 2 ticks)
+---- end ----
+
+== 4. build_dual_sphere_icons_v1.py (LF) - glyph_essenceshift: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("essenceshift3_user_mask.png")    # v3 10/18 (user: revert to the original, a bit smaller): the ORIGINAL mask scaled 0.88, centred (new file; v2 mask kept unused)
+---- end ----
+  (patch scripts\essenceshift3_user_mask.png already written; no art import export\essenceshift.png override exists.)
+
+== 5. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_fx_v1.py --apply             (DualDF 6200-6243 re-rendered)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply         (desc + 44-frame slot 0)
+  py -3.10 patch_essenceshift_v1.py                       (dry run: "zone ours(old) ... 'CLK': 'free'", 1440 bytes)
+  py -3.10 patch_essenceshift_v1.py --apply               (backup .bak_essence3 = the v2 state)
+  VEH startup check.
+
+== 6. Chain / LIFO ==
+  Unchanged: Essence Shift is in front of patch_terrain_spells_v1.py (6 sites) and patch_terrain_armyhooks_v1.py
+  (prio slot) - revert it first before re-running either.  NEW: it also owns TRejuvenate VMT +0xAC (nothing else
+  hooks that slot today); a later script taking that slot must be reverted before reverting Essence Shift.
+
+== 7. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\essence3\) ==
+  * Script round trip on a copy of the live (v2) DLL: dry run 1440 bytes -> --apply (upgrade) -> "already applied" ->
+    --revert = md5 e3932361.. = the v2 script's own revert of the live DLL; fresh v3 apply on that = the upgrade
+    (md5 8fc20761..).
+  * emu3.py (Unicorn, real v3 DLL at 0x55700000 and rebased 0x56C10000): ALL OK - every v1/v2 case plus: razed own
+    node refused (pred + exec); intact own node accepted; caster index read from te+0x18 with mana 50 at te+0x14 ->
+    transformed (the v2 regression); clk: valid hex -> +0xB0 asked on the selection's field -> 1, predicate refusal
+    -> 0, depths level used, off-map / negative x / nil selection -> 0, Rejuvenate 204 -> previous slot; stored old
+    +0xAC = 0x5579E4DC; the VMT slot points at clk.  Resource list modelled as THSSet's TMapObjectResourceList with
+    non-node resources (hill 0x20167, another map-object resource) mixed in.
+  * swirl2_sheet.png (the 44 frames), icon_old_vs_new.png (40x35 old | new).  Frame brightness falls smoothly from
+    frame 17 to exactly 0 at frame 43.
+
+== 8. Open (not seen in game) ==
+  * A click on an invalid hex now simply does nothing (no error text); the preview hex is red as before.
+  * Freeing the old node object mid-turn: TStructure.Destroy unregisters it from the game; other caches unverified (as v1).

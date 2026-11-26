@@ -1,0 +1,148 @@
+REVERSAL (234, Secret L3) - integration snippets (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----); detect the newline per builder (CRLF/LF) and
+ast.parse each edited builder afterwards.
+
+Engine: patch scripts\patch_reversal_v1.py (AoWEPACK.dll; zone 0x55880800..0x55880ADF of 0x55881000, verified zero +
+reloc-free; backup .bak_reversal).  Ability record: patch scripts\patch_reversal_ability_pfs_v1.py (Ability.pfs key 209,
+needs 208 = Smoke Screened present).  Icon mask: patch scripts\reversal_user_mask.png (traced from
+art import export\reversal.png: frame cropped, ink thickened 1 px at 320x280).
+
+DESIGN
+  * Ability 0xC7 'Reversed' = TDurationAbility mode 3 (until combat end; CombatDone strips it).
+  * Swaps the FINAL values of melee ATK <-> DEF (unit VMT +0xC0/+0xC4) and DMG <-> RES (+0xC8/+0xCC) - unit panel and
+    combat alike.  RANGED attack is NOT swapped (separate GetAttackRA path / record field).
+  * Friendly or enemy target, long range (12), no resistance roll.  Re-cast on a reversed unit TOGGLES it back.
+  * Getter swap = the 3 unit VMTs' 4 stat slots point at trampolines; a reentrancy flag (AoWEPACK .idata runtime slack
+    0x5590BFF0) lets the swapped getter call its partner's ORIGINAL; the 0xC7 test is the base bit test (no combat
+    unit dereference).  Existing entry hooks (Smokescreen GetAttack, Steadfast GetDefense) stay in the chain.
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry (a Secret single-sphere entry; e.g. right after dict(id=231 ...)) ==
+---- code ----
+    dict(id=234, name="Reversal", sphere=7, tier=3, mana=7, research=150,
+         donor="TRemedy", pfs_donor=45, tc_type=7, icon=234,          # Suspend's single-target chassis (range 12 = long); patch_reversal_v1.py: ability 0xC7 'Reversed' swaps ATK<->DEF and DMG<->RES until combat end (re-cast toggles back)
+         pokes=[(0x22, 1, 0), (0x0C, 1, 2)],                          # COMBAT spell type + combat-only cast context (as Suspend / Second Wind); side 3 = patch_reversal_v1's GCI cave
+         desc="Turns a unit's strengths inside out until the end of the battle: its attack and defense trade places, and so do its resistance and damage. Works on friend or foe; cast it again on the same unit to set it right.",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(6700, 6736)), -48, -86, f20=2, f18=1)},   # two counter-rotating ribbons that invert colour + a mirror flash (96x96)
+         sfx=["SFX\ZSP\DUALSE_REVERSAL.WAV"]),
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py ==
+  ICONS: add   234: "reversalspell"      CLOUDS: add   "reversalspell": 150   (Secret cloud = SpellIcn 150)
+  GLYPHS: add  "reversalspell": glyph_reversalspell
+  (key deliberately NOT "reversal": art import export\reversal.png exists and would silently REPLACE the glyph -
+   the icon-override trap.)  Function (e.g. right before glyph_mendwalls):
+---- code ----
+def glyph_reversalspell():
+    """Reversal (234, Secret L3, 2026-10-18): the user's reference art import export/reversal.png - a sword and a
+    half-dark shield inside two swapping arrows - TRACED -> reversal_user_mask.png (frame cropped, 1 px thickening)."""
+    return _user_mask_glyph("reversal_user_mask.png")
+---- end ----
+
+== 3. build_dual_sphere_fx_v1.py - function before `def build():` + group row (e.g. after the last Cosmos row) ==
+---- code ----
+def reversal_swirl(n=36):
+    """Reversal (234) slot 0 (2026-10-18): Second Wind's canvas (96x96, feet at (48, 86), anchor -48/-86), additive,
+    36 frames x 2 ticks: two ribbons circle the unit in OPPOSITE directions on a tilted orbit round its chest - a warm
+    ember-red one (attack) and a cool steel-blue one (defense) - and as they cross behind the unit at the half-way
+    point their colours INVERT (warm turns cool, cool turns warm) with a thin white mirror-flash splitting the unit
+    down the middle and a soft ring; paired red/blue motes swap sides; smooth fade in and out."""
+    W = H = 96; SS = 2; cx, cy = 48.0, 52.0; rnd = random.Random(2340); out = []
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    motes = [(rnd.uniform(0, 6.28), rnd.uniform(14, 22), rnd.uniform(-14, 14)) for _ in range(12)]
+    WARM, COOL = np.array((255, 105, 45), np.float32), np.array((70, 165, 255), np.float32)
+    for i in range(n):
+        t = i / (n - 1.0)
+        env = min(1.0, t / 0.15) ** 0.8 * (1.0 if t < 0.78 else max(0.0, 1 - (t - 0.78) / 0.22) ** 1.4)
+        mix = min(1.0, max(0.0, (t - 0.38) / 0.24)); mix = mix * mix * (3 - 2 * mix)      # smoothstep colour inversion
+        acc = np.zeros((H, W, 3), np.float32)
+        for k, (sgn, c0, c1) in enumerate(((1, WARM, COOL), (-1, COOL, WARM))):
+            big = Image.new("L", (W * SS, H * SS), 0); d = ImageDraw.Draw(big)
+            head = sgn * 2 * math.pi * 1.35 * t + k * math.pi
+            pts = []
+            for j in range(48):
+                u = j / 47.0; a = head - sgn * 2.4 * u                              # a 2.4 rad trailing arc
+                r = 22 - 3 * k; x = cx + r * math.cos(a); y = cy + 9 * math.sin(a) - 6 * math.cos(a) * (1 if k == 0 else -1) * 0.3
+                pts.append((x * SS, y * SS, u, a))
+            for j in range(len(pts) - 1):
+                x0, y0, u, a = pts[j]; x1, y1, _, _ = pts[j + 1]
+                front = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(a))                        # the near side brighter
+                lvl = int(255 * env * (1 - u) ** 1.3 * front)
+                d.line([(x0, y0), (x1, y1)], fill=lvl, width=int(3.0 * SS))
+            rib = np.asarray(big.filter(ImageFilter.GaussianBlur(2.0)).resize((W, H), Image.LANCZOS)).astype(np.float32) / 255.0
+            col = c0 * (1 - mix) + c1 * mix
+            for c in range(3): acc[..., c] += rib * col[c] * 0.95
+        for m, (a0, r0, dy) in enumerate(motes):                                    # paired motes trading sides
+            side = 1 if m % 2 == 0 else -1
+            a = a0 + side * 3.0 * t; x = cx + r0 * math.cos(a); y = cy + dy * 0.6 + 6 * math.sin(a)
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 2.2) * env * (0.55 + 0.45 * math.sin(7 * t + m))
+            col = (WARM if side > 0 else COOL) * (1 - mix) + (COOL if side > 0 else WARM) * mix
+            for c in range(3): acc[..., c] += g * col[c]
+        u = (t - 0.42) / 0.30                                                       # the mirror flash at the crossing
+        if 0 <= u <= 1:
+            f = math.sin(math.pi * u) ** 1.5
+            line = np.exp(-((xx - cx) / 1.3) ** 2) * np.exp(-((yy - 50) / 30.0) ** 2) * f
+            ring = np.exp(-((np.sqrt((xx - cx) ** 2 + ((yy - 86) / 0.35) ** 2) - (5 + 34 * u)) / 2.6) ** 2) * (1 - u) * 0.6
+            for c, cv in enumerate((245, 235, 255)): acc[..., c] += (line * 1.1 + ring) * cv
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+---- end ----
+---- code ----
+              (6700, reversal_swirl(), "SErevs%02d.BMP", 770, 85, 0x0000),       # Reversal (234) slot 0: counter-rotating ribbons that invert colour + mirror flash (96x96, 36 x 2 ticks)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py - MIXES entry (before "DUALEW_OVERGROWTH.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # Reversal (234, Secret L3 2026-10-18): a MIRRORED whoosh - the wind drawn IN reversed and slowed while an airy band
+    # sweeps up, meeting at a soft crossing chime, then the same wind thrown back OUT forward while the band sweeps down
+    # (the swap); a faint sub swell under it and a shimmer as the stats settle.
+    "DUALSE_REVERSAL.WAV":  [("Attack/Wind.WAV", 0.60, 0.00, 0.62, 0.10, -1.15, 0.25),
+                             ("synth:airwhoosh:900:5200:0.62", 0.38, 0.00, None, 0.08),
+                             ("Attack/Wind.WAV", 0.60, 0.60, 0.75, 0.40, 1.15, 0.03),
+                             ("synth:airwhoosh:5200:900:0.75", 0.38, 0.60, None, 0.35),
+                             ("synth:bell:784:1.2", 0.22, 0.56, None, 0.60),
+                             ("synth:bell:1175:1.0", 0.12, 0.60, None, 0.55),
+                             ("synth:subswell:45:70:1.4", 0.30, 0.00, None, 0.50),
+                             ("synth:shimmer:0.9", 0.20, 0.70, None, 0.50)],
+---- end ----
+  DRIVE dict: add   "DUALSE_REVERSAL.WAV": 1.1,      FADE_OUT dict: add   "DUALSE_REVERSAL.WAV": 0.5,
+  (test render 1.76 s: tmp\reversal\DUALSE_REVERSAL_test.wav at drive 1.3 (RMS 0.29); 1.1 lands ~0.23-0.25.)
+  New file -> add Sfx\Zsp\DUALSE_REVERSAL.WAV to the release zip (--add).
+
+== 5. Ceilings ==
+  After patch_reversal_ability_pfs_v1.py --apply: append 0xC7 to LADDER in patch_aowx_banner_ceilings_v1.py AND
+  patch_tcablist_ceiling_v1.py (bound -> 0xC8) and re-run both.
+
+== 6. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply        (SpellIcn 234)
+  py -3.10 build_dual_sphere_fx_v1.py --apply           (DualDF 6700-6735)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply          (DUALSE_REVERSAL.WAV)
+  py -3.10 patch_reversal_ability_pfs_v1.py --apply     (Ability.pfs record 209)
+  ceilings (section 5)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply       (Spells.pfs 234 + registration; trial dry-run OK)
+  py -3.10 patch_reversal_v1.py                         (dry run: reg/ex/vt/gci 'orig', slots 'orig', 549 bytes)
+  py -3.10 patch_reversal_v1.py --apply
+  VEH startup check.
+
+== 7. Chain / LIFO ==
+  Reversal chains IN FRONT of: RegisterAbility splice 0x557BCF6E (prev = Smokescreen's reg cave), TRemedy.ExecuteSpell
+  0x557E736C and TRemedy.ValidTarget 0x557E7434 (prev = Suspend / Static Shield chain), the TUnitSpell.GetCombatInfo
+  call 0x5577AC86 (prev = patch_suspend_fix_v1's GCI cave), and owns the 12 VMT stat slots.  While applied, those
+  scripts' dry-runs report OTHER - revert Reversal first, re-run them, re-apply Reversal.
+
+== 8. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\reversal\) ==
+  * Script: dry run on a live copy clean (549 B); apply -> "already applied"; --revert byte-identical to live
+    (c859383c); fresh apply == first apply (31c308dc).  patch_suspend_fix_v1 ABORTs while applied (expected).
+  * emu.py (Unicorn, real patched DLL at the preferred base AND rebased +0x01000000): ALL OK -
+    each of the 3 VMTs x 4 slots: plain unit -> its own original; 0xC7 unit -> partner value (atk<->def, dmg<->res);
+    ability-count bounds respected; flag always cleared; ebx/esi/edi/ebp + esp preserved;
+    GCI: 234 -> shots 1 / range 12 / side 3 / ATK byte 0 + epilogue; 214 passes to suspend-fix's cave;
+    ex: no 0xC7 -> Expand (0x94) + Changed; has 0xC7 -> Remove (0x98) + Changed; non-tactical caller -> no change;
+    ret 8 + registers preserved.
+  * Ability.pfs script on a copy: append / "already applied" / revert byte-identical.
+  * Pipeline trial dry-run with the 234 entry: OK (194 records); live files unchanged.
+
+== 9. Open (not seen in game) ==
+  * The AI may cast it (TRemedy chassis, no priority poke) - on a reversed target it would toggle; consider an AI
+    priority poke later if it misuses it.
+  * Other forks working now (Lucky 232 etc.) may pick ability 0xC8+ / Ability.pfs 210+ - keep the ids in order.
+  * The flag byte at AoWEPACK .idata slack 0x5590BFF0 must stay unclaimed by other scripts.

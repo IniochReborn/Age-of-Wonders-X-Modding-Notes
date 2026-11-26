@@ -1,0 +1,637 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AoWx Manual</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,__BRANDICON__">
+<style>
+@font-face{font-family:'NeueHammerUnziale';src:url(data:font/otf;base64,__TITLEFONT__) format('opentype')}
+:root{--bg:#12100c;--panel:#1e1a12;--panel2:#262013;--ink:#e9e0c8;--muted:#a99d7e;
+--gold:#d4af57;--gold2:#b8912f;--line:#3a3122;}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#0d0b08,#171309);color:var(--ink);
+font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+a{color:var(--gold);text-decoration:none;cursor:pointer}
+.srch{margin-left:auto;position:relative;flex:0 0 auto;width:88px;height:34px}
+.srch input{width:100%;height:34px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-size:13px;outline:none;box-sizing:border-box}
+.srch input:focus{position:absolute;right:0;top:0;width:230px;z-index:80;background:#1a1610;border-color:var(--gold2)}
+@media (max-width:1400px){
+ nav a{padding:7px clamp(5px,0.8vw,10px);font-size:clamp(11px,1.05vw,13px)}
+}
+@media (max-width:700px){.brandtx2{display:none}}
+.srch input:focus{border-color:var(--gold2)}
+#srchdd{display:none;position:absolute;right:0;top:calc(100% + 6px);width:320px;max-height:420px;overflow-y:auto;background:#1a1610;border:1px solid var(--gold2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:70}
+#srchdd .sr{padding:7px 11px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px}
+#srchdd .sr:last-child{border-bottom:none}
+#srchdd .sr:hover,#srchdd .sr.sel{background:var(--panel2)}
+#srchdd .sr .st{color:var(--muted);font-size:11px;margin-left:6px}
+.hlflash{animation:hlf 2.2s ease-out}
+@keyframes hlf{0%{box-shadow:0 0 0 3px var(--gold)}100%{box-shadow:0 0 0 3px rgba(0,0,0,0)}}
+header.top{position:sticky;top:0;z-index:20;display:flex;gap:6px;align-items:center;flex-wrap:nowrap;
+padding:10px 18px;background:rgba(18,15,9,.96);border-bottom:2px solid var(--gold2);box-shadow:0 3px 12px rgba(0,0,0,.5)}
+header.top nav{display:flex;gap:6px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px 14px 2px 0}
+header.top nav::-webkit-scrollbar{display:none}
+.brand{font-family:'NeueHammerUnziale',serif;color:var(--gold);letter-spacing:.5px;margin-right:clamp(4px,1vw,14px);cursor:pointer;font-size:clamp(14px,1.4vw,18px);display:flex;align-items:center;gap:7px;white-space:nowrap;flex:0 0 auto}
+.brandic{height:20px;width:20px;image-rendering:auto}
+nav a{padding:7px clamp(6px,1vw,14px);border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-size:clamp(11px,1.1vw,14px);transition:.15s;white-space:nowrap}
+nav a:hover{border-color:var(--gold);color:var(--gold);background:var(--panel2)}
+nav a.ng1{background:#262013;border-color:#54431f}
+nav a.ng1:hover{border-color:var(--gold);color:var(--gold)}
+nav a.ng2{background:#161e26;border-color:#32475c}
+nav a.ng2:hover{border-color:#7aa7cc;color:#9cc4e4;background:#1b2530}
+nav a.ng3{background:#211826;border-color:#4a3560}
+nav a.ng3:hover{border-color:#a583cc;color:#c3a6e0;background:#291f30}
+main{max-width:1180px;margin:0 auto;padding:26px 18px 60px}
+.hero{text-align:center;padding:12px 16px 30px}
+.hero h1{font-size:44px;margin:0 0 6px;color:var(--gold);text-shadow:0 2px 0 #000;font-family:'NeueHammerUnziale',serif}
+.hero .ver{color:var(--muted);margin-bottom:6px}
+.herologo{max-width:400px;width:80%;image-rendering:auto;margin-bottom:10px}
+.tic{height:52px}
+.ticpx{height:66px;image-rendering:pixelated}
+.ticsm{height:42px}
+.tile .ic>img{transition:transform .18s}
+.tile:hover .ic>img{transform:scale(1.09)}
+.icsw{position:relative;display:inline-block;height:58px}
+.icsw img{height:58px;display:block}
+.icsw img.lit{position:absolute;left:0;top:0;opacity:0;transition:opacity .18s}
+.tile:hover .icsw img.lit{opacity:1}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;margin-top:22px}
+.tile{padding:26px 20px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(160deg,var(--panel2),var(--panel));text-align:center;transition:.18s;cursor:pointer}
+.tile:hover{transform:translateY(-3px);border-color:var(--gold);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.tile.tg1{background:linear-gradient(160deg,#2a2212,#1e1a12);border-color:#54431f}
+.tile.tg1:hover{border-color:var(--gold)}
+.tile.tg2{background:linear-gradient(160deg,#182029,#151a20);border-color:#32475c}
+.tile.tg2:hover{border-color:#7aa7cc}
+.tile.tg3{background:linear-gradient(160deg,#241a2b,#1a141f);border-color:#4a3560}
+.tile.tg3:hover{border-color:#a583cc}
+.tile .ic{font-size:34px;margin-bottom:8px;height:64px;display:flex;align-items:center;justify-content:center}
+.tile h3{margin:0;color:var(--gold);font-size:20px;font-family:'NeueHammerUnziale',serif}
+.tile p{margin:6px 0 0;color:var(--muted);font-size:13px}
+h2.page{color:var(--gold);border-bottom:2px solid var(--gold2);padding-bottom:8px;margin:6px 0 22px;font-family:'NeueHammerUnziale',serif;font-weight:400;font-size:30px}
+.count{color:var(--muted);font-size:14px;font-weight:400}
+.crumb{color:var(--muted);font-size:13px;margin-bottom:14px}
+.crumb a{color:var(--muted)} .crumb a:hover{color:var(--gold)}
+.racegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.racecard{padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel);text-align:center;cursor:pointer;transition:.15s}
+.racecard:hover{border-color:var(--gold);background:var(--panel2);transform:translateY(-2px)}
+.racecard .rn{font-size:20px;color:var(--gold);font-weight:400;font-family:'NeueHammerUnziale',serif}
+.racecard .rc{color:var(--muted);font-size:13px;margin-top:4px}
+.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+.unit{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column}
+.uhead{display:flex;gap:12px;padding:12px;border-bottom:1px solid var(--line);align-items:center;background:var(--panel2)}
+.uhead>img,.noimg{width:60px;height:68px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#0c0a06;flex:0 0 auto}
+.noimg{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:22px}
+.uname{font-size:17px;color:var(--gold);font-weight:600}
+.umeta{font-size:12px;color:var(--muted);margin-top:2px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid var(--line);margin-right:5px}
+.stats{width:100%;border-collapse:collapse;font-size:13px}
+.stats th,.stats td{padding:6px 4px;text-align:center;border:1px solid var(--line)}
+.stats th{color:var(--muted);font-weight:600;background:#0e0c08;font-size:11px}
+.stats td{font-weight:600;font-size:14px;color:var(--ink)}
+.stats td.ml,.stats th.ml{text-align:left;font-weight:600;font-size:11px;color:var(--muted);padding-left:8px}
+.stats tr.mNo td.ml{color:#cfc7ad}
+.stats tr.mSilver{background:rgba(200,200,200,.06)} .stats tr.mSilver td.ml{color:#d9d9d9}
+.stats tr.mGold{background:rgba(212,175,87,.10)} .stats tr.mGold td.ml{color:var(--gold)}
+.stats tr.mLegendary{background:rgba(224,120,60,.12)} .stats tr.mLegendary td.ml{color:#e09a5a}
+.stats td.chg{font-weight:800;color:#fff}
+.sic{height:18px;image-rendering:pixelated;vertical-align:middle}
+.mic{height:16px;image-rendering:pixelated;vertical-align:middle}
+.gic{height:13px;image-rendering:pixelated;vertical-align:-2px;margin-left:3px}
+.abil .legnote{color:#c09468;font-style:italic}
+.tag.hero{border-color:var(--gold2);color:var(--gold)}
+h3.lvlhead{color:var(--gold2);margin:20px 0 10px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.relm{border-collapse:collapse;font-size:13px;margin:8px 0}
+.relm th,.relm td{border:1px solid var(--line);padding:4px 9px;text-align:center;min-width:34px}
+.relm th{background:#0e0c08;color:var(--muted)}
+.relm td:first-child{background:#0e0c08;color:var(--muted);font-weight:600}
+.relimg{max-width:100%;border:1px solid var(--line);border-radius:8px;margin:8px 0}
+.tmm{border-collapse:collapse;font-size:13px;margin:8px 0}
+.tmm th{background:#000;color:var(--ink);font-weight:700;border:1px solid var(--line);padding:6px 14px;text-align:left}
+.tmm td{border:1px solid var(--line);padding:4px 14px;text-align:left;color:var(--ink);background:var(--panel)}
+.textpage p.ind1{margin-left:30px;border-left-color:#8a744a}
+.textpage p.ind2{margin-left:60px;border-left-color:#6e5c3a}
+.textpage p.ind3{margin-left:90px;border-left-color:#5a4a30}
+.gcgap{height:14px}
+.hkwrap{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap;margin:10px 0 6px}
+.hklist{flex:1 1 360px;min-width:300px}
+.hkrow{display:flex;justify-content:space-between;gap:14px;padding:7px 10px;border:1px solid transparent;border-radius:6px;cursor:default}
+.hkrow:hover{background:rgba(201,168,76,.08);border-color:var(--line)}
+.hkc{color:var(--gold);font-weight:600}
+.hka{color:var(--ink);text-align:right}
+.mousebox{flex:0 0 260px;text-align:center}
+.mpart{fill:#241d10;stroke:#8a744a;stroke-width:1.5;transition:fill .12s,stroke .12s}
+.marr{fill:#6e5c3a;stroke:none;transition:fill .12s}
+svg .mhl{fill:#e8c76a;stroke:#ffd97a}
+.mtag{fill:#b5a077;font-size:11px}
+.mline{stroke:#6e5c3a;stroke-width:1}
+.sic2{height:15px;image-rendering:pixelated;vertical-align:-3px;margin:0 1px}
+.sphic{height:52px;image-rendering:pixelated;margin-bottom:6px}
+.rcic{height:64px;border:1px solid var(--line);border-radius:6px;margin-bottom:6px}
+.gcic{image-rendering:pixelated;transition:transform .18s}
+.racecard:hover .gcic{transform:scale(1.09)}
+.rcic,.sphic{transition:transform .18s}
+.racecard:hover .rcic,.racecard:hover .sphic{transform:scale(1.09)}
+.gcicbox{height:72px;display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.spicbox{width:60px;height:68px;display:flex;align-items:center;justify-content:center;
+border:1px solid var(--line);border-radius:6px;background:#0c0a06;flex:0 0 auto;color:var(--muted)}
+.spicbox img.spic{width:auto;height:auto;max-width:54px;max-height:60px;image-rendering:pixelated}
+.unit.linked{border-color:#8a6bb8;box-shadow:inset 0 0 0 1px rgba(138,107,184,.28);position:relative;overflow:visible}
+.unit.hassage{position:relative;overflow:visible}
+.sagetip{position:absolute;top:6px;right:6px;z-index:6;cursor:help}
+.sagesw{position:relative;display:block;width:26px;height:29px}
+.sagesw img{width:26px;height:29px;display:block}
+.sagesw img.lit{position:absolute;left:0;top:0;opacity:0;transition:opacity .18s}
+.sagetip:hover .sagesw img.lit{opacity:1}
+.sagepane{display:none;position:absolute;right:0;top:calc(100% + 6px);width:300px;background:#1a1610;border:1px solid #8a6bb8;border-radius:8px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:7}
+.sagetip:hover .sagepane{display:block}
+.sagetitle{display:block;color:#fff;font-weight:600;font-size:14px;margin-bottom:7px;font-family:'NeueHammerUnziale',serif;font-weight:400}
+.sagerow{display:flex;gap:10px;align-items:flex-start}
+.sageface{width:62px;height:auto;border:1px solid var(--line);border-radius:6px;flex:0 0 auto}
+.sagetext{font-size:12px;line-height:1.5;color:var(--ink)}
+.unit.linked .uhead{background:linear-gradient(160deg,rgba(122,90,170,.16),var(--panel2))}
+.abil{padding:11px 12px;font-size:13px}
+.abhov{border-bottom:1px dotted var(--gold2);cursor:help}
+.clsec{color:var(--gold);font-size:16px;margin:16px 0 6px;border-bottom:1px solid var(--line);padding-bottom:4px}
+#abtip{display:none;position:fixed;z-index:60;max-width:360px;background:#1a1610;border:1px solid var(--gold2);border-radius:8px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.6);pointer-events:none;font-size:12px;line-height:1.45}
+#abtip .tt-n{color:var(--gold);font-weight:600;font-size:14px;margin-bottom:3px}
+#abtip .tt-r{color:var(--gold);font-weight:600;margin-bottom:3px}
+#abtip .tt-r em{color:var(--muted);font-weight:400}
+#abtip .tt-d{color:var(--ink);white-space:pre-line}
+#abtip .tt-h{color:var(--muted);margin-top:5px;border-top:1px dashed var(--line);padding-top:4px}
+#abtip .tt-un{display:flex;gap:10px;align-items:flex-start}
+#abtip .tt-uimg{width:56px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#0c0a06;flex:0 0 auto}
+#abtip .tt-st{margin-right:9px;white-space:nowrap}
+#abtip .tt-st img.sic{vertical-align:-2px}
+.unhov{border-bottom:1px dotted var(--gold2);cursor:pointer}
+.unhov:hover{color:var(--gold)}
+.abdesc{padding:10px 12px;font-size:13px;white-space:pre-line}
+.abrng{padding:8px 12px 0;font-size:13px;font-weight:600;color:var(--gold)}
+.abrng em{color:var(--muted);font-weight:400}
+.abav{padding:0 12px 11px;font-size:12px;color:var(--muted)}
+.abav .lab{color:var(--gold2);font-weight:600}
+.abav b{color:var(--ink);font-weight:600}
+.abavp{margin-top:3px}
+.abav summary{cursor:pointer;color:var(--ink)}
+.abcard .uhead{padding:10px 12px}
+.abil .lab{color:var(--gold2);font-weight:600}
+.abil .med{color:var(--muted);font-size:12px;margin-top:4px}
+.abil .nd{color:#c98b5a;font-style:italic}
+.abil .desc{color:var(--muted);font-size:12px;margin-top:8px;font-style:italic;line-height:1.45;border-top:1px dashed var(--line);padding-top:6px}
+.textpage p{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold2);padding:9px 12px;border-radius:6px;margin:8px 0}
+.note{color:var(--muted);font-size:13px;font-style:italic;margin:18px 0}
+.btn-back{display:inline-block;margin-bottom:18px;padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);cursor:pointer}
+.btn-back:hover{border-color:var(--gold);color:var(--gold)}
+</style></head><body>
+<header class="top">
+ <span class="brand" onclick="go('home')"><img class="brandic" src="data:image/png;base64,__BRANDICON__" alt=""> <span class="brandtx2">AoWx Manual</span></span>
+ <nav>
+  <a class="ng1" onclick="go('home')">Home</a>
+  <a class="ng1" onclick="go('overview')">Overview</a>
+  <a class="ng1" onclick="go('general')">General Changes</a>
+  <a class="ng2" onclick="go('abilities')">Abilities List</a>
+  <a class="ng2" onclick="go('races')">Races &amp; Units</a>
+  <a class="ng2" onclick="go('spells')">Spells</a>
+  <a class="ng3" onclick="go('changelog')">Changelogs</a>
+  <a class="ng3" onclick="go('modding')">Modding AoWx</a>
+  <a class="ng3" onclick="go('community')">Community</a>
+ </nav>
+ <div class="srch">
+  <input id="srchin" type="text" placeholder="Search&#8230;" autocomplete="off" spellcheck="false">
+  <div id="srchdd"></div>
+ </div>
+</header>
+<main id="app"></main>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const D=JSON.parse(document.getElementById('data').textContent);
+const app=document.getElementById('app');
+const esc=s=>(s==null?'':(''+s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function go(h){location.hash=h;}
+function mhl(el,on){(el.dataset.b||'').split(' ').forEach(k=>{const n=document.getElementById('mo_'+k);if(n)n.classList.toggle('mhl',!!on)})}
+function raceCounts(){const m={};D.units.forEach(u=>{if(!u.hero)m[u.race]=(m[u.race]||0)+1});return m;}
+function home(){
+ const HI=D.homeicons||{};
+ return `<div class="hero">
+ ${HI.logo?`<img class="herologo" src="${HI.logo}" alt="${esc(D.title)}">`:`<h1>${esc(D.title)}</h1>`}
+ <div class="ver">${esc(D.version)}</div>
+ <div class="ver" style="font-size:13px">${esc(D.lastupdated||'')}</div>
+ <div class="tiles">
+  <div class="tile tg1" onclick="go('overview')"><div class="ic">${HI.keeper?`<img class="tic" src="${HI.keeper}">`:'&#128220;'}</div><h3>Overview</h3><p>Summary &amp; Installation</p></div>
+  <div class="tile tg2" onclick="go('spells')"><div class="ic">${HI.mana?`<img class="ticsm" src="${HI.mana}">`:'&#10024;'}</div><h3>Spells</h3><p>${(D.spells||[]).length} spells across ${(D.spheres||[]).filter(s=>!String(s).includes("/")).length} spheres and ${(D.spheres||[]).filter(s=>String(s).includes("/")).length} dual-spheres</p></div>
+  <div class="tile tg2" onclick="go('abilities')"><div class="ic">${HI.abilities?`<img class="ticsm" src="${HI.abilities}">`:'&#9889;'}</div><h3>Abilities List</h3><p>${(D.abilities||[]).length} unit &amp; hero abilities</p></div>
+  <div class="tile tg2" onclick="go('races')"><div class="ic">${HI.swordsman?`<img class="ticpx" src="${HI.swordsman}">`:'&#128737;'}</div><h3>Races &amp; Units</h3><p>${D.units.filter(u=>!u.hero).length} units across ${D.races.length} groups</p></div>
+  <div class="tile tg1" onclick="go('general')"><div class="ic">${HI.cult?`<img class="tic" src="${HI.cult}">`:'&#9881;'}</div><h3>General Changes</h3><p>${(D.generalcats||[]).length} categories of rules &amp; balance</p></div>
+  <div class="tile tg3" onclick="go('changelog')"><div class="ic">${HI.changelog?`<span class="icsw"><img src="${HI.changelog}"><img class="lit" src="${HI.changelog2||HI.changelog}"></span>`:'&#128220;'}</div><h3>Changelogs</h3><p>${(D.changelog||[]).length} releases</p></div>
+  <div class="tile tg3" onclick="go('modding')"><div class="ic">${HI.modding?`<span class="icsw"><img src="${HI.modding}"><img class="lit" src="${HI.modding2||HI.modding}"></span>`:'&#128296;'}</div><h3>Modding AoWx</h3><p>Tools &amp; resources</p></div>
+  <div class="tile tg3" onclick="go('community')"><div class="ic">${HI.community?`<span class="icsw"><img src="${HI.community}"><img class="lit" src="${HI.community2||HI.community}"></span>`:'&#128172;'}</div><h3>Community</h3><p>Discord &amp; multiplayer</p></div>
+ </div></div>`;
+}
+function textPage(title,paras,note){
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / ${esc(title)}</div>
+ <h2 class="page">${esc(title)}</h2>
+ ${note?`<div class="note">${note}</div>`:''}
+ <div class="textpage">${paras.map(p=>`<p>${esc(p)}</p>`).join('')||'<p class="note">No content.</p>'}</div>`;
+}
+function overviewPage(){
+ const items=D.overviewitems||[];
+ const HK=[
+  ['Scroll Wheel &#8593; / &#8595; / &#8592; / &#8594;','Scroll Map','wheelup wheeldn tiltl tiltr'],
+  ['Wheel Click','Show Grid','wheel'],
+  ['Back + Wheel &#8593; / &#8595;','Next / Previous Unit','back wheelup wheeldn'],
+  ['Forward + Wheel &#8593; / &#8595;','Map Level Up / Down','fwd wheelup wheeldn'],
+  ['Back or Forward + Wheel &#8592; / &#8594;','Done (hides unit from Next/Previous Unit cycling)','back fwd tiltl tiltr'],
+  ['Back or Forward + Wheel Click','Center on Unit','back fwd wheel'],
+  ['Back + Left Click','Select Leader','back left'],
+  ['Back + Right Click','ESC (closes most pop-ups)','back right'],
+  ['Forward + Left Click + Right Click','End Turn','fwd left right'],
+  ['Back + Forward','Save Game','back fwd'],
+ ];
+ const mouseSvg=`<svg width="250" height="320" viewBox="0 0 260 330" role="img" aria-label="Mouse buttons">
+  <rect class="mpart" x="70" y="129" width="124" height="170" rx="56"/>
+  <rect class="mpart" id="mo_left" x="70" y="30" width="60" height="95" rx="16"/>
+  <rect class="mpart" id="mo_right" x="134" y="30" width="60" height="95" rx="16"/>
+  <rect class="mpart" id="mo_wheel" x="121" y="48" width="22" height="48" rx="11"/>
+  <polygon class="marr" id="mo_wheelup" points="123,44 141,44 132,32"/>
+  <polygon class="marr" id="mo_wheeldn" points="123,100 141,100 132,112"/>
+  <polygon class="marr" id="mo_tiltl" points="117,62 117,82 106,72"/>
+  <polygon class="marr" id="mo_tiltr" points="147,62 147,82 158,72"/>
+  <rect class="mpart" id="mo_fwd" x="56" y="142" width="16" height="44" rx="8"/>
+  <rect class="mpart" id="mo_back" x="56" y="196" width="16" height="44" rx="8"/>
+  <text class="mtag" x="8" y="18">Left Click</text><line class="mline" x1="34" y1="22" x2="86" y2="42"/>
+  <text class="mtag" x="198" y="18">Right Click</text><line class="mline" x1="222" y1="22" x2="176" y2="42"/>
+  <text class="mtag" x="132" y="14" text-anchor="middle">Scroll Wheel</text><line class="mline" x1="132" y1="18" x2="132" y2="30"/>
+  <text class="mtag" x="4" y="152">Forward</text><line class="mline" x1="44" y1="156" x2="56" y2="162"/>
+  <text class="mtag" x="14" y="236">Back</text><line class="mline" x1="40" y1="232" x2="56" y2="220"/>
+ </svg>`;
+ const hotkeysBlock=()=>`<div class="hkwrap"><div class="hklist">${
+   HK.map(([c,a,b])=>`<div class="hkrow" data-b="${b}" onmouseenter="mhl(this,1)" onmouseleave="mhl(this,0)"><span class="hkc">${c}</span><span class="hka">${a.replace(/\([^()]*\)/g,'<em>$&</em>')}</span></div>`).join('')
+ }</div><div class="mousebox">${mouseSvg}</div></div>`;
+ const body=items.map(i=>i.t==='h'
+   ?`<h3 class="lvlhead" style="font-size:24px;margin-top:26px;font-family:'NeueHammerUnziale',serif;font-weight:400">${esc(i.x)}</h3>`
+   :i.t==='hotkeys'?hotkeysBlock()
+   :i.html?`<p>${i.html.replace(/\([^()]*\)/g,'<em>$&</em>')}</p>`
+   :`<p>${esc(i.x).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>').replace(/\([^()]*\)/g,'<em>$&</em>')}</p>`).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / Overview</div>
+  <h2 class="page">Overview</h2>
+  <div class="textpage">${body}</div>`;
+}
+function races(){
+ const c=raceCounts();
+ const RI=D.raceicons||{};
+ const PLAY=['Human','Azrac','Lizardman','Frostling','Elf','Halfling','Dwarf','Highmen','Dark Elf','Orc','Goblin','Undead'];
+ const card=r=>`<div class="racecard" onclick="go('race/${encodeURIComponent(r).replace(/'/g,'%27')}')">
+   ${RI[r]?`<img class="rcic" src="${RI[r]}" alt="">`:''}<div class="rn">${esc(r)}</div><div class="rc">${c[r]||0} units</div></div>`;
+ const races12=D.races.filter(r=>PLAY.includes(r)).map(card).join('');
+ const others=D.races.filter(r=>!PLAY.includes(r)).map(card).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / Races &amp; Units</div>
+  <h2 class="page">Races &amp; Units <span class="count">— pick a race</span></h2>
+  <div class="racegrid">${races12}</div>
+  <h3 class="lvlhead" style="margin-top:30px">Other Unit Types</h3>
+  <div class="racegrid">${others}</div>`;
+}
+function unitCard(u){
+ const img=u.img?`<img src="${u.img}" alt="">`:`<div class="noimg">&#9670;</div>`;
+ const IC=D.icons||{};
+ const head=D.stat.map((s,i)=>`<th title="${s}">${IC.stat&&IC.stat[i]?`<img class="sic" src="${IC.stat[i]}" alt="${s}">`:s}</th>`).join('');
+ const MEDS=[['No','None',null],['Silver','Silver','silver'],['Gold','Gold','gold'],['Legendary','Legendary','leg']];
+ let prev=null;
+ const mrows=u.hero?`<tr><td class="ml">&#8212;</td>${u.stats.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`:MEDS.map(([k,lbl,ick])=>{
+  const row=(u.med&&u.med[k])?u.med[k]:u.stats;
+  const cells=row.map((v,i)=>`<td${prev&&prev[i]!==v?' class="chg"':''}>${esc(v)}</td>`).join('');
+  prev=row;
+  const ml=ick&&IC[ick]?`<img class="mic" src="${IC[ick]}" alt="${lbl}" title="${lbl}">`:(ick?lbl:'&#8212;');
+  return `<tr class="m${k}"><td class="ml">${ml}</td>${cells}</tr>`;}).join('')
+ const j=a=>a&&a.length?a.map(abHov).join(', '):'';
+ const abil=`<div class="abil"><span class="lab">Abilities:</span> ${j(u.ab.base)||'&#8212;'}
+     ${u.ab.Silver&&u.ab.Silver.length?`<div class="med">&#9679; Silver: ${j(u.ab.Silver)}</div>`:''}
+     ${u.ab.Gold&&u.ab.Gold.length?`<div class="med">&#9679; Gold: ${j(u.ab.Gold)}</div>`:''}
+     ${u.ab.Legendary&&u.ab.Legendary.length?`<div class="med">&#9679; Legendary: ${j(u.ab.Legendary)}</div>`:''}
+     ${u.hero?'':`<div class="med legnote">*Legendary: Gold medal units continue to gain 2HP per additional 10XP gained. Upon reaching their max HP cap, they become Legendary.</div>`}
+     ${u.desc?`<div class="desc">${esc(u.desc)}</div>`:''}</div>`;
+ const UNITTIPS={
+  'Mysterious Frog':{t:`D-duh? Is this some kinda inside joke? What's so mysterious about a frog? D-uh!`,who:'Rolar the Terrible',face:'gb5'}
+ };
+ const utip=UNITTIPS[u.name];
+ const adv=u.link?advTip('Given the Stormlord is Possessed, he will respawn as an Incarnate upon death.'):(utip?advTip(utip.t,utip.who,utip.face):'');
+ return `<div class="unit${u.link?' linked':''}${!u.link&&adv?' hassage':''}">${adv}<div class="uhead">${img}<div>
+   <div class="uname">${esc(u.name)}</div>
+   <div class="umeta">${u.hero?`<span class="tag hero">${esc(u.type)}</span>`:`<span class="tag">Lvl ${esc(u.level)}</span>${u.type?`<span class="tag">${esc(u.type)}</span>`:''}`}Alignment: ${esc(u.align)||'&#8212;'}</div>
+   ${u.hero?'':`<div class="umeta">Upkeep ${esc(u.upkeep)||'-'} &nbsp;|&nbsp; Cost ${esc(u.cost)||'-'}</div>`}
+   </div></div>
+   <table class="stats"><tr><th class="ml">Medal</th>${head}</tr>${mrows}</table>
+   ${abil}</div>`;
+}
+function generalHome(){
+ const cats=D.generalcats||[];
+ const GI=D.gcicons||{};
+ const GSZ={'Leaders & Heroes':48,'Units':68};
+ const cards=cats.map(c=>`<div class="racecard" onclick="go('gc/${encodeURIComponent(c.name).replace(/'/g,'%27')}')">
+   ${GI[c.name]?`<div class="gcicbox"><img class="gcic" style="height:${GSZ[c.name]||46}px" src="${GI[c.name]}" alt=""></div>`:''}<div class="rn">${esc(c.name)}</div><div class="rc">${c.items.filter(i=>i.t==='p').length} changes</div></div>`).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / General Changes</div>
+  <h2 class="page">General Changes <span class="count">— pick a category</span></h2>
+  <div class="racegrid">${cards}</div>`;
+}
+function relVisuals(){
+ let out='';
+ if(D.relmatrix){
+  const rws=D.relmatrix.filter(r=>r.length>2);
+  out+=`<h3 class="lvlhead">Race Relations <span class="count">(rows = Units &amp; Cities, columns = Leaders)</span></h3>
+   <div style="overflow-x:auto"><table class="relm">`+
+   rws.map((r,ri)=>`<tr>${r.map(cell=>{
+     const bg=cell.c&&cell.c!=='auto'?`background:#${cell.c};color:#1a160e;`:'';
+     return ri===0?`<th>${esc(cell.x)}</th>`:`<td style="${bg}">${esc(cell.x)}</td>`;}).join('')}</tr>`).join('')+
+   `</table></div>`;
+ }
+ if(D.relimg) out+=`<h3 class="lvlhead">Alignment Relations</h3><img class="relimg" src="${D.relimg}" alt="Alignment relations">`;
+ return out;
+}
+function generalCat(nm){
+ const c=(D.generalcats||[]).find(x=>x.name===nm);
+ if(!c)return generalHome();
+ const body=(nm==='Relations & Unit Morale'?relVisuals():'')+c.items.map(i=>
+   i.t==='h'?`<h3 class="lvlhead">${esc(i.x)}</h3>`
+   :i.t==='gap'?`<div class="gcgap"></div>`
+   :i.t==='table'?('<table class="tmm">'+i.rows.map((rw,ri)=>'<tr>'+rw.map(cl=>ri===0?'<th>'+esc(cl)+'</th>':'<td>'+esc(cl)+'</td>').join('')+'</tr>').join('')+'</table>')
+   :`<p class="ind${i.lvl||0}">${esc(i.x.includes('\n')?i.x:i.x.replace(/^-\s*/,'')).replace(/\n/g,'<br>').replace(/\([^()]*\)/g,'<em>$&</em>')}</p>`).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / <a onclick="go('general')">General Changes</a> / ${esc(nm)}</div>
+  <span class="btn-back" onclick="go('general')">&#8592; All categories</span>
+  <h2 class="page">${esc(nm)}</h2>
+  <div class="textpage">${body}</div>`;
+}
+function spheres(){
+ const cnt={};(D.spells||[]).forEach(s=>cnt[s.sphere]=(cnt[s.sphere]||0)+1);
+ const SI=D.sphicons||{};
+ const cards=(D.spheres||[]).map(s=>`<div class="racecard" onclick="go('sphere/${encodeURIComponent(s).replace(/'/g,'%27')}')">
+   ${SI[s]?`<img class="sphic" src="${SI[s]}" alt="">`:''}<div class="rn">${esc(s)}</div><div class="rc">${cnt[s]||0} spells</div></div>`).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / Spells</div>
+  <h2 class="page">Spells <span class="count">— pick a sphere</span></h2>
+  <div class="racegrid">${cards}</div>`;
+}
+function spellCard(s){
+ const img=s.icon?`<img src="${s.icon}" alt="">`:`<div class="noimg">&#10024;</div>`;
+ const m=(s.type||'').match(/^(Global|Combat|Enchantment|Summon\w*|City|Unit|Special)(.*)$/);
+ const ty=m?m[1]:s.type;
+ const raw=m&&m[2]?m[2]:'';
+ const IC2=D.icons||{};
+ let detH='',det2='';
+ const dm=raw.match(/^\s*(\d+)\s*ATK\s*\/\s*(\d+)\s*DMG(?:\s*X(\d+))?\s*(.*)$/);
+ if(dm&&IC2.stat){
+  detH=`<img class="sic2" src="${IC2.stat[0]}" alt="ATK" title="ATK"> ${dm[1]} / <img class="sic2" src="${IC2.stat[2]}" alt="DMG" title="DMG"> ${dm[2]}`;
+  det2=[dm[3]?('x'+dm[3]):'',esc((dm[4]||'').replace(/([a-z])([A-Z])/g,'$1 $2').trim())].filter(Boolean).join(' &nbsp;|&nbsp; ');
+ }else{
+  let det=raw.replace(/(\d)([A-Z])/g,'$1 $2').replace(/([a-z])([A-Z])/g,'$1 $2');
+  detH=esc(det);
+  if(IC2.stat){detH=detH.replace(/ATK|DMG/g,w=>`<img class="sic2" src="${w==='ATK'?IC2.stat[0]:IC2.stat[2]}" alt="${w}" title="${w}">`);}
+ }
+ const cp=(s.cast||'').split('/'), cost=esc((cp[0]||'').trim()), upk=esc((cp[1]||'').trim());
+ const SPELLTIPS={
+  'Chain Lightning':'Battle tested mages know that Chain Lightning can extend past its supposed range. Simply target an empty hex near its range limit and nearby enemies will no longer be out of reach!',
+  'Fury':'In some situations, enchanting enemy units with Fury can be worthwhile in order to lower their DEF. Especially projectile-oriented enemies...',
+  'Swarm':'It may be reckless, but Swarm can be cast even with no enemies within range. It will often extend across vast distances to find suitable targets... including your own troops!',
+  'Healing Water':'A prudent mage manipulates his available casting points to allow delayed casting of Healing Water on the following turn. If he continues to wait patiently, he can even cast it in combat without using any casting points!',
+  'Ooze':'The Halflings laughed as Jattah cast Ooze, trudging gleefully through the mud - taunting him even. Then the Karaghs arrived.',
+  'Water Walking':'Did you know this enchantment can\'t be dispelled by enemy wizards?',
+  'Liquid Form':'One must always ensure not to get dispelled in inopportune locations...',
+  'Dispel Magic':`Gold Dragon? No, I don't think I'll allow it.`,
+  'Cosmagic Surgery':`As amusing as it may be to change a foe's appearance to resemble Sirdanc the Changed, casting the enchantment without altering them is more difficult to detect. It may even allow the caster to track their enchantment for some time...`
+ };
+ const ROLAR={'Fire Halo':`Duh! I wonder what would happen if this enchantment was removed while I'm on lava? D-uh?`};
+ const sadv=SPELLTIPS[s.name]?advTip(SPELLTIPS[s.name]):(ROLAR[s.name]?advTip(ROLAR[s.name],'Rolar the Terrible','gb5'):'');
+ return `<div class="unit${sadv?' hassage':''}">${sadv}<div class="uhead">${img}<div>
+   <div class="uname">${esc(s.name)}</div>
+   <div class="umeta">${s.level?`<span class="tag">Lvl ${esc(s.level)}</span>`:''}${ty?`<span class="tag">${esc(ty)}</span>`:''}${detH}</div>
+   ${det2?`<div class="umeta">${det2}</div>`:''}
+   <div class="umeta">Cost ${cost||'-'}${upk?` &nbsp;|&nbsp; Upkeep ${upk}`:''} &nbsp;|&nbsp; Research ${esc(s.research)||'-'}</div>
+   </div></div>
+   <div class="abil">${esc(s.desc)}</div></div>`;
+}
+function spherePage(sp){
+ const list=(D.spells||[]).filter(s=>s.sphere===sp).sort((a,b)=>(a.level-b.level)||a.name.localeCompare(b.name));
+ const lvls=[...new Set(list.map(s=>s.level))];
+ const out=lvls.map(l=>`<h3 class="lvlhead">${l?('Level '+l):''}</h3><div class="units">${list.filter(s=>s.level===l).map(spellCard).join('')}</div>`).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / <a onclick="go('spells')">Spells</a> / ${esc(sp)}</div>
+  <span class="btn-back" onclick="go('spells')">&#8592; All spheres</span>
+  <h2 class="page">${esc(sp)} <span class="count">— ${list.length} spells</span></h2>
+  ${out}`;
+}
+function racePage(r){
+ const list=D.units.filter(u=>u.race===r).sort((a,b)=>((a.ord??9999)-(b.ord??9999))||(a.level-b.level)||((a.rank??3)-(b.rank??3))||a.name.localeCompare(b.name));
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / <a onclick="go('races')">Races</a> / ${esc(r)}</div>
+  <span class="btn-back" onclick="go('races')">&#8592; All groups</span>
+  <h2 class="page">${esc(r)} <span class="count">— ${list.length} units</span></h2>
+  <div class="units">${list.map(unitCard).join('')}</div>${raceInfoPanel(r)}`;
+}
+function raceInfoPanel(r){
+ const ri=(D.raceinfo||{})[r];
+ if(!ri)return '';
+ const n=Math.max(ri.disliked.length,ri.hated.length);
+ let rowsH='';
+ for(let i=0;i<n;i++)rowsH+='<tr><td>'+esc(ri.disliked[i]||'')+'</td><td>'+esc(ri.hated[i]||'')+'</td></tr>';
+ return '<h3 class="lvlhead">Hostile Terrain Morale Modifiers</h3>'+
+  '<table class="tmm"><tr><th>Disliked (-20 Morale)</th><th>Hated (-40 Morale)</th></tr>'+rowsH+'</table>';
+}
+function advTip(txt,who,face){
+ const HIu=D.homeicons||{};
+ if(!HIu.changelog)return '';
+ const fim=HIu[face||'tanaris'];
+ return `<span class="sagetip"><span class="sagesw"><img src="${HIu.changelog}"><img class="lit" src="${HIu.changelog2||HIu.changelog}"></span>
+   <span class="sagepane"><span class="sagetitle">${esc(who||'Tanaris the Knowing')} advises:</span>
+   <span class="sagerow">${fim?`<img class="sageface" src="${fim}">`:''}<span class="sagetext">${esc(txt)}</span></span></span></span>`;
+}
+function abilityCard(a){
+ const cost='';
+ const rng=(a.ranged?`<div class="abrng">${esc(a.ranged)}${a.dtypes?` <em>(${esc(a.dtypes)})</em>`:''}</div>`:'')
+  +(a.status?`<div class="abrng">Status Effect &#8212; ${esc(a.status)}</div>`:'');
+
+ const av=a.avail||{base:[],Silver:[],Gold:[],Legendary:[]};
+ if(!av.Legendary)av.Legendary=[];
+ const parts=[];
+ if(av.base.length)parts.push(['Base',av.base]);
+ if(av.Silver.length)parts.push(['Silver medal',av.Silver]);
+ if(av.Gold.length)parts.push(['Gold medal',av.Gold]);
+ if(av.Legendary.length)parts.push(['Legendary medal',av.Legendary]);
+ const total=av.base.length+av.Silver.length+av.Gold.length+av.Legendary.length;
+ const showCost=(a.hero==='Yes'&&a.cost!=null)?` &nbsp;|&nbsp; <span class="lab">Level-Up Cost:</span> ${a.cost} SP`:'';
+ let avh=`<div class="abav"><span class="lab">Hero Level Up Availability:</span> ${a.hero||'No'}${showCost}</div>`;
+ if(total>0){
+  const body=parts.map(p=>`<div class="abavp"><b>${p[0]}:</b> ${p[1].map(n=>`<span class="unhov" data-un="${esc(n)}">${esc(n)}</span>`).join(', ')}</div>`).join('');
+  avh+=`<div class="abav"><span class="lab">Unit Availability:</span> <details><summary>${total} unit${total>1?'s':''}</summary>${body}</details></div>`;
+ }else{
+  avh+=`<div class="abav"><span class="lab">Unit Availability:</span> None (spell or special effect)</div>`;
+ }
+ return `<div class="unit abcard"><div class="uhead"><div>
+   <div class="uname">${esc(a.name)}</div>
+   </div></div>
+   ${rng}
+   <div class="abdesc">${esc(a.desc)}</div>
+   ${avh}</div>`;
+}
+function abilitiesPage(){
+ const abs=D.abilities||[];
+ const groups=[];
+ abs.forEach(a=>{const g=groups.find(x=>x.n===a.group); if(g)g.items.push(a); else groups.push({n:a.group,items:[a]});});
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / Abilities</div>
+  <h2 class="page">Abilities <span class="count">— ${abs.length} abilities</span></h2>
+  ${groups.map(g=>`<h3 class="lvlhead" style="font-size:24px;font-family:'NeueHammerUnziale',serif;font-weight:400">${esc(g.n)}</h3><div class="units">${g.items.map(abilityCard).join('')}</div>`).join('')}`;
+}
+const ABIX={};
+(D.abilities||[]).forEach(a=>{ABIX[a.name.toLowerCase()]=a;});
+ABIX['flame throwing']=ABIX['cosmic breath']||null;
+function abBase(n){return n.replace(/ (I{1,3}|IV|V)$/,'');}
+function abHov(n){
+ const b=abBase(n);
+ if(!ABIX[b.toLowerCase()])return esc(n);
+ return `<span class="abhov" data-ab="${esc(b)}">${esc(n)}</span>`;
+}
+const abtip=document.createElement('div');
+abtip.id='abtip';
+document.body.appendChild(abtip);
+function posTip(t){
+ abtip.style.display='block';
+ const r=t.getBoundingClientRect();
+ let x=r.left, y=r.bottom+8;
+ const w=abtip.offsetWidth, hh=abtip.offsetHeight;
+ if(x+w>window.innerWidth-12)x=window.innerWidth-w-12;
+ if(y+hh>window.innerHeight-12)y=r.top-hh-8;
+ if(y<8)y=8;
+ abtip.style.left=x+'px'; abtip.style.top=y+'px';
+}
+document.addEventListener('click',e=>{
+ const tu=e.target.closest?e.target.closest('.unhov'):null;
+ if(!tu)return;
+ const u=(D.units||[]).find(x=>x.name===tu.dataset.un);
+ if(!u)return;
+ abtip.style.display='none';
+ srGo({a:u.name,r:'race/'+encodeURIComponent(u.race)});
+});
+document.addEventListener('mouseover',e=>{
+ const tu=e.target.closest?e.target.closest('.unhov'):null;
+ if(tu){
+  const u=(D.units||[]).find(x=>x.name===tu.dataset.un);
+  if(u){
+   const IC=D.icons||{};
+   const st=(u.stats||[]).map((v,i)=>`<span class="tt-st">${IC.stat&&IC.stat[i]?`<img class="sic" src="${IC.stat[i]}">`:esc(D.stat[i])} ${esc(v)}</span>`).join('');
+   abtip.innerHTML=`<div class="tt-un">${u.img?`<img class="tt-uimg" src="${u.img}">`:''}<div>
+     <div class="tt-n">${esc(u.name)}</div>
+     <div class="tt-h" style="border:none;padding:0;margin:2px 0 4px">${u.hero?esc(u.type||'Hero'):'Lvl '+esc(u.level)+(u.type?' &middot; '+esc(u.type):'')}</div>
+     <div>${st}</div></div></div>`;
+   posTip(tu);
+   return;
+  }
+ }
+ const t=e.target.closest?e.target.closest('.abhov'):null;
+ if(!t){abtip.style.display='none';return;}
+ const a=ABIX[(t.dataset.ab||'').toLowerCase()];
+ if(!a){abtip.style.display='none';return;}
+ const cost=(a.hero==='Yes'&&a.cost!=null)?` &nbsp;|&nbsp; Cost: ${a.cost} SP`:'';
+ abtip.innerHTML=`<div class="tt-n">${esc(a.name)}</div>`
+  +(a.ranged?`<div class="tt-r">${esc(a.ranged)}${a.dtypes?` <em>(${esc(a.dtypes)})</em>`:''}</div>`:'')
+  +(a.status?`<div class="tt-r">Status Effect &#8212; ${esc(a.status)}</div>`:'')
+  +`<div class="tt-d">${esc(a.desc)}</div>`
+  +`<div class="tt-h">Hero Level Up: ${esc(a.hero||'No')}${cost}</div>`;
+ posTip(t);
+});
+function richPage(title,items){
+ const body=(items||[]).map(i=>
+  i.t==='h'?`<h4 class="clsec">${i.html}</h4>`:`<p class="ind0">${i.html}</p>`).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / ${esc(title)}</div>
+  <h2 class="page">${esc(title)}</h2><div class="textpage">${body}</div>`;
+}
+function changelogPage(){
+ const blocks=D.changelog||[];
+ const body=blocks.map(b=>
+  `<h3 class="lvlhead" style="font-size:26px;font-family:'NeueHammerUnziale',serif;font-weight:400;margin-top:34px">${esc(b.title)} <span class="count">&#8212; ${esc(b.date)}</span></h3>`
+  +`<div class="textpage">${b.items.map(i=>
+    i.t==='h'?`<h4 class="clsec">${esc(i.x)}</h4>`
+    :i.t==='gap'?`<div class="gcgap"></div>`
+    :`<p class="ind${i.lvl||0}">${esc(i.x)}</p>`).join('')}</div>`).join('');
+ return `<div class="crumb"><a onclick="go('home')">Home</a> / Changelogs</div>
+  <h2 class="page">Changelogs</h2>${body}`;
+}
+function render(){
+ const h=decodeURIComponent(location.hash.replace(/^#/,''))||'home';
+ let html;
+ if(h==='home')html=home();
+ else if(h==='overview')html=overviewPage();
+ else if(h==='general')html=generalHome();
+ else if(h.startsWith('gc/'))html=generalCat(decodeURIComponent(h.slice(3)));
+ else if(h==='races')html=races();
+ else if(h==='spells')html=spheres();
+ else if(h==='abilities')html=abilitiesPage();
+ else if(h==='changelog')html=changelogPage();
+ else if(h==='modding')html=richPage('Modding AoWx',D.moddingpage);
+ else if(h==='community')html=richPage('Community',D.communitypage);
+ else if(h.startsWith('sphere/'))html=spherePage(decodeURIComponent(h.slice(7)));
+ else if(h.startsWith('race/'))html=racePage(h.slice(5));
+ else html=home();
+ app.innerHTML=html;
+ if(window.__pend){
+  const p=window.__pend; window.__pend=null;
+  const want=p.text.toLowerCase();
+  let el=null;
+  document.querySelectorAll('.uname').forEach(n=>{if(!el&&n.textContent.trim().toLowerCase()===want)el=n.closest('.unit')||n;});
+  if(!el)document.querySelectorAll('.textpage p, h3.lvlhead, h4.clsec').forEach(n=>{if(!el&&n.textContent.toLowerCase().includes(want))el=n;});
+  if(el){el.scrollIntoView({block:'center'});el.classList.add('hlflash');setTimeout(()=>el.classList.remove('hlflash'),2300);}
+  else window.scrollTo(0,0);
+ }else window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',render); render();
+// ---- search ----
+const SIDX=[];
+(function(){
+ const seen=new Set();
+ (D.units||[]).forEach(u=>{const k=u.name+'|'+u.race;if(seen.has(k))return;seen.add(k);
+  SIDX.push({l:u.name,t:u.hero?'Hero / Leader':'Unit ('+u.race+')',r:'race/'+encodeURIComponent(u.race),a:u.name});});
+ (D.abilities||[]).forEach(a=>SIDX.push({l:a.name,t:'Ability',r:'abilities',a:a.name}));
+ (D.spells||[]).forEach(sp=>SIDX.push({l:sp.name,t:'Spell ('+sp.sphere+')',r:'sphere/'+encodeURIComponent(sp.sphere),a:sp.name}));
+ (D.generalcats||[]).forEach(c=>{
+  SIDX.push({l:c.name,t:'General Changes',r:'gc/'+encodeURIComponent(c.name),a:''});
+  c.items.forEach(i=>{if(i.t==='p'&&i.x)SIDX.push({l:i.x.replace(/^-/,'').trim().slice(0,70),t:'GC: '+c.name,r:'gc/'+encodeURIComponent(c.name),a:i.x.replace(/^-/,'').trim().slice(0,40)});});});
+ (D.changelog||[]).forEach(b=>SIDX.push({l:b.title,t:b.date,r:'changelog',a:b.title}));
+ [['Overview','overview'],['Modding AoWx','modding'],['Community','community'],['Races & Units','races'],['Spells','spells'],['Changelogs','changelog']].forEach(x=>SIDX.push({l:x[0],t:'Page',r:x[1],a:''}));
+})();
+const srin=document.getElementById('srchin'), srdd=document.getElementById('srchdd');
+const srmq=window.matchMedia('(max-width:980px)');
+function srPh(){srin.placeholder='Search'+String.fromCharCode(8230);}
+srmq.addEventListener?srmq.addEventListener('change',srPh):srmq.addListener(srPh);
+srin.addEventListener('focus',srPh);
+srin.addEventListener('blur',()=>setTimeout(srPh,50));
+srPh();
+let srsel=-1, srres=[];
+function srRender(){
+ if(!srres.length){srdd.style.display='none';return;}
+ srdd.innerHTML=srres.map((x,i)=>`<div class="sr${i===srsel?' sel':''}" data-i="${i}">${esc(x.l)}<span class="st">${esc(x.t)}</span></div>`).join('');
+ srdd.style.display='block';
+}
+function srGo(x){
+ srdd.style.display='none'; srin.value=''; srres=[]; srsel=-1;
+ if(x.a)window.__pend={text:x.a};
+ if(decodeURIComponent(location.hash.replace('#',''))===decodeURIComponent(x.r))render();
+ else location.hash=x.r;
+}
+srin.addEventListener('input',()=>{
+ const q=srin.value.trim().toLowerCase();
+ srsel=-1;
+ if(q.length<2){srres=[];srRender();return;}
+ const starts=[],incl=[];
+ for(const x of SIDX){
+  const ll=x.l.toLowerCase();
+  if(ll.startsWith(q))starts.push(x);
+  else if(ll.includes(q))incl.push(x);
+  if(starts.length>=12)break;
+ }
+ srres=starts.concat(incl).slice(0,12);
+ srRender();
+});
+srin.addEventListener('keydown',e=>{
+ if(e.key==='ArrowDown'){srsel=Math.min(srsel+1,srres.length-1);srRender();e.preventDefault();}
+ else if(e.key==='ArrowUp'){srsel=Math.max(srsel-1,0);srRender();e.preventDefault();}
+ else if(e.key==='Enter'&&srres.length){srGo(srres[srsel<0?0:srsel]);}
+ else if(e.key==='Escape'){srres=[];srRender();srin.blur();}
+});
+srdd.addEventListener('mousedown',e=>{
+ const t=e.target.closest('.sr');
+ if(t)srGo(srres[+t.dataset.i]);
+});
+document.addEventListener('mousedown',e=>{
+ if(!e.target.closest('.srch')){srres=[];srRender();}
+});
+</script></body></html>

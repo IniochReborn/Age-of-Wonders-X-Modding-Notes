@@ -1,0 +1,39 @@
+ESSENCE SHIFT (231) v8 - altars shifted IN PLACE (they vanished in v7) + Pestilence altar = Earth (2026-10-18, fork; NOTHING applied live)
+
+ROOT CAUSE (v7 "altars disappear"): v7 ran altars through the node path - retire (SetPlayer 0xFF, shadow destroy,
+RemoveFromMap, StructureDestroyed) then CreateAndPlace of the target altar resource (resource VMT+0x68 -> HSEPack
+create/place); that placement returned nil for altars, AND the fallback re-place of the OLD altar resource also returned
+nil -> nothing on the hex.  (The resource ids were right: TAltarOfX resource ClassID = object ClassID + 1, all in the
+hss list, group 21.)  The engine refuses re-placing an altar there (TAltar overrides +0x168 / +0x1C0 / +0x21C placement
+and terrain-check slots) - instead of chasing that, v8 never removes an altar.
+FIX: the six altar classes (TAltarOfLife 0x557D1BCC, Death 0x557D2094, Pestilence 0x557D255C, Lightning 0x557D16F4,
+Fire 0x557CF5F8, Ice 0x557CFAF0; all TAltar 0x557CE7C4, size 0x44) differ ONLY in VMT+0x24 (ClassID) and +0x224 (a
+storm-spell factory: fresh TSpell per call, no cached state); TAltarOfFire's ctor override just calls the inherited one.
+So: SetPlayer(0xFF) under the old class -> destroy shadow (VMT+0x194) -> [obj] = target altar VMT, [obj+8] = its
+resource -> re-create shadow (VMT+0x190) if it had one -> SetPlayer(owner).  No removal, no placement: the altar can
+never be lost.  Inside a Delphi try/except (an exception before the swap leaves the old altar intact; diag bit 0x80);
+target resource missing -> untouched (diag+8 = 5).  Path code diag+8 = 4.  Nodes keep the v5/v6 retire -> place path.
+MAPPING: Pestilence = Earth (3).  Earth caster -> Altar of Pestilence; Earth caster can't target a Pestilence altar;
+Death caster -> Altar of Death (and CAN target a Pestilence altar).  Earth now counts for altar ties (synced Random).
+
+== 1. patch_dual_sphere_spells_v1.py, entry 231 - replace the desc line with ==
+---- code ----
+         desc="Reshape the essence of a magic node or altar you own: the target (a mana node, an elemental node or an altar that is not razed, on the surface, underground or in the depths) takes on the element you are most devoted to (a tie is decided at random). Altars become the Altar of Life, Death, Pestilence (Earth), Lightning, Fire or Ice. Its guards remain.",
+---- end ----
+
+== 2. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (description only)
+  py -3.10 patch_essenceshift_v1.py                   (dry run: 2454 bytes, in-place upgrade v7 -> v8)
+  py -3.10 patch_essenceshift_v1.py --apply           (backup backup\AoWEPACK.dll.bak_essence8 = the v7 state)
+  VEH startup check.
+  LIFO unchanged: revert Essence Shift before re-running patch_terrain_spells_v1 / patch_terrain_armyhooks_v1.
+
+== 3. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\essence8\) ==
+  * round trip on a copy of live (md5 57794ed2): upgrade -> "already applied"; v8 --revert md5 d8cea328 == the v7
+    script's own revert; fresh v8 apply == upgrade (c859383c).
+  * emu8.py (Unicorn, real v8 DLL at 0x55700000 and 0x56C10000): ALL OK - all earlier v1-v7 node tests; every altar ->
+    every other element on levels 0/1/2 (VMT + resource swapped, never removed/placed/freed, unregister + re-own,
+    shadow destroyed + re-created only when present, [game+0x174] zeroed + restored, diag 9 / path 4); Pestilence +
+    Death -> Death; fire altar + Earth -> Pestilence; earth/water tie -> synced Random(2); missing target resource ->
+    untouched; exception in the unregister / shadow destroy -> handled, altar kept; node placement failure -> old node
+    re-placed (never lost).

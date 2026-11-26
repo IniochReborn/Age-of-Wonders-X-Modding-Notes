@@ -1,0 +1,45 @@
+ESSENCE SHIFT (231) v2 - underground casting + must own the node (2026-10-18, fork; NOTHING applied live).
+User: "I should be able to cast it underground. And I should have to OWN the node to target it."
+
+ROOT CAUSE (underground): the only level block for a TRejuvenate clone is TGlobalTargetSpell's target-error routine
+0x5579E73C, which refuses a non-surface target when [spell+0x39] (the SURFACE-ONLY flag, set to 1 by
+TRejuvenate.Create) != 0 (same flag the raise-terrain fix cleared for Raise Terrain).  The predicates (base 0x5579E4AC =
+fog/explored only), the TE body and our exc cave are level-agnostic (level = [te+0x22]).  -> a pipeline POKE
+(0x39, 1, 0) on entry 231 only.  Rejuvenate 204 / Wither 205 / Scorch 0x29 keep their surface-only flag.
+
+OWNERSHIP (engine, patch_essenceshift_v1.py upgraded in place to v2, header 'ESSHIFT2', accepts the v1 'ESSHIFT1'):
+  pred (both TRejuvenate predicates) refuses a node whose owner byte [node+0x30] != the caster's index [spell+0x38]
+  (unowned 0xFF / enemy refused); exc re-checks [node+0x30] == [te+0x14] (the TE's player index) and then does nothing
+  (the vanilla cast fx/sfx still play) - defence in depth.
+
+== 1. patch_dual_sphere_spells_v1.py (CRLF) - entry 231: add a pokes line after the donor line, and replace the desc line ==
+---- code ----
+         pokes=[(0x39, 1, 0)],                                                # v2 10/18: clear the surface-only flag (TRejuvenate.Create sets 1) -> castable underground / in the depths (target-error routine 0x5579E73C)
+---- end ----
+---- code ----
+         desc="Reshape the essence of a magic node you own: the target node (a mana node or an elemental node, on the surface, underground or in the depths) becomes the elemental node of the sphere you are most devoted to (a tie is decided at random). Its guards remain.",
+---- end ----
+
+== 2. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs / registration: poke + desc)
+  py -3.10 patch_essenceshift_v1.py                    (dry run: zone ours(old) -> 891 bytes change; sites ours(old))
+  py -3.10 patch_essenceshift_v1.py --apply            (backup backup\AoWEPACK.dll.bak_essence2 = the v1 state)
+  VEH startup check.
+
+== 3. Chain / LIFO (unchanged) ==
+  Essence Shift is in front of patch_terrain_spells_v1.py (6 TRejuvenate sites) and patch_terrain_armyhooks_v1.py
+  (TArmyHS VMT+0x64 prio slot): revert Essence Shift first before re-running either, then re-apply it.
+  --revert from v1 or v2 restores the exact pre-v1 bytes.
+
+== 4. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\essence2\) ==
+  * live copy: dry run "891 bytes change"; v1 -> v2 upgrade; re-run "already applied"; v2 --revert md5 354bbd3d ==
+    the v1 script's own revert; fresh v2 apply on that == the upgrade (3d3ec1da).
+  * emu2.py (Unicorn, real v2 DLL at 0x55700000 and rebased 0xC10000): ALL OK - every v1 case plus:
+    pred unowned -> refuse, enemy -> refuse, own -> accept, own underground (level 1) / depths (level 2) -> accept,
+    caster index 2 owns -> accept / caster 2 vs player-0 node -> refuse; exec node not the caster's -> untouched
+    (no place / SetPlayer / Free), unowned -> untouched, own node at level 1 / 2 -> new node placed on that level.
+
+== 5. Open (not seen in game) ==
+  * The poke is applied after Create by the pipeline (as Wither's old +0x39 poke was) - verify the target cursor no
+    longer shows the "surface only" error underground.
+  * Underground node placement uses the same resource list / PlaceResourceUser path as the surface (assumed valid).

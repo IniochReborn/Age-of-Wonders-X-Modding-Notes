@@ -1,0 +1,148 @@
+STATIC SHIELD v3 (215) - lightning aura that shrinks to Fire Halo size and REMAINS (2026-10-16, fork; NOT applied live)
+==================================================================================================================
+
+FINDINGS
+  * Bolt art: Effects\Lightn.ILB ids 0 / 5 / 8 ('StormLtn' / 'StormLtn2', 174x431 raw type 22, 770/60) - the
+    blue-violet storm/lightning bolt with a white core and a glow puddle at its foot.  (No vanilla Spells.pfs slot
+    references it; it is the 'lightning' bolt of the storm effects.  BOLTS.ILB 60-67 is Lightning-Bolt's projectile.)
+  * Lightning Altar: Images\A_lghtn.ILB (the altar, 43x49, RLE16 type 17) + Images\A_lghtnA.ILB 0-7 (its animation =
+    13x14 sparks: two glow dots + short zig-zag arcs, blue-violet edges, white cores).  raw_pixels cannot read type 17;
+    old modding tools\research\ilbdecode.py decode() can.
+  * Fire Halo's unit aura = ability 0xA3 (Ability.pfs record 173, 'Enchantment gives Fire Immunity + ...') tag 8:
+    EFFECTS\MAGIC.ILB 170-181 ping-pong (22 entries), 44x42, drawMode 770 blend 50, kind 4, f18 0, f20 5, xs -22, ys -21.
+    0xA3 is in the TC status-overlay table (TTacticalCombatUnitHS.Show loop 0x4227AA, table now at TCPCK 0x444010).
+  * Overlay draw = ability's Ability.pfs tag-8 sequence at x = xs + drawX + 0xF, y = ys + drawY + 0xA, frame from the
+    map tick, image's own drawMode.  So 0xC4 gets the SAME anchor/canvas as Fire Halo -> identical placement/size.
+  * Note (not mine): live record 205 (Suspend) overlay is now 3250-3289 with f18 2 / f20 40 (f20 = ticks per frame
+    in every vanilla overlay, e.g. Fire Halo 5, Dazed 6) - check that 40 is intended.
+
+---- 1. build_dual_sphere_fx_v1.py: REPLACE the existing staticshield_aura() with the v3 below, ADD the two helpers +
+        staticshield_status() (before def build()), and ADD one group row right after the existing 3200 row:
+              (3230, staticshield_status(), "AIssstat%02d.BMP", 770, 70, 0x0000),   # Static Shield (215) 0xC4 status overlay: Fire-Halo-sized lightning aura loop (44x42, 16 frames)
+        (the existing row (3200, staticshield_aura(), "AIsshld%02d.BMP", 770, 100, 0x0000) stays; 30 frames 3200-3229.)
+        The functions use np / math / random / os / Image / ImageDraw / ImageFilter / ilbcodec / raw_pixels / GAME -
+        all already in that module.
+
+def _ss_dome_glow(xx, yy, cx, cy, rx, ry):
+    """Fire Halo's dome SHAPE as a soft glow (no ring): brightest just inside the outline, fading inward, and OPEN at
+    the bottom (it fades out below the dome's middle, like Fire Halo's dome round the figure's legs)."""
+    e = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
+    shell = np.where(e < 1.0, e ** 3, np.exp(-((e - 1.0) / 0.06) ** 2))
+    return shell * np.clip((cy + 0.45 * ry - yy) / (0.55 * ry), 0, 1)
+
+
+def _ss_dome_arcs(dr, cx, cy, rx, ry, rnd, lv, n_arcs, jit, inner):
+    """Lightning-Altar-style crackle on a Fire-Halo-shaped dome (shared by the cast aura and the status loop): n_arcs
+    short zig-zag arcs (blue-violet edge, white core) running along the dome outline, angles -25..205 deg (the bottom
+    left open like Fire Halo's dome), plus `inner` small sparks/forks inside the dome.  lv = brightness 0..1."""
+    edge = (int(120 * lv), int(120 * lv), int(235 * lv)); core = (int(235 * lv), int(235 * lv), int(255 * lv))
+    for k in range(n_arcs):
+        a0 = rnd.uniform(-10, 190); span = rnd.uniform(28, 58) * (1 if rnd.random() < 0.5 else -1)
+        segs = rnd.randint(4, 6); pts = []
+        for s_ in range(segs + 1):
+            a = math.radians(a0 + span * s_ / segs); j = 1.0 + (rnd.uniform(-jit, jit) if 0 < s_ < segs else 0.0)
+            pts.append((cx + rx * j * math.cos(a), cy - ry * j * math.sin(a)))
+        dr.line(pts, fill=edge, width=3); dr.line(pts, fill=core, width=1)
+    for k in range(inner):                                                  # small forks inside, like the Altar's sparks
+        a = math.radians(rnd.uniform(20, 160)); r_ = rnd.uniform(0.35, 0.8)
+        x0, y0 = cx + rx * r_ * math.cos(a), cy - ry * r_ * math.sin(a); pts = [(x0, y0)]
+        for s_ in range(3):
+            x0 += rnd.uniform(-0.18, 0.18) * rx; y0 += rnd.uniform(-0.18, 0.18) * ry; pts.append((x0, y0))
+        dr.line(pts, fill=edge, width=2); dr.line(pts, fill=core, width=1)
+
+
+def staticshield_aura(n=30):
+    """Static Shield (215) slot 0 v3 (2026-10-16, user: keep the lightning idea but make it look like LIGHTNING STRIKE's
+    lightning, same size; no circle - a LARGE lightning aura that SHRINKS to the Fire Halo aura's size, which then
+    REMAINS (the 0xC4 status overlay, staticshield_status); Lightning Altar animations for the aura's lightning):
+    96x96 additive (770), anchor -48/-86 (unit feet at (48, 86)).  Frames 0-5: the vanilla STORM bolt (Effects\Lightn
+    .ILB 0/5/8 'StormLtn', the blue-violet bolt with its white core and ground glow) scaled to the canvas height slams
+    onto the unit with a flash; frames 3-21: a Fire-Halo-shaped dome of Altar-style crackling arcs (zig-zag blue-violet
+    arcs with white cores + small inner forks) shrinks from 2x to Fire Halo's 44x42 dome (bottom on the feet); frames
+    22-29 hold at 1x, matching the persistent overlay that takes over."""
+    from PIL import ImageFilter
+    W = H = 96; cx = 48.0; feet = 86.0; out = []
+    lib = ilbcodec.read(open(os.path.join(GAME, "Images", "Effects", "Lightn.ILB"), "rb").read())
+    bolts = []
+    for src in (0, 5, 8):
+        im, r = raw_pixels(lib, src); bb = im.getbbox(); im = im.crop(bb)
+        sc = 88.0 / im.height; bolts.append(im.resize((max(1, int(im.width * sc)), 88), Image.LANCZOS))
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    for i in range(n):
+        rnd = random.Random(2150 + 7 * i); acc = np.zeros((H, W, 3), np.float32)
+        if i < 6:                                                           # the strike (Lightning-Strike / Storm bolt)
+            lv = 1.0 if i < 3 else 1.0 - (i - 2) / 4.0
+            b = bolts[[0, 1, 2, 1, 0, 2][i]]; lay = Image.new("RGB", (W, H)); bx = int(cx - b.width / 2)
+            lay.paste(b.convert("RGB"), (bx, int(feet + 4 - b.height)), mask=b.split()[3])
+            acc += np.asarray(lay, np.float32) * 1.25 * lv
+            flash = np.exp(-((xx - cx) ** 2 + ((yy - (feet - 6)) / 0.7) ** 2) / (90 + 70 * i)) * lv * (1.3 if i < 2 else 0.7)
+            for c, cv in enumerate((170, 180, 255)): acc[..., c] += flash * cv
+        if i >= 3:                                                          # the aura: 2x -> 1x, then hold
+            u = min(1.0, (i - 3) / 18.0); s = 2.0 - (1 - (1 - u) ** 2)        # ease-out shrink
+            lv = min(1.0, (i - 2) / 3.0)
+            rx, ry = 22.0 * s, 21.0 * s; cy = feet - ry * 0.95
+            glowd = _ss_dome_glow(xx, yy, cx, cy, rx, ry) * 0.30 * lv
+            for c, cv in enumerate((90, 100, 230)): acc[..., c] += glowd * cv
+            lay = Image.new("RGB", (W, H)); dr = ImageDraw.Draw(lay)
+            _ss_dome_arcs(dr, cx, cy, rx, ry, rnd, lv, n_arcs=int(5 + 3 * s), jit=0.09, inner=2 + int(s))
+            arc = np.asarray(lay, np.float32); soft = np.asarray(lay.filter(ImageFilter.GaussianBlur(1.8)), np.float32)
+            acc += arc * 0.9 + soft * 1.4
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+
+def staticshield_status(n=16):
+    """Static Shield (215) 0xC4 STATUS OVERLAY loop (2026-10-16, user: the aura REMAINS, Fire Halo's size): Fire Halo's
+    overlay canvas exactly (MAGIC.ILB 170-181 = 44x42, Ability.pfs tag 8 at xs -22 / ys -21, its dome's bottom on the
+    feet), additive 770: a faint blue-violet dome glow with Lightning-Altar-style zig-zag arcs crackling over its
+    outline and a couple of small forks inside - a fresh crackle every frame (16 frames, looping; flicker IS the look)."""
+    from PIL import ImageFilter
+    W, H = 44, 42; cx, feet = 22.0, 41.0; rx, ry = 20.5, 19.5; cy = feet - ry * 0.95; out = []
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    for i in range(n):
+        rnd = random.Random(2190 + 11 * i); acc = np.zeros((H, W, 3), np.float32)
+        glowd = _ss_dome_glow(xx, yy, cx, cy, rx, ry) * 0.26
+        for c, cv in enumerate((90, 100, 230)): acc[..., c] += glowd * cv
+        lay = Image.new("RGB", (W, H)); dr = ImageDraw.Draw(lay)
+        _ss_dome_arcs(dr, cx, cy, rx, ry, rnd, 0.85, n_arcs=4, jit=0.10, inner=1 + (i % 2))
+        arc = np.asarray(lay, np.float32); soft = np.asarray(lay.filter(ImageFilter.GaussianBlur(1.3)), np.float32)
+        acc += arc * 0.8 + soft * 1.2
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+---- 2. patch_dual_sphere_spells_v1.py: NO change (215 slot 0 = DualDF 3200-3229 at -48/-86, f20=2, f18=1 already).
+
+---- 3. engine/data scripts (already written, scratch-tested):
+  patch_staticshield_ability_pfs_v1.py  v2 - record 206 gets tag 8 = DualDF 3230-3245, kind 4, f18 0, f20 3, xs -22,
+                                         ys -21 (Fire Halo's anchor); the older live 206 is rewritten (last key).
+                                         Pre-edit copy: tmp\sshield3\patch_staticshield_ability_pfs_v1_v1.py.
+  patch_tc_suspend_overlay_v1.py        v2 - ADD = (0xC3, 0xC4): the overlay table at 0x444010 becomes 17 ids
+                                         (..., B5, C3, C4), BOUND (0,16), LOOP 17.  Upgrades the live v1 in place (3 bytes
+                                         change: bound, loop, the new id); --revert stays exact (header unchanged).
+                                         Pre-edit copy: tmp\sshield3\patch_tc_suspend_overlay_v1_v1.py.
+
+---- APPLY ORDER (game + editor closed)
+  a. build_dual_sphere_fx_v1.py --apply            (DualDF 3200-3229 rebuilt, 3230-3245 new)
+  b. patch_staticshield_ability_pfs_v1.py --apply  (record 206 v2)
+  c. patch_tc_suspend_overlay_v1.py --apply        (v1 -> v2: + 0xC4)
+  d. VEH startup check
+  REVERT: c --revert restores the pre-table state (both C3 and C4 overlays go; same as v1's revert); b --revert removes
+  206 entirely (re-run the v1 copy to get the plain record back).
+
+---- CHAIN CONSEQUENCES
+  None new: the overlay script's sites/zone are its own; no other script touches 0x444000-0x444400 or record 206.
+
+---- SCRATCH TESTS (tmp\sshield3\scr, copies of LIVE files)
+  overlay v2: live dry-run '3 bytes change'; upgrade apply -> written+verified; re-run 'already applied'; v2 --revert
+  byte-identical to the v1 script's --revert of the same live DLL; fresh revert+apply byte-identical to the upgrade.
+  pfs v2: dry-run OK; apply -> only record 206 differs, tag-8 parses to the sequence above; re-run 'already applied';
+  revert + re-apply byte-identical to the first apply.
+  fx: both functions rendered and previewed through the GFXE Intensity formula over a battlefield colour next to Fire
+  Halo's own frame (tmp\sshield3\cast.png / status.png): same dome size/placement, bottom open, blue-violet arcs.
+
+---- IN-GAME TESTS
+  1. Cast: a storm bolt slams down with a flash, a big crackling lightning dome forms and shrinks onto the unit.
+  2. While shielded the unit keeps a Fire-Halo-sized crackling lightning dome (same place/size as Fire Halo's), every
+     battle frame; gone when the battle ends.
+  3. Fire Halo, Suspend, Rot, Burning and the vanilla status overlays still draw.
+  4. Timing seam between the cast's last (held) frames and the overlay - the overlay starts whenever 0xC4 is granted.

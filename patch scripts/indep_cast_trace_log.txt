@@ -1,0 +1,9 @@
+attached pid 23428, 10 breakpoints, waiting up to 5 min
+    AI unit 0x9699e6c vmt 0x55711fec HERO 'Tanaris' owner 0 cp 20 abilities 0 4 15 27 29 34 40 8B 91 AC AD AE AF  <-- has 0x34
+[18:50:25] HIT A2 own unit HAS the looped ability (site 2)  eax=00000001 edx=00000000 | ability [ebp-0xc]=0x0 spell [ebp-0x10]=1702312
+[18:50:25] HIT C2 own unit: ability == 0x34 Spell Casting  eax=FFFFFFBF edx=00000034 | ability [ebp-0xc]=0x34 spell [ebp-0x10]=1702312
+[18:50:25] HIT D2 caster is a THero  eax=00EE1F01 edx=00EE1FEC | ability [ebp-0xc]=0x34 spell [ebp-0x10]=1702312
+[18:50:25] HIT E2 spell type != 0 -> asks GetPlayer  eax=00000008 edx=00EE1FEC | ability [ebp-0xc]=0x34 spell [ebp-0x10]=8
+[18:50:25] HIT D3 site 3: hero caster  eax=00EE1F01 edx=00EE1FEC | ability [ebp-0xc]=0x34 spell [ebp-0x10]=512
+not reached: ['F2 spell is KNOWN', 'G2 CanCastSpellInstantly = true', 'H2 spell usable in combat -> added to the cast candidates', 'D4 site 4: hero caster', 'K GetPlayer(<0) stand-in path']
+trace done

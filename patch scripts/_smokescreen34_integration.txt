@@ -1,0 +1,39 @@
+SMOKESCREEN (225) v3.4 - underground earth walls + city-tile half smoke (2026-10-17, fork; NOTHING applied live)
+
+FINDINGS
+- Underground earth walls are NOT IL-terrain.  They are the static base hexes (TCombatHexagon, exact VMT 0x40340C, x405 in the
+  probe) of the comb_res 'Wall' base-hex resource = TCOMBAT\BASE_HEX\H_EARTH.ILB: ids 40-44 = pure BLACK 48x32 hex tops (the
+  user's "black"), ids 0-27 = brown 86x107 cliff faces drawn by TCombatHexagon.Show (0x403CAC: base image Get([hex+0x10]) of the
+  res sequence list item-0 library at (HP.x - 8, HP.y), then up to 3 overlays [hex+0x11..0x13] from res+0x34).  Every other
+  base-hex library is 48x32 (H_Gr / H_De / ...; CTransHx transitions 66x62).
+- TAoWBorderHexagon (x323) = HSEPack BorderHx.TBorderHexagon (ClassID 0x20557) = the black map border, not the walls.
+- The 14 'tall' TCombatILTerrain tiles in the probe battle were 75x91 CITY tiles (TCOMBAT\CITY\c_tile.ILB).  v3.3's TALLH 44
+  let them through -> re-drawn cut at their hex centre -> the floor/pavement hexes next to the walls lost half their smoke.
+FIX (patch_tc_smokescreen_v1.py v3.4, zone 2 only, 2455 of 2560 B; no site changes)
+- ehtest: TCombatHexagon whose res seq-list item-0 library image 0 is >= 100 px tall (H_EARTH) -> earth path.
+- earth path: re-shown after the bank within NEAR_E = 3 hexes of a bank centre via cshow MODE 1 = no smoke-tile test (earth
+  hexes never carry one) and line = HXtoHP.y + EARTH_CUT 64 (+ the +-2 px wave, soft blended): black top + upper cliff face
+  protrude, ~24 px of the face base stays smoked, floors in front stay fully smoked.
+- TALLH 44 -> 100: only H_EARTH-sized IL tiles qualify (they also take the earth path); city tiles stay covered.
+- cshow takes a stack mode argument (push 0 / push 1) and returns with ret 4.
+- Tunables (top of the script): EARTH_CUT (bigger = smoke lower on the face), NEAR_E, EH_H, TALLH.
+
+APPLY (game + editor closed)
+  py -3.10 patch_tc_smokescreen_v1.py            (dry run: "zone2 ours(old) ... v3.4 upgrade")
+  py -3.10 patch_tc_smokescreen_v1.py --apply    (backup backup\AoWTCPCK.dll.bak_smokescreen34 = the v3.3 state)
+  VEH startup check.
+
+NEXT IN-GAME TEST (game running, battle with smoke over earth walls on screen)
+  py -3.10 smoke_shot.py 3 2                     (3 screenshots 2 s apart -> patch scripts\tmp_smokeshot\shot_NN.png)
+  py -3.10 combat_objects_probe.py               (now also lists 'earth-wall base hexes' = what v3.4 lifts out of the smoke)
+Both are read-only.
+
+TESTS (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\smoke7\)
+- script: in-place upgrade v3.3 -> v3.4 then "already applied (v3.4)"; --revert md5 4dbbf03d == the v3.2/v3.3 revert;
+  fresh apply on the reverted copy == the upgrade (83b48446).
+- emu34.py (Unicorn, cshow/iltall/ehtest at 0x400000 and 0xA00000, 565 + 555): ALL OK (old structure cases + earth mode
+  pixel-exact lines/blend with and without a smoke tile, ret 4 / regs; iltall 32/91/100/107/68 -> 0/0/0/1/0; ehtest
+  32/107/100/99/62 -> 0/1/1/0/0 + nil cases).
+- emu34_dds.py (dds dispatch, rebased): ALL PASS - near earth hexagon re-shown clipped (27 column draws), earth hex 4 away /
+  far / floor hexagon not, wall 4 away still re-shown, 107 IL tile via the earth path, 91 c_tile not.
+- mock_v33_vs_v34.png (illustrative, guessed grid).

@@ -1,0 +1,146 @@
+MEND WALLS (216) v6 - staggered flings (2026-10-17, fork; NOTHING applied live, no shared builder edited)
+User: "really good but have the debris fling to the walls in a staggered order, not all at once. and sfx to suit."
+Why v5 read as 'all at once': launches every 3 ticks with 8-tick flights -> 2-3 pieces in the air together (ticks
+20-43).  v6: ONE piece flung every 5 ticks with a quicker 5-tick fling (launches 16/21/26/31/36/41, hits
+21/26/31/36/41/46) -> exactly one piece in flight at any tick 16-45 (checked for both layouts); the later pieces
+tremble longer while they wait their turn.  Rocks/halo keep 50 frames x 1 tick and their ids (4500-4549 / 4350-4399 /
+4800-4899); the torn-ground heal shortened 10 -> 8 ticks so the last hole closes inside frame 49.  Wall glow (slot 1)
+re-timed: bursts on the new hits, aura ramps from the FIRST hit (21), rising band 48-64 (after the last hit) - look
+unchanged; 72-tick life = blank x21 + 51 frames -> NEW ids 4900-4951 (4700-4744 stay, unused).  No engine change
+(markers / slots / life unchanged).  Max frame-to-frame delta 659 px (v4 831), no spikes.
+Previews (scratch): C:\Users\<user>\.claude\jobs\47241cad\tmp\mend6\mend6_timeline.gif, mend6_sheet.png, DUALER_MENDWALLS_v6.WAV (2.80 s).
+Line endings: fx builder LF; sfx builder + spells pipeline CRLF - detect per file.
+
+== 1. build_dual_sphere_fx_v1.py - five exact line substitutions (each OLD is the START of exactly one line; replace
+      that prefix with NEW, keep any trailing comment; the first NEW is three lines) ==
+---- old ----
+MEND5_FLY = 8                                               # ticks of flight: launch = MEND3_ARRIVE[k] - 8 (flung, accelerating)
+---- new ----
+MEND5_FLY = 5                                               # v6: ticks of flight (was 8): launch = MEND6_ARRIVE[k] - 5 (flung, quick)
+MEND6_ARRIVE = [21, 26, 31, 36, 41, 46]                     # v6 10/17 (user: staggered, not all at once): ONE piece flung every 5 ticks
+                                                            # (launches 16/21/26/31/36/41; v5 28..43 every 3 with 8-tick flights = 3 in the air)
+---- end ----
+---- old ----
+        pop = MEND5_POP[k]; arr = MEND3_ARRIVE[k]; launch = arr - MEND5_FLY
+---- new ----
+        pop = MEND5_POP[k]; arr = MEND6_ARRIVE[k]; launch = arr - MEND5_FLY
+---- end ----
+---- old ----
+            pop = MEND5_POP[k]; launch = MEND3_ARRIVE[k] - MEND5_FLY; gx, gy = f.ground
+---- new ----
+            pop = MEND5_POP[k]; launch = MEND6_ARRIVE[k] - MEND5_FLY; gx, gy = f.ground
+---- end ----
+---- old ----
+            if pop <= t < launch + 10:
+---- new ----
+            if pop <= t < launch + 8:
+---- end ----
+---- old ----
+                o = min(1.0, (t - pop + 1) / 3.0); a = 1.0 if t < launch else max(0.0, 1.0 - (t - launch) / 10.0)
+---- new ----
+                o = min(1.0, (t - pop + 1) / 3.0); a = 1.0 if t < launch else max(0.0, 1.0 - (t - launch) / 8.0)
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - add this function before `def build():` (mend5_glow stays, unused) ==
+---- code ----
+_MEND6_GLOW = []
+
+
+def mend6_glow(t_end=72):
+    """Mend Walls (216) v6 slot 1 (2026-10-17, user: debris flung in a staggered order): mend5_glow re-timed to the
+    staggered arrivals MEND6_ARRIVE (21/26/31/36/41/46) - one small subtle burst per piece as it lands, the aura ramping
+    in from the FIRST arrival (tick 21, v5 28) and the rising band moved to ticks 48-64 so it sweeps up after the LAST
+    piece (v5 44-60); the look (aura, band, ground ellipse, motes, fade 52-71) is unchanged.  72-tick life as before:
+    one blank frame + 51 frames (ticks 21..71) -> NEW ids 4900-4951 (v5 4700-4744 had a 28-tick blank prefix)."""
+    if _MEND6_GLOW: return _MEND6_GLOW
+    W, H, AX, AY = 96, 112, 48, 92
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); rnd = random.Random(2180)
+    _sparks4 = [[(rnd.uniform(0, 6.28), rnd.uniform(9, 16), rnd.uniform(-0.3, 0.1)) for _ in range(8)] for _ in range(6)]   # (v4's draws, kept so the motes match v4/v5)
+    motes = [(rnd.uniform(-16, 16), rnd.uniform(0, 1), rnd.uniform(0.6, 1.0), rnd.uniform(0, 6.28)) for _ in range(16)]
+    rnd5 = random.Random(2185)
+    sparks5 = [[(rnd5.uniform(0, 6.28), rnd5.uniform(5, 10), rnd5.uniform(-0.25, 0.05)) for _ in range(6)] for _ in range(6)]
+    colx = np.exp(-((xx - AX) ** 2) / (2 * 13.0 ** 2)); coly = np.clip((AY + 6 - yy) / 8.0, 0, 1) * np.clip((yy - (AY - 66)) / 14.0, 0, 1)
+    _MEND6_GLOW.append(Image.new("RGB", (W, H), (0, 0, 0)).convert("RGBA"))
+    for ti in range(MEND6_ARRIVE[0], t_end):
+        t = float(ti); acc = np.zeros((H, W, 3), np.float32)
+
+        def add(g, col):
+            for c, cv in enumerate(col): acc[..., c] += g * cv
+        for k, (tx, ty) in enumerate(MEND3_TARGETS):
+            d = t - MEND6_ARRIVE[k] + 1
+            if 0 <= d < 14:
+                x, y = AX + tx, AY + ty; f = min(1.0, (d + 1) / 2.0) * math.exp(-d / 4.0)
+                add(np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * (2.0 + d * 0.25) ** 2)) * f * 0.42, (150, 255, 175))
+                for a, r, vy in sparks5[k]:
+                    u = d / 14.0; sx = x + math.cos(a) * r * (1 - (1 - u) ** 2); sy = y + math.sin(a) * r * 0.7 * (1 - (1 - u) ** 2) + vy * d * 2.0
+                    add(np.exp(-((xx - sx) ** 2 + (yy - sy) ** 2) / 0.8) * (1 - u) ** 1.3 * 0.55, (170, 255, 190))
+        ramp = min(1.0, max(0.0, (t - MEND6_ARRIVE[0] + 1) / 18.0))
+        fade = 1.0 if t < 52 else max(0.0, 1.0 - (t - 52) / 19.0)
+        env = ramp * fade; env = env * env * (3 - 2 * env)
+        add(colx * coly * (0.82 + 0.18 * np.sin(yy * 0.35 - t * 0.45 + xx * 0.12)) * 0.42 * env, (40, 210, 95))
+        u = (t - 48) / 16.0
+        if 0 <= u <= 1:
+            by = AY + 4 - u * 70
+            add(np.exp(-((yy - by) ** 2) / (2 * 1.6 ** 2)) * np.exp(-((xx - AX) ** 2) / (2 * 12.0 ** 2)) * math.sin(math.pi * u) * 0.7, (150, 255, 175))
+        add(np.exp(-((xx - AX) ** 2) / (2 * 16.0 ** 2) - ((yy - AY - 2) ** 2) / (2 * 2.4 ** 2)) * 0.4 * env, (60, 230, 110))
+        for x0, ph, sp, tw in motes:
+            if t < 34: continue
+            v = (ph + (t - 34) / 38.0 * sp * 1.3) % 1.0
+            y = AY - 2 - v * 72; x = AX + x0 + 2.5 * math.sin(tw + v * 7.0)
+            a = math.sin(math.pi * v) * (0.65 + 0.35 * math.sin(tw + t * 0.8)) * fade * min(1.0, (t - 34) / 4.0)
+            add(np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 1.3) * a, (190, 255, 205))
+        _MEND6_GLOW.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return _MEND6_GLOW
+---- end ----
+
+== 1c. build_dual_sphere_fx_v1.py - REPLACE the (4700, mend5_glow(), ...) row with ==
+---- code ----
+              (4900, mend6_glow(), "ERmgl6%02d.BMP", 770, 90, 0x0000),      # Mend Walls (216) v6 slot 1: wall glow re-timed to the staggered hits (blank + 51 frames, 4900-4951)
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALER_MENDWALLS.WAV" entry AND its 7 v5 comment lines above it
+      (FADE_OUT keeps "DUALER_MENDWALLS.WAV": 0.5; no DRIVE) ==
+---- code ----
+    # Mend Walls v6 (2026-10-17 round 6, user: "have the debris fling to the walls in a staggered order, not all at
+    # once. and sfx to suit"): v5's mix re-timed to the staggered flings - one piece launched every 5 ticks (MEND6_ARRIVE
+    # 21/26/31/36/41/46 @ 34.5 ticks/s = hits at 0.61/0.75/0.90/1.04/1.19/1.33 s): a faint air flick as each piece is
+    # flung (launches 0.46..1.19 s) and the six small hail-like knocks one by one on its arrival; the soft Tremors bed
+    # stretched to carry the last hit; the green glow's shimmer + chime start with the FIRST hit and the two soft bells
+    # ring after the LAST (the wall glow's band sweeps up 1.39-1.86 s).
+    "DUALER_MENDWALLS.WAV":  [("Attack/m_Earth.wav", 0.40, 0.00, 1.6, 0.7, 0.9),                 # the Earth sphere's cast
+                              ("Attack/Earth.WAV", 0.55, 0.00, 1.6, 0.6, 0.82, 0.30),           # Tremors, gentled: slowed, swelling in, easing off after the last hit
+                              ("synth:subswell:34:50:1.4", 0.28, 0.00, None, 0.5),              # a soft sub under the trembling
+                              ("Attack/Earth.WAV", 0.22, 0.00, 0.18, 0.10, 1.8),                # ground cracking open under the debris
+                              ("Attack/Earth.WAV", 0.19, 0.12, 0.18, 0.10, 1.95, 0.0, 0.3),
+                              ("Attack/Earth.WAV", 0.17, 0.23, 0.18, 0.10, 1.7, 0.0, 0.6),
+                              ("Attack/Wind.WAV", 0.07, 0.46, 0.14, 0.08, 1.9, 0.03),           # a faint air flick as each piece is flung (staggered)
+                              ("Attack/Wind.WAV", 0.06, 0.61, 0.14, 0.08, 2.1, 0.03),
+                              ("Attack/Wind.WAV", 0.07, 0.75, 0.14, 0.08, 1.8, 0.03),
+                              ("Attack/Wind.WAV", 0.06, 0.90, 0.14, 0.08, 2.0, 0.03),
+                              ("Attack/Wind.WAV", 0.07, 1.04, 0.14, 0.08, 1.9, 0.03),
+                              ("Attack/Wind.WAV", 0.06, 1.19, 0.14, 0.08, 2.1, 0.03),
+                              ("Attack/A_Force1.WAV", 0.24, 0.60, 0.26, 0.16, 1.45),            # six small hail-like knocks, one per piece as it hits the wall
+                              ("Attack/A_Force2.WAV", 0.20, 0.745, 0.24, 0.16, 1.60),
+                              ("Attack/A_Force1.WAV", 0.22, 0.89, 0.26, 0.16, 1.55),
+                              ("Attack/A_Force2.WAV", 0.20, 1.035, 0.24, 0.16, 1.50),
+                              ("Attack/A_Force1.WAV", 0.21, 1.18, 0.26, 0.16, 1.62),
+                              ("Attack/A_Force2.WAV", 0.19, 1.325, 0.24, 0.16, 1.45),
+                              ("synth:shimmer:1.5", 0.30, 0.60, None, 0.0),                     # the green glow (from the first hit)
+                              ("Attack/EnchP01.WAV", 0.38, 0.66, 1.2, 0.6, 0.95),               # a healing chime (Remedy's family)
+                              ("synth:bell:392:1.4", 0.18, 1.40, None, 0.6),                    # soft bells after the last hit
+                              ("synth:bell:587:1.0", 0.12, 1.62, None, 0.5),
+                              ("synth:drone:98:2.1", 0.16, 0.00, None, 0.7)],
+---- end ----
+
+== 3. patch_dual_sphere_spells_v1.py, entry 216 - replace the `1: G.seq_entry(...)` line with ==
+---- code ----
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [4900] * 21 + list(range(4901, 4952)), -48, -92, f18=0),   # v6: blank until the first staggered hit (tick 21), then 51 x 1 tick (72-tick life as v5)
+---- end ----
+
+== 4. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF: rocks/halo re-rendered, + 4900-4951)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (DUALER_MENDWALLS.WAV v6)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 216 slot 1)
+  VEH startup check.  No AoWTCPCK change (patch_tc_mendwalls_v2.py stays at v5).
+  Revert = restore the v5 lines (MEND5_FLY 8, MEND3_ARRIVE in the two path lines, heal 10) + the 4700 row + the v5
+  slot-1 line [4700] * 28 + list(range(4701, 4745)) + the v5 sfx entry, then re-run the three builders.

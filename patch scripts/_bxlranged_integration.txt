@@ -1,0 +1,76 @@
+Hurl Flaming Skull (0xCC) + Shoot Black Javelin (0xCD) - BXL port, 2026-10-19 (fork; NOTHING applied live)
+
+Scripts (copy into patch scripts\; they import bakpath / spellgfx / patch_reversal_ability_pfs_v1 /
+patch_seekerbolts_pfs_v1 / patch_tame_ability_pfs_v1 from there):
+  patch_bxl_ranged_abilities_v1.py      AoWEPACK.dll + AoWTCPCK.dll engine (backups .bak_bxlranged)
+  patch_bxl_ranged_ability_pfs_v1.py    Release\Ability.pfs records 214 / 215 (safety copy .bak_bxlranged)
+
+fx builder (build_dual_sphere_fx_v1.py, LF file) - OPTIONAL but recommended (animated flying skull; without it the
+pfs script uses BXL's static COMBAT.ILB #116 and can be re-run later to upgrade in place):
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` ----
+def flaming_skull(n=8):
+    """Hurl Flaming Skull (ability 0xCC, 2026-10-19) slot 0: the flying projectile for the kind-2 (Hurl Boulder) arc.
+    Source art = the vanilla flaming-skull hit icon COMBAT.ILB #116 ('HitIcon.BMP', 46x45, the Undead skull used by
+    the Skull Thrower) centred on Hurl Boulder's 64x64 BALLS canvas (anchor -31/-33).  8-frame loop: the skull stays
+    put, its flame tongue flickers (fire pixels brightness 0.78..1.12 with a phase that runs up the flame) and a few
+    ember sparks drift off the tail.  Solid keyed sprite (256/0, like the Death/Fire stones)."""
+    import sys as _s
+    _s.path.insert(0, os.path.join(HERE, "..", "modding tools"))
+    from aowxlib import ilb as _ilb
+    lib = _ilb.read(os.path.join(GAME, "Images", "Combat.ILB"))
+    img = next(i for i in lib.images if i.id == 116)
+    w, h, rows = _ilb.decode_record(lib, img.parts[0])
+    src = Image.new("RGBA", (w, h), (0, 0, 0, 0)); src.putdata([p for row in rows for p in row])
+    W = H = 64; ox, oy = (W - w) // 2, (H - h) // 2
+    sp = src.load(); out = []
+    rnd = random.Random(4120)
+    sparks = [(rnd.uniform(0.55, 0.95), rnd.uniform(0.05, 0.45), rnd.random()) for _ in range(6)]
+    for i in range(n):
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); px = im.load()
+        ph = 2 * math.pi * i / n
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = sp[x, y]
+                if not a: continue
+                fire = r > 150 and r > g + 25 and b < 140          # orange / yellow / red flame pixels
+                if fire:
+                    f = 0.95 + 0.17 * math.sin(ph + (h - y) * 0.35 + x * 0.12)
+                    r, g, b = min(255, int(r * f)), min(255, int(g * f)), min(255, int(b * f))
+                px[ox + x, oy + y] = (r, g, b, a)
+        dr = ImageDraw.Draw(im)
+        for (fx, fy, p0) in sparks:                                # embers drifting up-right off the flame tail
+            t = (i / n + p0) % 1.0
+            x = ox + fx * w + 6 * t; y = oy + fy * h - 8 * t
+            if 0 <= x < W and 0 <= y < H and t < 0.85:
+                c = (255, int(200 - 120 * t), int(60 - 50 * t), 255)
+                dr.point((x, y), fill=c)
+        out.append(im)
+    return out
+---- end ----
+---- rows: build_dual_sphere_fx_v1.py build() - add right after the (7300, tame_badge7(), ...) row ----
+              (7400, flaming_skull(), "FSkull%d.BMP", 256, 0, KEY),          # Hurl Flaming Skull (0xCC) slot 0: flying flaming skull, flame flicker loop (64x64 BALLS canvas, Ability.pfs 214)
+---- end ----
+
+APPLY ORDER (game + editor closed):
+  1. (optional) paste the block + row above, then  py -3.10 build_dual_sphere_fx_v1.py --apply      (DualDF 7400-7407)
+  2. py -3.10 patch_bxl_ranged_abilities_v1.py --apply
+  3. py -3.10 patch_bxl_ranged_ability_pfs_v1.py --apply     (prints "slot 0 DualDF 7400-7407" if step 1 ran)
+  4. sed -i 's/0xC9, 0xCA, 0xCB)/0xC9, 0xCA, 0xCB, 0xCC, 0xCD)/' patch_aowx_banner_ceilings_v1.py patch_tcablist_ceiling_v1.py
+     (the current bound 0xCC must be in LADDER for the raise), then run both with --apply  (bound 0xCC -> 0xCE)
+  5. VEH startup check.
+  Ship: AoWEPACK.dll, AoWTCPCK.dll, AoWx.exe, Release\Ability.pfs, Images\Effects\DualDF.ILB.
+REVERT (LIFO): ceiling scripts may stay raised (harmless); patch_bxl_ranged_ability_pfs_v1.py --revert (214/215 must be
+  the largest keys); patch_bxl_ranged_abilities_v1.py --revert (BEFORE any revert/re-run of patch_channeler_v1.py,
+  patch_tame_animal_v2/v3.py, patch_reversal_v1.py - it owns the reg chain head and the TCPCK S2 hook, chained behind
+  Channeler and Tame v2).  Next free ability id 0xCE; next free Ability.pfs key 216.
+
+TEST PLAN (in game):
+  * Editor: both abilities listed ("Hurl Flaming Skull", "Shoot Black Javelin"); give them to two units.
+  * Unit panels / banner popup / in-combat ability panel list them; ATK/DMG 3/8 (skull) and 8/6 (javelin); damage
+    types physical+fire+death+walls / physical+death; attack-panel icons = flaming skull / black javelin.
+  * Combat: skull flies on Hurl Boulder's high arc (animated if step 1 ran), hits units and city WALLS (damages them);
+    javelin flies like Shoot Javelin with the black javelin sprite in every direction.
+  * Seeker Bolts (0x3A) unchanged (orbs, gold/blue bolt, chest-height impact).
+  * AI: an AI unit with either ability shoots with it (tactical), skull units attack walls in sieges; autocombat works.
+  * Tame Animal still converts (S2 chain); Channeler/other abilities still present (reg chain).

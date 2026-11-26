@@ -1,0 +1,37 @@
+MAGIC MISSILE (228) round 5 (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+User: "icon: keep the missiles as they are but slightly separate them, then re-smooth their edges where they were separated"
+      "the sfx sucks. make it like a mix of magic bolts and ice shards"
+New file (already written): patch scripts\magicmissile5_user_mask.png (made by tmp\mm5\mk_icon5.py from magicmissile4_user_mask.png:
+  an 8-px (= 1 px at 40x35) seam cut between the top and middle streaks through their own hollows and off the shared
+  head tip, the bottom bolt's one thin contact with the middle bolt opened to the same gap, crumbs removed, then ONLY the
+  cut zone re-smoothed (blur + rethreshold, soft values kept); everything else is v4 pixel-for-pixel, same bbox).
+Previews (C:\Users\<user>\.claude\jobs\47241cad\tmp\mm5\): icon_v4_vs_v5.png, DUALCO_MMISSILE_v5.wav, DUALCO_MMHIT_v5.wav,
+preview_3bolts_v5.wav (3 launches 10 ticks apart + their hits).
+Builders: icons LF, sfx CRLF - detect the newline per file; ast.parse after editing.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_magicmissile: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("magicmissile5_user_mask.png")    # v5 10/18 (user: slightly separate the bolts): v4 + 1-px seams, cut edges re-smoothed
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALCO_MMISSILE.WAV" and "DUALCO_MMHIT.WAV" entries AND their comment lines with ==
+---- code ----
+    # Magic Missile v5 (2026-10-18, user: "sfx sucks - make it like a mix of Magic Bolts and Ice Shards"): per bolt (cue 0,
+    # one per projectile) - the Magic Bolt ability zap (Attack/MagicA04) and the Ice Shards crackle (Attack/Ice) in EQUAL
+    # measure (RMS 0.10 / 0.10 over the first 0.3 s), their transients aligned on the zap's rise, a thinner shard sparkle on
+    # top and a faint shimmer; 0.45 s, peak 0.85 (no DRIVE, not normalised up), little low end (<300 Hz 12 %).
+    "DUALCO_MMISSILE.WAV":  [("Attack/MagicA04.WAV", 1.00, 0.000, 0.44, 0.20, 1.06, 0.004, 0.0, 1.5),
+                             ("Attack/Ice.WAV", 0.90, 0.012, 0.34, 0.20, 1.18, 0.003, 0.0, 1.5),
+                             ("Attack/Ice.WAV", 0.39, 0.060, 0.22, 0.14, 1.65, 0.004, 0.10, 1.6),
+                             ("synth:shimmer:0.42", 0.16, 0.030, None, 0.25)],
+    # per landing (cue 1, x3): a soft zap + a tiny crystal tink (0.16 s, peak 0.25, no DRIVE)
+    "DUALCO_MMHIT.WAV":     [("Attack/MagicA04.WAV", 0.30, 0.000, 0.16, 0.10, 1.45, 0.003, 0.06, 1.5),
+                             ("Attack/Ice.WAV", 0.26, 0.004, 0.14, 0.10, 1.95, 0.002, 0.0, 1.6)],
+---- end ----
+  DRIVE dict:    "DUALCO_MMISSILE.WAV" stays 1.0 (or delete the key).   No DRIVE for MMHIT.
+  FADE_OUT dict: "DUALCO_MMISSILE.WAV": 0.16 -> 0.14,   "DUALCO_MMHIT.WAV": 0.10 -> 0.08
+
+== 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  No pipeline / Spells.pfs / DLL change (spacing patch_tc_magicmissile_v1.py v3 unchanged).  VEH check optional (data only).

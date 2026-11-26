@@ -1,0 +1,185 @@
+MEND WALLS (216, Earth L1 combat) - integration snippet for the parent (2026-10-17, worker fork).
+Nothing below is applied.  patch_tc_mendwalls_v1.py is written + scratch-tested (apply / already-applied / revert
+byte-identical / re-apply on a copy of the LIVE AoWTCPCK.dll in C:\Users\<user>\.claude\jobs\47241cad\tmp\mend\).
+Previews: tmp\mend\mw_icon.png, mw_stone.png, mw_trail.png, mw_impact.png; sfx renders tmp\mend\DUALER_*.WAV.
+No mend-walls reference in `art import export` (and no art-import override png) - the glyph is original.
+
+======================================================================== 1. patch_tc_spell_alias_v1.py
+ALIAS += {216: 0x7C}         # Mend Walls -> Ooze (2026-10-17; hail class 0x0A, 19 strikes = the radius-2 area,
+                             # 19-hex preview @0x42827A, landing via 0x40C8D0 -> 0x40C8D8 (eax 8) -> Ooze path 0x40C922,
+                             # where patch_tc_mendwalls_v1.py takes 216)
+# NO SITE_KEEP / SITE_ALIAS entries (216 must alias at 0x40C8D0 - that is what routes it to 0x40C922).
+
+======================================================================== 2. patch_dual_sphere_spells_v1.py
+DONOR: none new ("TOoze" (0x557F5D94, 0x557F9590) already exists - Oil Spring).
+Put it with the other single-sphere spells (after 215 Static Shield):
+
+    dict(id=216, name="Mend Walls", sphere=3, tier=1, mana=4, research=40,
+         donor="TOoze", pfs_donor=134, tc_type=0x0A, icon=216,                 # Ooze clone: ATK/DMG 0, 19 strikes, RANGE 0xFF (unlimited) inherited; alias 216 -> 0x7C; patch_tc_mendwalls_v1.py: each strike repairs the city wall / gate on its hex
+         desc="Stones and earth fly back into place: every city wall and gate in the target area is restored to full strength. Breached sections are rebuilt, unless a unit or a corpse lies in the rubble.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(3954, 3962)), -31, -33, f20=3, f18=1),   # tumbling stone block (Ooze's BALLS projectile slot: kind 4, f20 3, f18 1)
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(3962, 3966)), -32, -33, f20=1),          # amber grit trail (Ooze's BOLTS slot)
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(3966, 3990)), -48, -44, f20=2)},          # dust ring + settling golden earth-glow on each landed hex (Ooze's MISC splash slot; 24 x 2 ticks)
+         sfx=["SFX\\ZSP\\DUALER_MENDWALLS.WAV", ["SFX\\ZSP\\DUALER_MENDSTONE1.WAV", "SFX\\ZSP\\DUALER_MENDSTONE2.WAV"]]),   # 0 = cast; 1 = REQUIRED: the hail-class TfxHS landing plays sound ID 1 on EVERY strike (missing -> AV per landing, Oil Spring v3.2 lesson)
+
+(Sphere 3 = Earth: 0 Cosmos 1 Life 2 Death 3 Earth 4 Air 5 Fire 6 Water.  pfs key 226.  No pokes - Ooze's own range 0xFF
+ is the spec's "infinite range"; ATK/DMG 0 so the TCAI damage scorer values it 0.)
+
+======================================================================== 3. build_dual_sphere_icons_v1.py
+ICONS[216] = "mendwalls";  CLOUDS["mendwalls"] = 40   (Earth = Stone Skin's cloud, like Gust uses Air's 0);
+GLYPHS["mendwalls"] = glyph_mendwalls;  add the function (needs canvas/S/math/ImageDraw - all in the module):
+
+def glyph_mendwalls():
+    """Mend Walls (216, Earth L1, 2026-10-17; no user reference art): a crenellated stretch of city wall in brick courses,
+    a breach notch knocked out of its top-middle, and three stone blocks flying back into the gap (motion streaks
+    behind them, the lowest already settling in), a few mortar-dust sparks around the notch."""
+    im = canvas(); dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    x0, x1, top, bot = 3.0, 37.0, 17.0, 33.5
+    dr.rectangle([x0 * S, top * S, x1 * S, bot * S], fill=255)                                               # the wall body
+    for cx in (3.0, 10.0, 24.0, 31.0):                                                                        # merlons (a breach between 10 and 24)
+        dr.rectangle([cx * S, (top - 4.0) * S, (cx + 5.6) * S, top * S], fill=255)
+    dr.polygon(P([(14.6, top - 0.2), (25.4, top - 0.2), (24.0, 22.4), (21.2, 23.6), (18.4, 21.8), (15.8, 22.8)]), fill=0)   # the breach notch
+    lw = max(1, int(0.75 * S))
+    for k, y in enumerate((21.2, 25.4, 29.6)):                                                                # mortar courses
+        dr.line(P([(x0, y), (x1, y)]), fill=0, width=lw)
+        off = 0.0 if k % 2 else 3.4
+        for xx in range(int(x0 + off + 2), int(x1), 7):
+            y1 = y + 4.2 if y + 4.2 < bot else bot
+            dr.line(P([(xx, y), (xx, y1)]), fill=0, width=lw)
+    for xx in (5.6, 12.6, 26.6, 33.6):                                                                        # top course joints
+        dr.line(P([(xx, top), (xx, 21.2)]), fill=0, width=lw)
+    dr.polygon(P([(14.6, top - 0.2), (25.4, top - 0.2), (24.0, 22.4), (21.2, 23.6), (18.4, 21.8), (15.8, 22.8)]), fill=0)   # (re-cut after the joints)
+    for bx, by, w_, h_, a in ((17.0, 18.2, 5.2, 3.6, -8), (19.6, 9.0, 4.6, 3.2, 14), (12.2, 3.0, 4.0, 2.8, -20)):   # flying blocks (the lowest settling)
+        cxb, cyb = bx + w_ / 2, by + h_ / 2; r = math.radians(a)
+        pts = [(cxb + dx * math.cos(r) - dy * math.sin(r), cyb + dx * math.sin(r) + dy * math.cos(r))
+               for dx, dy in ((-w_ / 2, -h_ / 2), (w_ / 2, -h_ / 2), (w_ / 2, h_ / 2), (-w_ / 2, h_ / 2))]
+        dr.polygon(P([(x + 0.9, y + 0.9) for x, y in pts]), fill=0)                                           # cut a thin gap below it
+        dr.polygon(P(pts), fill=255)
+    for (ax, ay), (bx2, by2) in (((24.6, 5.0), (29.4, 1.2)), ((25.2, 8.4), (30.6, 5.0)), ((17.0, 0.6), (21.0, 0.2)), ((15.6, 6.8), (19.0, 6.0))):   # motion streaks
+        dr.line(P([(ax, ay), (bx2, by2)]), fill=255, width=max(1, int(0.8 * S)))
+    for x, y in ((9.0, 9.6), (28.0, 13.2), (6.0, 5.0), (33.4, 8.6)):                                          # dust sparks
+        dr.line(P([(x - 1.2, y), (x + 1.2, y)]), fill=255, width=max(1, int(0.6 * S)))
+        dr.line(P([(x, y - 1.2), (x, y + 1.2)]), fill=255, width=max(1, int(0.6 * S)))
+    return im
+
+
+======================================================================== 4. build_dual_sphere_fx_v1.py
+Functions (insert before `def build():`; they use np / Image / ImageDraw / random / math from the module):
+
+def mend_stone(n=8):
+    """Mend Walls (216) slot 0 (2026-10-17): the falling projectile of each of the 19 Ooze strikes (Ooze BALLS canvas
+    64x66, anchor (-31,-33), opaque keyed like boulders): a tumbling dressed stone block (lit top, shaded side, mortar
+    crumbs clinging to it) wrapped in a faint earthy halo of grit, turning a quarter per 2 frames."""
+    W, H = 64, 66; cx, cy = 31.0, 33.0; out = []; rnd = random.Random(3954)
+    grit = [(rnd.uniform(0, 6.28), rnd.uniform(9, 14), rnd.choice((1, 1, 2))) for _ in range(9)]
+    for i in range(n):
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); dr = ImageDraw.Draw(im)
+        a = i * math.pi / 4 / 2 + 0.3; ca, sa = math.cos(a), math.sin(a)
+        rot = lambda dx, dy: (cx + dx * ca - dy * sa, cy + dx * sa * 0.75 + dy * ca * 0.75)
+        w2, h2, d = 8.0, 5.5, 4.0
+        face = [rot(-w2, -h2), rot(w2, -h2), rot(w2, h2), rot(-w2, h2)]
+        side = [rot(w2, -h2), (rot(w2, -h2)[0] + d * 0.6, rot(w2, -h2)[1] + d), (rot(w2, h2)[0] + d * 0.6, rot(w2, h2)[1] + d), rot(w2, h2)]
+        bottom = [rot(-w2, h2), rot(w2, h2), (rot(w2, h2)[0] + d * 0.6, rot(w2, h2)[1] + d), (rot(-w2, h2)[0] + d * 0.6, rot(-w2, h2)[1] + d)]
+        dr.polygon(bottom, fill=(92, 78, 62, 255)); dr.polygon(side, fill=(110, 94, 74, 255))
+        dr.polygon(face, fill=(168, 150, 120, 255))
+        dr.line([face[0], face[1]], fill=(205, 190, 158, 255)); dr.line([face[0], face[3]], fill=(190, 174, 142, 255))
+        for k in range(5):                                                                                       # pitting / crumbs
+            u, v = rnd.uniform(-0.8, 0.8), rnd.uniform(-0.7, 0.7); px, py = rot(u * w2, v * h2)
+            dr.point((px, py), fill=(120, 104, 84, 255))
+        for g0, r, s in grit:                                                                                   # grit orbiting with it
+            ang = g0 + i * 0.5; x, y = cx + r * math.cos(ang), cy + r * 0.75 * math.sin(ang)
+            dr.rectangle([x, y, x + s - 1, y + s - 1], fill=(140, 116, 80, 255))
+        out.append(im)
+    return out
+
+
+def mend_trail(n=4):
+    """Mend Walls (216) slot 1: the trail (Ooze BOLTS canvas, anchor (-32,-33)), additive: a short smear of warm amber
+    earth-dust motes."""
+    W, H = 64, 66; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []; rnd = random.Random(3962)
+    for i in range(n):
+        acc = np.zeros((H, W, 3), np.float32)
+        for k in range(6):
+            x = cx + rnd.uniform(-5, 5); y = cy + rnd.uniform(-10, 4); r = rnd.uniform(1.2, 2.4)
+            g = 0.55 * np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (r * r))
+            for c, cv in enumerate((200, 150, 80)): acc[..., c] += g * cv
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+
+def mend_impact(n=24):
+    """Mend Walls (216) slot 2: the landing on every hex of the area (Ooze MISC canvas grown to 96x72, hit at (48, 44)),
+    additive: a burst of brown-amber dust ringing out flat along the ground (frames 0-7), chips of stone kicked up and
+    falling back, and a warm golden earth-glow that swells over the hex and settles (the mortar setting) - longer and
+    softer than Ooze's 5-frame splash so a mended segment visibly glows as its stones lock in."""
+    W, H = 96, 72; cx, cy = 48.0, 44.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); rnd = random.Random(3966)
+    puffs = [(k * 6.2832 / 16 + rnd.uniform(-0.15, 0.15), rnd.uniform(0.75, 1.1), rnd.uniform(3.0, 5.0)) for k in range(16)]
+    chips = [(rnd.uniform(-2.9, -0.25), rnd.uniform(0.5, 1.0)) for _ in range(10)]
+    out = []
+    for i in range(n):
+        t = i / (n - 1.0); acc = np.zeros((H, W, 3), np.float32)
+        R = 4 + 26 * (1 - (1 - min(1.0, t / 0.4)) ** 2); dfade = max(0.0, 1 - t / 0.75) * min(1.0, 0.35 + t * 6)
+        for a, v, r in puffs:                                                                                   # the dust ring, squashed flat (hex perspective)
+            x = cx + R * v * math.cos(a); y = cy + 0.45 * R * v * math.sin(a) - 3 * t
+            g = 0.42 * dfade * np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / ((r + 4 * t) ** 2))
+            for c, cv in enumerate((150, 115, 70)): acc[..., c] += g * cv
+        gl = math.sin(math.pi * min(1.0, max(0.0, (t - 0.1) / 0.85)))                                          # the settling glow
+        glow = np.exp(-((xx - cx) ** 2 + ((yy - cy + 4) / 0.55) ** 2) / 260.0) * 0.75 * gl
+        for c, cv in enumerate((255, 200, 90)): acc[..., c] += glow * cv
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"); dr = ImageDraw.Draw(im)
+        for a, v in chips:                                                                                      # stone chips: up and back down
+            s = min(1.0, t / 0.55); x = cx + 22 * v * math.cos(a) * s; y = cy + 30 * v * math.sin(a) * s * (1 - s) * 2.2 - 2
+            if t < 0.6:
+                c = int(200 * (1 - t / 0.6)) + 40; dr.rectangle([x, y, x + 1, y + 1], fill=(c, int(c * 0.85), int(c * 0.6), 255))
+        out.append(im)
+    return out
+
+
+Group rows (DualDF ids 3954-3989 of the 3954-3999 block; 3990-3999 left free):
+              (3954, mend_stone(), "ERmstone%d.BMP", 256, 0, KEY),          # Mend Walls (216) slot 0: tumbling stone block projectile (64x66, opaque keyed like boulders)
+              (3962, mend_trail(), "ERmtrail%d.BMP", 770, 50, 0x0000),      # Mend Walls (216) slot 1: amber grit trail (64x66)
+              (3966, mend_impact(), "ERmend%02d.BMP", 770, 80, 0x0000),     # Mend Walls (216) slot 2: dust ring + settling earth-glow per landed hex (96x72, hit at (48,44))
+
+======================================================================== 5. build_dual_sphere_sfx_v1.py
+    # Mend Walls (216, Earth L1 2026-10-17): the Earth sphere's cast with Tremors slowed into a stone grind, two heavy
+    # stone settles and a low drone.  Per strike (sound ID 1, picked at random): a slowed heavy footfall = a stone
+    # thumping into place, with a short grit spray.
+    "DUALER_MENDWALLS.WAV":  [("Attack/m_Earth.wav", 0.7, 0.00, 2.4, 0.8),
+                              ("Attack/Earth.WAV", 0.6, 0.15, 1.8, 0.7, 0.7),
+                              ("Moves/SFStep1.WAV", 0.8, 0.90, None, 0.2, 0.6),
+                              ("Moves/SFStep3.WAV", 0.7, 1.35, None, 0.2, 0.55),
+                              ("synth:drone:62:2.4", 0.35, 0.00, None, 0.8)],
+    "DUALER_MENDSTONE1.WAV": [("Moves/SFStep2.WAV", 1.0, 0.00, None, 0.15, 0.6),
+                              ("Attack/Earth.WAV", 0.35, 0.02, 0.35, 0.2, 1.5)],
+    "DUALER_MENDSTONE2.WAV": [("Moves/SFStep4.WAV", 1.0, 0.00, None, 0.15, 0.55),
+                              ("Attack/Earth.WAV", 0.3, 0.40, 0.35, 0.2, 1.7)],
+(Rendered OK in scratch: 2.40 s / 0.59 s / 0.75 s.)
+
+======================================================================== 6. APPLY ORDER
+ 1. patch_tc_spell_alias_v1.py --apply                 (ALIAS 216)
+ 2. patch_dual_sphere_spells_v1.py --apply             (pfs record key 226 + AoWEPACK zone re-sync)
+ 3. build_dual_sphere_icons_v1.py --apply / build_dual_sphere_fx_v1.py --apply / build_dual_sphere_sfx_v1.py --apply
+ 4. LAST - after the Oil Spring smoothing fork has finished re-applying patch_oilspring_v1.py:
+    patch_tc_mendwalls_v1.py            (dry run must say lnd chain(0x43ac40), tgt chain(0x43d890), zone zero, relocs none)
+    patch_tc_mendwalls_v1.py --apply    (backup backup\AoWTCPCK.dll.bak_mendwalls)
+
+======================================================================== 7. CHAIN CONSEQUENCES
+ * 0x40C922 (Ooze landing) now = jmp 0x447410 -> (216) wall repair, (others) jmp 0x43AC40 = patch_ooze_extinguish_v1.
+   patch_ooze_extinguish_v1.py --revert / re-apply will see a foreign jmp -> revert patch_tc_mendwalls_v1 FIRST.
+ * 0x40E35D (NextStrike target) now = call 0x447520 -> (216) ZF=1 nil target, (others) call 0x43D890 = oilspring 'tgt'.
+   Re-running patch_oilspring_v1.py (any re-sync that touches 'tgt' or moves the 0x43D890 cave) -> revert mendwalls first,
+   re-apply after.  If the oilspring cave moved under it, the mendwalls dry run reports MOVED and refuses.
+ * Previous targets are kept at 0x447400 (+0 lnd, +4 tgt); --revert restores exactly those.
+ * 216 does NOT reach 0x40C8D8's oilspring land-cave special case (alias 0x7C -> eax 8 -> 0x40C922); the oil gate is untouched.
+
+======================================================================== 8. IN-GAME TESTS
+ 1. Siege a city, damage a wall (HP>0) with a ram/catapult, cast Mend Walls on it from anywhere on the field (range
+    unlimited): 19-hex preview, 19 stones fall, the segment returns to the intact image.
+ 2. Destroy a wall segment fully (rubble, passable), cast: it is rebuilt and blocks movement again.
+ 3. Same with a unit standing in the breach -> NOT rebuilt (still rubble, unit unaffected); with a corpse there -> not rebuilt.
+ 4. Gate: damaged gate restored; a destroyed gate with nobody in it rebuilt.
+ 5. Cast on open ground / no city -> just the fx + sounds, no error; every strike plays a stone thump (no AV).
+ 6. After all walls are back up the AI should value rams/crushers again (breach flag cleared); with one wall still
+    rubble the flag stays set.
+ 7. AI never casts it (damage 0); auto/fast combat: no effect (AoWEPACK TCombatWall objects are not resynced - known).
+ 8. Ooze / Black Tide / Oil Spring / Sandstorm still behave (chain pass-through).

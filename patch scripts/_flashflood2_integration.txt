@@ -1,0 +1,81 @@
+FLASH FLOOD (223) v3 - ATK 4 / DMG 7, side-entry sweep, sweep rush in the sfx (v2) + half-distance water units and
+displaced-but-undamaged Sailing units (v3) (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+Engine: patch_tc_flashflood_v1.py upgraded IN PLACE to v3 (copies: tmp\flood2\patch_tc_flashflood_v1.v1.py / .v2.py).
+patch_dual_sphere_spells_v1.py + build_dual_sphere_sfx_v1.py are CRLF -> detect the newline per file.
+
+== 1. patch_dual_sphere_spells_v1.py, entry 223: replace the pokes line and the desc line with ==
+---- code ----
+         pokes=[(0x34, 1, 4), (0x35, 1, 7), (0x36, 2, 0x80)],          # v2 10/17: ATK 4 / DMG 7 / Physical (range 0xFF, 1 shot inherited)
+---- end ----
+---- code ----
+         desc="A raging flash flood sweeps across the battlefield from the caster's side: every unit that is not flying, floating or wind walking is swept up to 4 hexes away in a random direction, hit or not, and struck (attack 4, damage 7, physical). Swimmers, water walkers and liquid-form units are swept only up to 2 hexes and take half damage, swamp walkers take half damage, and ships are swept up to 2 hexes but take no damage.",
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py: replace the "DUALWT_FLASHFLOOD.WAV" entry (keep its comment; DRIVE 1.35 / FADE_OUT 0.9 unchanged) with ==
+   (v1 + two layers: the flood FRONT rushing in across the field during the visual sweep 0.12-1.5 s.  The hit tick is
+   unchanged (0x59 = ~2.58 s), so the surge splashes at 2.4-3.1 s still line up.  Scratch renders:
+   tmp\flood2\DUALWT_FLASHFLOOD_old.wav / _v2.wav; 4.50 s, peak 0.87 both, 0.25 s RMS during the sweep 0.16 -> 0.19-0.23.)
+---- code ----
+    "DUALWT_FLASHFLOOD.WAV": [("synth:subswell:32:58:3.0", 0.55, 0.00, None, 0.8),
+                             ("Attack/Earth.WAV", 0.40, 0.05, 3.0, 0.9, 0.55),
+                             ("Moves/waterlg.WAV", 0.85, 0.00, 3.4, 1.0, 0.62, 0.6),
+                             ("Moves/waterlg.WAV", 0.75, 0.10, 1.45, 0.45, 1.08, 0.25),       # v2: the flood front rushing in (visual sweep ticks 4-52)
+                             ("synth:wind:1.6", 0.22, 0.05, None, 0.5),                      # v2: the air shoved ahead of the wall of water
+                             ("Moves/waterlg.WAV", 0.55, 0.45, 3.2, 1.0, 0.78, 0.5, 0.3),
+                             ("synth:hiss:3.2", 0.22, 0.20, None, 0.6),
+                             ("Attack/m_Water.WAV", 0.45, 0.15, 2.2, 0.8, 0.7),
+                             ("synth:splash:1.4", 0.9, 2.40, None, 0.3),
+                             ("Moves/SlimeS1.WAV", 0.5, 2.50, None, 0.2, 0.8),
+                             ("Moves/M_Swim1.WAV", 0.6, 2.56, None, 0.3, 0.75),
+                             ("Moves/SlimeS3.WAV", 0.45, 2.70, None, 0.2, 0.7),
+                             ("synth:splash:1.2", 0.55, 2.85, None, 0.3),
+                             ("Moves/SlimeS2.WAV", 0.35, 3.05, None, 0.2, 0.9),
+                             ("Moves/waterlg.WAV", 0.5, 3.00, 1.5, 0.9, 0.9)],
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  py -3.10 patch_dual_sphere_spells_v1.py --apply        (Spells.pfs 223: ATK 4 / DMG 7 + desc)
+  py -3.10 patch_tc_flashflood_v1.py                     (dry run: "zone ours (v1) (2765 B) ... 2568 bytes change")
+  py -3.10 patch_tc_flashflood_v1.py --apply             (in-place v1 -> v3; backup backup\AoWTCPCK.dll.bak_flashflood3 = the v1 state)
+  VEH startup check.  No fx / icon change (same DualDF 5400-5402 particles).
+  Revert: patch_tc_flashflood_v1.py --revert -> vanilla sites + zone zeroed (byte-identical to the v1 script's revert).
+
+== 4. Engine notes ==
+  * "move all targetable units even if not hit": ALREADY the case in v1 - the move loop walks the whole collected list
+    (alive, not airborne, not Sailing), independent of the rolled damage; a 0-damage miss gets no hurt anim but is still
+    displaced.  Emulator case added (tmp\flood2\test_flood2.py "miss still displaced").  Only units killed by the hit stay.
+  * Sweep: ticks 4..52 (~1.4 s) the front crosses the view (+-240 px margins): spray / crest bands spawn only behind it,
+    plus 8 surf particles per tick on the front; from tick 52 the v1 full-field rolling water (unchanged).  Hit stays at
+    tick 0x59 (~1.1 s of full flood after the front has covered the view).  Shake starts at tick 28 (front half-way),
+    EVEN offsets, +-4 surge round the hit, origin restored at 104.
+  * Direction: the flood enters from the CASTER's side - caster hex x < 32 -> from the left flowing right, else mirrored
+    (enters right, flows left).  TEK latches {carrier fx, dir} at .idata slack 0x479FF8..0x47A000 (RW, zero in file; Gust
+    v7 = 0x479FF0, Crashing Wave tables end 0x479FE8) while the carrier tick < 4; caster = [te+0x10] cu -> HS [cu+0x60]
+    (back-pointer [hs+0x1C] == cu checked) -> VMT+0x74 x.  No valid caster / stale latch -> from the left.  Visual only.
+  * Zone 0x44B000: 2652 B (v1 2305 B) of 4096.
+  * Tests (scratch copies in tmp\flood2): dry run / apply / "already applied (v2)" / revert md5 == v1 script's revert md5;
+    fresh v2 apply on the reverted copy == the in-place upgrade.  test_flood2.py (Unicorn, real v2 caves): all v1
+    scenarios (mixed roster, off-field, crowded blob, deep water, 12 x 40-unit stress, routing) + miss displaced +
+    side latch (caster x 10 / 31 / 32 / 50 / none, no latch at tick >= 4) + VIS in dir 1 and 2: no particle ahead of the
+    front or drifting the wrong way, front crosses the full view, v1 per-tick counts after tick 52, even shake offsets,
+    origin restored -> ALL PASS.  Preview strips (particle field at ticks 14 / 28 / 44 / 70): tmp\flood2\sweep_dir1.png,
+    sweep_dir2.png.
+
+
+== 5. v3 (coordinator follow-up) ==
+  * Half distance (rings 1..2 = HN 1..18, max 2 hexes): Swimming (2), Water Walking (0xA4), Liquid Form (0xA6) and
+    Sailing (0x17).  CHOICE: Swampwalk (0xBA) keeps the FULL 4-hex distance (a swamp-movement ability, not a
+    swimming / water-walking one); it still takes half damage as before.
+  * Sailing: now collected (flyers / floaters / wind walkers still excluded); NO damage (no CA, no hurt anim, no CA
+    list entry); displaced half distance through the SAME per-unit ValidLocation check, so a ship only lands where the
+    engine lets it move (water); a ship with no reachable water hex within 2 stays.
+  * List entry +8 = flags (bit0 no damage, bit1 half distance; the old +8 = x was never read).  RNG: one synced
+    RandInt(n) per moved unit in the same x-major collection order, n = 18 for half-distance units, else 60;
+    candidates HN (r + k) % n + 1, k < n.  Sequential resolution unchanged -> no shared hexes.
+  * Zone 2765 B of 4096.  Tests (tmp\flood2\test_flood3.py, Unicorn on the real v3 caves; emulator ValidLocation =
+    ships on deep water only): mixed roster with ships + every water type, beached ship (no water in reach -> stays,
+    no damage), 12 x 40-unit stress fields with ships / half movers / deep water, routing, miss displaced, side latch,
+    VIS both directions -> ALL PASS (CA set, dmg 3/5, no ship damaged, RandInt ranges 18/60 in collection order, half
+    movers within 2 hexes, ships on water only, no shared hex).  Script: v1 -> v3 and v2 -> v3 upgrades == fresh v3
+    apply (md5 b522921e...), re-run 'already applied (v3)', revert from v3 == the v1 script's revert (md5 d4fd6f5a...).

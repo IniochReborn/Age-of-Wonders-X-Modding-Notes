@@ -1,0 +1,94 @@
+ROYAL AMBITION (230, Cosmos L3 global) - integration snippets (2026-10-17, fork; NOTHING applied live).
+Engine: patch scripts\patch_royalambition_v1.py (AoWEPACK.dll, zone 0x5587E800-0x5587F000, ~694 B on the live chain,
+backup .bak_royal).  Insert ONLY the code blocks (between ---- code ---- / ---- end ----), detect each builder's newline
+(sfx builder = CRLF, the others LF at the time of writing) and ast.parse each edited builder afterwards.
+Cosmos = sphere 0 (TMagicSphere 0 Cosmos .. 6 Water); Cosmos icon cloud = SpellIcn image 120 (purple).
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry: the single-sphere block, e.g. right after dict(id=227 (Pyroclasm) ==
+---- code ----
+    dict(id=230, name="Royal Ambition", sphere=0, tier=3, mana=50, research=150, upkeep=7,
+         donor="TEarthMastery", pfs_donor=74, tc_type=None, icon=230,          # patch_royalambition_v1.py: marker 230 chained in front of Rite of the Seas (-> Depths -> Golden Age)
+         pokes=[(0x34, 4, 0xFFFFFFFF)],                                       # AI priority -1 (as Depths of Plenty / Rite of the Seas)
+         desc="Your ambition stirs your own people: while this spell lasts, every gain and every loss in your own race's regard for you is doubled.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [6150, 6151, 6152, 6153, 6152, 6151], -10, -10, f20=0)},   # map-wide golden star glints (Earth Mastery particle)
+         sfx=["SFX\\ZSP\\DUALCO_ROYAL.WAV"]),
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py ==
+  ICONS: add   230: "royalambition"      CLOUDS: add   "royalambition": 120   (Cosmos cloud)      GLYPHS: add   "royalambition": glyph_royalambition
+  function (e.g. right before glyph_mendwalls).  The user's reference art import export\royal ambition.jpg (comedy /
+  tragedy masks) is TRACED -> patch scripts\royalambition_user_mask.png (new file, already written; median 5, thr 140,
+  open 3x3 to drop specks, fit 97 %, blur 1.4 / thr 120).  No art import export\royalambition.png exists (no override).
+---- code ----
+def glyph_royalambition():
+    """Royal Ambition (230, Cosmos L3, 2026-10-17): the user's reference art import export/royal ambition.jpg - the
+    comedy and tragedy masks (favour and disfavour, both doubled) - TRACED (median 5, thr 140, 3x3 open, fit 97 %,
+    blur 1.4 / thr 120) -> royalambition_user_mask.png."""
+    return _user_mask_glyph("royalambition_user_mask.png")
+---- end ----
+
+== 3. build_dual_sphere_fx_v1.py - function before `def build():` + group row after the (5300, sea_rite_motes(), ...) row ==
+---- code ----
+def royal_motes():
+    """Royal Ambition (230) slot 0 (2026-10-17): Earth Mastery's map-wide particle (as Depths of Plenty's ore_glints,
+    20x20, played [6150, 6151, 6152, 6153, 6152, 6151], additive): a regal golden FIVE-POINTED STAR glint - a warm
+    white-gold core, star rays that grow and shrink as it twinkles, and a soft royal-gold halo."""
+    frames = []; yy, xx = np.mgrid[0:20, 0:20].astype(np.float32)
+    dx, dy = xx - 9.5, yy - 9.5; r = np.sqrt(dx * dx + dy * dy); ang = np.arctan2(dy, dx)
+    for g, rl in ((0.55, 3.2), (0.85, 5.2), (1.1, 6.8), (0.7, 4.2)):
+        lobe = 0.38 + 0.62 * np.abs(np.cos(2.5 * (ang + np.pi / 2))) ** 3      # five sharp points, one pointing up
+        star = np.clip(1.0 - r / (rl * lobe + 1e-3), 0, 1) * 0.85 * g
+        core = np.exp(-r * r / (2 * 1.3 ** 2)) * g
+        halo = np.exp(-r * r / (2 * 4.5 ** 2)) * 0.25 * g
+        v = np.clip(np.maximum(np.maximum(core, star), halo), 0, 1); w = np.clip(core * 1.3 - 0.3, 0, 1)
+        rgb = np.dstack([(225 + 30 * w) * v, (170 + 75 * w) * v, (40 + 150 * w) * v])
+        frames.append(Image.fromarray(np.dstack([np.clip(rgb, 0, 255), 255 * (v > 0.04)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+---- code ----
+              (6150, royal_motes(), "COroyal%d.BMP", 770, 50, 0x0000),            # Royal Ambition (230) slot 0: Earth Mastery map-wide particle = golden 5-point star glints (20x20, 4 frames)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py (CRLF) - MIXES entry (before "DUALEW_OVERGROWTH.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # Royal Ambition (230, Cosmos L3 2026-10-17): a short brass FANFARE rising C-E-G into a held high C over a G (synth
+    # horns, no stock sample), a string + choir major chord swelling under it, a timpani-like stroke on the arrival, a
+    # bright bell and the Cosmos shimmer - regal, not holy.
+    "DUALCO_ROYAL.WAV":     [("synth:subswell:40:60:2.8", 0.35, 0.00, None, 0.8),
+                             ("synth:horn:262:262:0.28", 0.55, 0.05, None, 0.06),
+                             ("synth:horn:330:330:0.28", 0.55, 0.33, None, 0.06),
+                             ("synth:horn:392:392:0.30", 0.55, 0.61, None, 0.06),
+                             ("synth:horn:523:523:1.6", 0.60, 0.92, None, 0.8),
+                             ("synth:horn:392:392:1.6", 0.35, 0.92, None, 0.8),
+                             ("synth:strings:262:2.2", 0.35, 0.90, None, 0.9),
+                             ("synth:choir:262:2.0", 0.30, 1.00, None, 0.9),
+                             ("synth:drum:70:1.0", 0.45, 0.92, None, 0.5),
+                             ("synth:bell:1047:1.6", 0.18, 0.95, None, 0.8),
+                             ("synth:shimmer:2.0", 0.30, 0.90, None, 0.8)],
+---- end ----
+  DRIVE dict: add   "DUALCO_ROYAL.WAV": 1.4,      FADE_OUT dict: add   "DUALCO_ROYAL.WAV": 0.9,
+  (scratch render 3.10 s, peak 0.89 before normalise: C:\Users\<user>\.claude\jobs\47241cad\tmp\royal\DUALCO_ROYAL_test.wav)
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply       (SpellIcn 230)
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 6150-6153)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (Sfx\Zsp\DUALCO_ROYAL.WAV - NEW file, ship via build_release_zip --add)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 230 + registration)
+  py -3.10 patch_royalambition_v1.py                   (dry run: CE/MM/EV/PS/ID/emAct/emDeact/emChk 'chain->0x558789xx' (Rite), RS 'vanilla')
+  py -3.10 patch_royalambition_v1.py --apply
+  VEH startup check.
+
+== 6. Chain / LIFO ==
+  * Royal Ambition sits IN FRONT of Rite of the Seas on the 5 Earth Mastery sites + 3 slots (Rite -> Depths -> Golden
+    Age).  While applied, patch_riteseas_v1.py (and behind it Depths / Golden Age) ABORTs -> revert Royal Ambition first.
+  * If City Spy (229) / Essence Shift (231) also chain the Earth Mastery sites, apply them in any order but revert in
+    exact reverse order (each script decodes the previous owner at apply time).
+  * RS = TRace.SetPlayerRelationValue entry 0x5574CDC4 (5 B, vanilla required) - our own hook; revert is exact.
+
+== 7. Behaviour ==
+  * All race-relation changes go through TRace.SetPlayerRelationValue (diplomatic actions send/accept, unit production
+    and cancel, city new-turn race checks, crop trampling, razing).  For a caster P with an active Royal Ambition, a
+    change of P's OWN race's relation toward P becomes old + 2 x delta, clamped to [min(new,0), max(new,100)].  Other
+    races and other players unchanged; the daily drift toward the default and resets are not doubled.
+  * Interpretation choice: "doubled for the caster's race" = the caster's own race's regard for the caster (the
+    relation that governs that race's cities' unrest / joining toward the caster).

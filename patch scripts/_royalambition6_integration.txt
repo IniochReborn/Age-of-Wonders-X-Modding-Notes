@@ -1,0 +1,61 @@
+ROYAL AMBITION (230) round 6 (2026-10-18, fork) - new icon from the user's re-uploaded reference + found-item-style sfx.
+NOTHING applied live, no shared builder edited.  Insert ONLY the code blocks; detect the newline per builder (sfx = CRLF).
+
+Reference: art import export\royal ambition.jpg (modified 10-18 02:52): WHITE comedy/tragedy masks on BLACK.  In our masks
+WHITE = INK, and the ink renders DARK on the Cosmos cloud - so taking the white masks as ink IS the requested "colour
+inverted" look in game (dark solid masks with light cut-out features, as the user asked in round 2).  Threshold > 128,
+median 3, bbox crop, fit 320x280 at 95 %, then a 2-px erode of the ink (MinFilter 5) so the eyes/mouths survive 40x35
+(grow 0..3 compared in tmp\royal6\grow_opts.png; 2 chosen).  Made by tmp\royal6\mk_mask6.py <out> 2.
+Icon-override trap: no art import export\royalambition.png exists (only the .jpg) - safe.
+
+== 1. build_dual_sphere_icons_v1.py (LF) - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition6_user_mask.png")    # v6 10/18: the user's new white-masks reference taken as ink (renders dark = 'inverted'), eroded 2 px for 40x35
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_ROYAL.WAV" entry AND its comment lines above it with ==
+---- code ----
+    # Royal Ambition v6 (2026-10-18, user: "should sound more like the found-item sound from Zelda"): an ORIGINAL
+    # phrase in that spirit (not the Zelda melody) - a quick D-major run A4 B4 D5 F#5 | A5 D6 (bell chime + plucked
+    # octave-below body + short bright lead per note, uneven da-da-da-daa rhythm) resolving at 0.62 s onto a held
+    # D major brass/strings/choir chord with rising bell sparkle (D6 F#6 A6 D7 F#7), shimmer and a soft D2 timpani.
+    "DUALCO_ROYAL.WAV":     [('synth:bell:440.00:0.9', 0.3, 0.0, None, 0.5),
+                             ('synth:bell:220.00:0.35', 0.16, 0.0, None, 0.25),
+                             ('synth:horn:440.00:440.00:0.30', 0.32, 0.0, 0.16, 0.08),
+                             ('synth:bell:493.88:0.9', 0.3, 0.075, None, 0.5),
+                             ('synth:bell:246.94:0.35', 0.16, 0.075, None, 0.25),
+                             ('synth:horn:493.88:493.88:0.30', 0.32, 0.075, 0.16, 0.08),
+                             ('synth:bell:587.33:0.9', 0.3, 0.15, None, 0.5),
+                             ('synth:bell:293.67:0.35', 0.16, 0.15, None, 0.25),
+                             ('synth:horn:587.33:587.33:0.30', 0.32, 0.15, 0.16, 0.08),
+                             ('synth:bell:739.99:0.9', 0.3, 0.225, None, 0.5),
+                             ('synth:bell:370.00:0.35', 0.16, 0.225, None, 0.25),
+                             ('synth:horn:739.99:739.99:0.30', 0.32, 0.225, 0.16, 0.08),
+                             ('synth:bell:880.00:0.9', 0.3, 0.345, None, 0.5),
+                             ('synth:bell:440.00:0.35', 0.16, 0.345, None, 0.25),
+                             ('synth:horn:880.00:880.00:0.30', 0.32, 0.345, 0.16, 0.08),
+                             ('synth:bell:1174.66:0.9', 0.3, 0.42, None, 0.5),
+                             ('synth:bell:587.33:0.35', 0.16, 0.42, None, 0.25),
+                             ('synth:horn:1174.66:1174.66:0.30', 0.32, 0.42, 0.16, 0.08),
+                             ('synth:horn:587.33:587.33:2.2', 0.55, 0.62, 1.5, 0.9),
+                             ('synth:horn:739.99:739.99:2.2', 0.42, 0.62, 1.5, 0.9),
+                             ('synth:horn:880.00:880.00:2.2', 0.42, 0.62, 1.5, 0.9),
+                             ('synth:horn:1174.66:1174.66:2.2', 0.36, 0.62, 1.5, 0.9),
+                             ('synth:strings:293.66:2.0', 0.32, 0.57, None, 0.9),
+                             ('synth:choir:587.33:1.8', 0.2, 0.67, None, 0.9),
+                             ('synth:bell:1174.66:1.6', 0.26, 0.62, None, 0.9),
+                             ('synth:bell:1479.98:1.4', 0.18, 0.6799999999999999, None, 0.9),
+                             ('synth:bell:1760.00:1.2', 0.14, 0.74, None, 0.9),
+                             ('synth:bell:2349.32:0.9', 0.1, 0.84, None, 0.7),
+                             ('synth:bell:2959.96:0.8', 0.07, 0.96, None, 0.6),
+                             ('synth:shimmer:2.0', 0.22, 0.52, None, 1.0),
+                             ('synth:drum:73.42:0.9', 0.3, 0.62, None, 0.5)],
+---- end ----
+  DRIVE dict: "DUALCO_ROYAL.WAV" stays 1.0 (no drive).   FADE_OUT dict: "DUALCO_ROYAL.WAV": 1.0 -> 0.9
+  Test render (2.57 s, peak 0.80 before normalise, 0 clipped samples): tmp\royal6\DUALCO_ROYAL_v6.wav
+  (old live v5 for comparison: tmp\royal6\DUALCO_ROYAL_old_v5.wav)
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  No pipeline / DLL change.

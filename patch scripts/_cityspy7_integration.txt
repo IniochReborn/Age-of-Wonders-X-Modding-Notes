@@ -1,0 +1,69 @@
+CITY SPY (229) eye v7 - "have the eye OPEN FULLY before it starts moving" (2026-10-18, fork; NOTHING applied live).
+The lids now part with the iris centred, a 0.21 s settle at full open, THEN the v6 look-left / hold / sweep right /
+hold; the v6 overlapped close is kept (lids start closing while the iris returns from the right).  201 entries x 35 ms
+= 7.04 s (v6: 184).  NO new images: every frame already exists (v6 mixed 6420-6428 are only used by the close now;
+opening = v5 apertures 6400-6415 at centre gaze; v4 gaze/blank 6343-6376; lid-line rows 6416-6418).  Engine unchanged
+(patch_cityspy_v1.py picks real time mod the list length).  Preview: C:\Users\<user>\.claude\jobs\47241cad\tmp\cityspy7\eye7.gif
+
+== 1. build_dual_sphere_fx_v1.py (LF) - add this block right AFTER cityspy_eye6_timeline (before `def build():`) ==
+---- code ----
+CSPY7_SETTLE = 6                  # v7: entries held fully open + centred before the look-left (6 x 35 ms = 0.21 s)
+
+
+def _cspy7_plan():
+    """City Spy (229) v7 slot-1 timeline (10/18 user: the eye OPENS FULLY before it starts moving): the lids part with
+    the iris centred, a short settle, then the v6 look-left / hold / sweep right / hold; the v6 overlapped close is kept
+    (the lids start closing while the iris returns from the right).  Same tuple format as _cspy6_plan."""
+    def ap(t): return max(0, min(CSPY5_NOPEN - 1, int(round(_ease4(min(1.0, max(0.0, t))) * (CSPY5_NOPEN - 1)))))
+    def gi(px): return int(round((px + 4.0) / 0.25))
+    NO, NL = CSPY6_NO, 17
+    seq = []
+    seq += [('L', 0, 0)] * 2 + [('L', 1, 0)] * 2 + [('L', 2, 0)] * 2           # faint lid line appears
+    seq += [('E', ap(i / (NO - 1)), 16) for i in range(NO)]                     # lids part, iris centred
+    seq += [('E', 15, 16)] * CSPY7_SETTLE                                      # fully open, settle
+    seq += [('E', 15, gi(-4.0 * _ease4((i + 1) / NL))) for i in range(NL)]      # look left
+    seq += [('E', 15, gi(-4.0))] * 17                                         # hold left
+    seq += [('E', 15, gi(-4.0 + 8.0 * _ease4((i + 1) / 23))) for i in range(23)]   # sweep right
+    seq += [('E', 15, gi(4.0))] * 17                                          # hold right
+    back = [4.0 - 4.0 * _ease4((i + 1) / 14) for i in range(14)]               # back towards centre ...
+    seq += [('E', 15, gi(px)) for px in back[:CSPY6_CLOSE_AT]]
+    rest = back[CSPY6_CLOSE_AT:]                                              # ... while the lids already close (v6)
+    for i in range(NO):
+        g = rest[i] if i < len(rest) else 0.0
+        seq.append(('E', ap(1 - (i + 1) / NO), gi(g)))
+    seq += [('L', 2, 0)] * 2 + [('L', 1, 0)] * 2 + [('L', 0, 0)] * 2           # lid line fades away
+    seq += [('B', 0, 0)] * 57                                                 # 2 s hidden
+    return seq
+
+
+def cityspy_eye7_timeline(base, v5base, v4base):
+    """City Spy (229) v7 slot-1 list - no new images: base = the v6 mixed frames (DualDF 6420+, indexed by
+    _cspy6_combos order), v5base = v5 apertures / lid-line rows, v4base = v4 blank / gaze."""
+    combos = _cspy6_combos(); ids = []
+    for kind, k, g in _cspy7_plan():
+        if kind == 'L': ids.append(v5base + 16 + k)
+        elif kind == 'B': ids.append(v4base)
+        elif k == CSPY5_NOPEN - 1: ids.append(v4base + 1 + g)
+        elif g == 16: ids.append(v5base + k)
+        else:
+            assert (k, g) in combos, "v7 needs a lid x gaze frame the v6 set does not have: %r" % ((k, g),)
+            ids.append(base + combos.index((k, g)))
+    return ids
+---- end ----
+(No group row: no new images.)
+
+== 2. patch_dual_sphere_spells_v1.py, entry 229 - replace the slot-1 line (it keeps the dict's closing `},`) ==
+---- code ----
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [6416] * 2 + [6417] * 2 + [6418] * 2 + [6400] * 3 + [6401] * 2 + [6402, 6403, 6404, 6405, 6406, 6407, 6408, 6409, 6410, 6411, 6412, 6413] + [6414] * 2 + [6360] * 10 + [6359] * 2 + [6358, 6357, 6355, 6354, 6353, 6351, 6350, 6349, 6347, 6346] + [6345] * 2 + [6344] * 20 + [6345] * 2 + [6347, 6348, 6349, 6351, 6353, 6355, 6357, 6359, 6361, 6363, 6365, 6367, 6369, 6371, 6372, 6373] + [6375] * 2 + [6376] * 20 + [6375, 6374, 6373, 6371, 6370, 6368, 6366, 6365, 6363, 6427, 6428, 6413, 6412, 6411] + [6410] * 2 + [6409, 6408, 6406] + [6405] * 2 + [6404, 6403, 6402] + [6401] * 2 + [6400] * 3 + [6418] * 2 + [6417] * 2 + [6416] * 2 + [6343] * 57, -20, -14, f20=2, f18=3)},   # v7 10/18: lids open fully (iris centred) + 0.21 s settle before the look-left; v6 overlapped close kept; 201 x 35 ms = 7.04 s (= cityspy_eye7_timeline(6420, 6400, 6343))
+---- end ----
+(Anchor -20, -14, f20=2, f18=3 = the live v6 values, checked.)
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply     (only needed if you want the function in the builder; no image changes)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply
+  VEH startup check.
+
+== 4. Tests ==
+  * cityspy_eye7_timeline(6420, 6400, 6343): 201 ids, all within existing 6343-6428 (assert: every (lid, gaze) pair
+    the close needs is in the v6 mixed set); opening gaze == centre for every entry before full open.
+  * The slot literal eval()s to exactly that list.

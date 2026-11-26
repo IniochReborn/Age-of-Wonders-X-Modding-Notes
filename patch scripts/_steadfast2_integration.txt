@@ -1,0 +1,198 @@
+STEADFAST (218) v2 - art/sfx rework (2026-10-17, fork).  Code-only snippets below; ast.parse each edited builder.
+User: icon head -> plain featureless head + raise the image so more of the shield shows; gfx green, shields floating
+down onto each unit in the AOE, a very subtle green pillar, no ground circles (something unique); new sfx.
+New files (already in patch scripts\): steadfast2_user_mask.png (icon mask; old steadfast_user_mask.png kept),
+patch_tc_steadfast_fx_v1.py (AoWTCPCK zone 0x448C00..0x449400, backup .bak_steadfastfx; scratch-tested: dry run,
+apply, re-apply "already applied", revert byte-identical).  Previews: C:\Users\<user>\.claude\jobs\47241cad\tmp\stead2\
+(icon_preview.png old|new at 40x35, shield_sheet.png = the 26 driver frames on grass with the hex-centre cross,
+DUALER_STEADFAST.WAV / DUALER_STEADHIT.WAV test mixes).
+AoWEPACK: nothing (the 0x55873400 allocation was not needed).  DualDF ids 4400-4425 (26 of 4400-4449).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_steadfast body ==
+    return _user_mask_glyph("steadfast2_user_mask.png")
+(replace `return _user_mask_glyph("steadfast_user_mask.png")`; docstring addendum: "v2 2026-10-17: plain featureless
+head (crest/helmet/plume removed, solid head + neck on rounded shoulders), whole picture raised 40 px (of 320x280) and
+both shield rims continued along their fitted circles (outer c(204.7,292.4) r121, inner c(207.1,292.6) r101) to the
+bottom edge -> steadfast2_user_mask.png (tmp\stead2\mk_mask.py)".)
+
+== 2. build_dual_sphere_fx_v1.py - functions before `def build():` ==
+def _sf2_shield(S=4):
+    """A round hoplite shield (aspis) seen slightly from below/front: a 22x26 px ellipse with a thick rim, an inner
+    raised ring, a central boss and a chevron (lambda-like) blazon.  Returned as a float32 intensity mask at S x."""
+    w, h = 24 * S, 28 * S
+    im = Image.new("L", (w, h), 0); d = ImageDraw.Draw(im)
+    d.ellipse([1 * S, 1 * S, 23 * S, 27 * S], fill=95)                              # face
+    d.ellipse([1 * S, 1 * S, 23 * S, 27 * S], outline=255, width=int(2.2 * S))      # thick rim
+    d.ellipse([5.5 * S, 6 * S, 18.5 * S, 22 * S], outline=215, width=int(1.0 * S))  # inner ring
+    d.line([(7.5 * S, 19.5 * S), (12 * S, 9 * S), (16.5 * S, 19.5 * S)], fill=255, width=int(1.6 * S))   # chevron blazon
+    d.ellipse([10.2 * S, 12.4 * S, 13.8 * S, 16.4 * S], fill=255)                     # boss
+    return np.asarray(im, np.float32) / 255.0
+
+
+def steadfast_shield(n=26):
+    """Steadfast (218) v2 slot 3 (2026-10-17, user: green not yellow; shields above each unit in the AOE that float down
+    onto them, maybe a very subtle green pillar; no ground circles - something unique): ONE kind-0x26 driver per
+    FRIENDLY non-machine unit on the pattern (patch_tc_steadfast_fx_v1.py, marker 3 -> slot 3), at the unit's hex
+    centre (HXtoHP + 16), 96x128 canvas, anchor -48/-112 -> the hex-centre point = canvas (48, 112).
+      * SHIELD: a round green hoplite shield (rim, inner ring, boss, chevron blazon) appears high above the unit, glides
+        down on an ease-out curve with a short motion trail and a slight sway, settles at chest height (y 72) with a
+        bright pulse, then sinks a little into the unit while it fades - the ward 'taken up'.
+      * PILLAR: a very faint green column of light (soft gaussian, 18 px wide) from the sky to the ground, fading in with
+        the shield and out after it, with slow upward glints.
+      * GROUND: SIX small angular rune-stones (no rings/circles) at the corners of a flattened hexagon around the
+        unit's feet: as the shield lands they push up out of the earth, glow, shed a few rising green motes and sink.
+    Additive 770 (stored on black), anti-aliased at 4x.  26 frames x 2 ticks (f18=1) = 52 ticks (~1.5 s)."""
+    S = 4; W, H = 96, 128; cx, gy = 48.0, 104.0                       # gy = ground point of the unit's feet (centre-8)
+    Wb, Hb = W * S, H * S
+    yy, xx = np.mgrid[0:Hb, 0:Wb].astype(np.float32) / S
+    sh = _sf2_shield(S); shh, shw = sh.shape
+    rnd = random.Random(2182)
+    stones = []
+    for k in range(6):
+        a = math.radians(30 + 60 * k)
+        stones.append((cx + 26.0 * math.cos(a), gy + 10.0 * math.sin(a), 0.75 + 0.25 * math.sin(a)))   # back stones dimmer
+    motes = [(rnd.randrange(6), rnd.uniform(-2.5, 2.5), rnd.uniform(0.0, 0.25), rnd.uniform(14, 26)) for _ in range(16)]
+    glints = [(rnd.uniform(-5, 5), rnd.uniform(0, 1), rnd.uniform(0.5, 1.0)) for _ in range(6)]
+    T_LAND = 0.52
+    out = []
+    for i in range(n):
+        t = i / (n - 1.0)
+        acc = np.zeros((Hb, Wb), np.float32); core = np.zeros((Hb, Wb), np.float32)
+        # ---- pillar (very subtle)
+        pil = 0.10 * math.sin(math.pi * min(1.0, t / 0.9)) ** 1.2
+        if pil > 0:
+            col = np.exp(-((xx - cx) / 7.5) ** 2) * np.clip((yy - 4) / 30.0, 0, 1) * np.clip((gy + 4 - yy) / 6.0, 0, 1)
+            acc += col * pil
+            for gx, ph, lv in glints:
+                y0 = gy - ((t * 1.6 + ph) % 1.0) * (gy - 10)
+                acc += np.exp(-((xx - cx - gx) / 0.9) ** 2 - ((yy - y0) / 4.0) ** 2) * 0.22 * lv * min(1.0, pil * 12)
+        # ---- shield
+        if t <= T_LAND:
+            u = t / T_LAND; e = 1 - (1 - u) ** 2.2
+            sy = 14.0 + (72.0 - 14.0) * e; sl = min(1.0, u / 0.25) * 0.72
+            sxo = 2.0 * math.sin(u * math.pi * 1.5) * (1 - u)
+            trail = [(sy - (72.0 - 14.0) * (e - (1 - (1 - max(0.0, u - dd)) ** 2.2)), f) for dd, f in ((0.05, 0.35), (0.10, 0.18), (0.16, 0.08))]
+            pulse = 0.0
+        else:
+            u = (t - T_LAND) / (1 - T_LAND)
+            sy = 72.0 + 6.0 * u ** 1.5; sxo = 0.0
+            sl = (1 - u) ** 1.4 * 0.72; trail = []
+            pulse = math.exp(-((u - 0.06) / 0.10) ** 2)
+        def stamp(cy_, lev, scale=1.0):
+            if lev <= 0.004: return
+            m = sh if scale == 1.0 else np.asarray(Image.fromarray((sh * 255).astype(np.uint8)).resize((max(1, int(shw * scale)), max(1, int(shh * scale))), Image.BILINEAR), np.float32) / 255.0
+            mh, mw = m.shape
+            x0 = int(round((cx + sxo) * S - mw / 2)); y0 = int(round(cy_ * S - mh / 2))
+            xa, ya = max(0, x0), max(0, y0); xb, yb = min(Wb, x0 + mw), min(Hb, y0 + mh)
+            if xa >= xb or ya >= yb: return
+            acc[ya:yb, xa:xb] += m[ya - y0:yb - y0, xa - x0:xb - x0] * lev
+        for ty, f in trail: stamp(ty, sl * f)
+        stamp(sy, sl, 1.0 + 0.08 * pulse)
+        if pulse > 0.01:
+            halo = np.exp(-(((xx - cx) / 16.0) ** 2 + ((yy - sy) / 18.0) ** 2)) * 0.40 * pulse
+            acc += halo; core += halo * 0.6
+        # ---- six rune-stones at the hexagon corners
+        sv = math.sin(math.pi * min(1.0, max(0.0, (t - T_LAND + 0.12) / 0.55))) if t > T_LAND - 0.12 else 0.0
+        if sv > 0:
+            rise = 5.0 * sv
+            for x0, y0, dep in stones:
+                ytop = y0 - rise
+                # a small upright diamond shard: 3 px wide, 4..6 px tall
+                pts = [((x0 - 0.4) * S, (ytop - 3.6) * S), ((x0 + 2.2) * S, (ytop - 0.6) * S), ((x0 + 1.4) * S, (y0 + 1.0) * S), ((x0 - 1.6) * S, (y0 + 1.0) * S), ((x0 - 2.2) * S, (ytop - 0.2) * S)]
+                m = Image.new("L", (Wb, Hb), 0); ImageDraw.Draw(m).polygon(pts, fill=255)
+                sm = np.asarray(m, np.float32) / 255.0
+                acc += sm * 0.85 * sv * dep
+                core += sm * 0.5 * sv * dep
+                acc += np.exp(-(((xx - x0) / 3.5) ** 2 + ((yy - ytop) / 3.0) ** 2)) * 0.30 * sv * dep
+            for k, dx, ph, hgt in motes:
+                lt = (t - T_LAND - ph) / 0.42
+                if 0 < lt < 1:
+                    x0, y0, dep = stones[k]
+                    my = y0 - 4 - hgt * lt; mx = x0 + dx * lt
+                    acc += np.exp(-(((xx - mx) / 0.9) ** 2 + ((yy - my) / 0.9) ** 2)) * 0.8 * (1 - lt) * dep
+        # ---- colour (emerald): body green, hot spots toward pale mint
+        v = np.clip(acc, 0, 1.6); hot = np.clip(core * 0.7 + np.clip(acc - 0.9, 0, 1), 0, 1)
+        r = 40 * v + 150 * hot; g = 205 * v + 50 * hot; b = 85 * v + 90 * hot
+        rgb = np.dstack([r, g, b]).clip(0, 255).astype(np.uint8)
+        im = Image.fromarray(rgb, "RGB").resize((W, H), Image.BOX)
+        out.append(im.convert("RGBA"))
+    return out
+
+== 2b. build_dual_sphere_fx_v1.py - group row (after the (4250, steadfast_ward(), ...) row; that row can stay, unused) ==
+              (4400, steadfast_shield(), "ERsfsh%02d.BMP", 770, 80, 0x0000),    # Steadfast (218) v2 slot 3: per-unit shield driver (96x128, 26 frames)
+
+== 3. patch_dual_sphere_spells_v1.py - entry 218: replace the gfx dict ==
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),                       # nothing visibly falls (Sanctify's blank)
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),
+              2: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),                       # v2: no per-hex impact (empty/enemy hexes show nothing)
+              3: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(4400, 4426)), -48, -112, f18=1, f20=26)},   # v2: per-FRIENDLY-unit shield driver (patch_tc_steadfast_fx_v1.py marker 3; 26 x 2 ticks)
+(sfx line unchanged: ["SFX\ZSP\DUALER_STEADFAST.WAV", ["SFX\ZSP\DUALER_STEADHIT.WAV"]])
+
+== 4. build_dual_sphere_sfx_v1.py ==
+4a. synth(): insert before `    if kind == "bell":`
+    if kind == "bronzering":
+        # 'bronzering:f0:seconds' -> Steadfast v2 (2026-10-17, user: try something new): a struck bronze SHIELD - the
+        # inharmonic modes of a clamped circular plate (1, 1.59, 2.14, 2.65, 3.16, 3.65 x f0) with slow beating pairs
+        # (each mode doubled 0.6..1.8 Hz apart), a 3 ms knock of filtered noise, and a long low HUM: the fundamental
+        # decays slowest and swells back once (the plate's breathing), higher modes die fast
+        f0, secs = float(parts[1]), float(parts[2]); n = int(secs * RATE); out = []; rnd = random.Random(218)
+        ratios = (1.0, 1.59, 2.14, 2.65, 3.16, 3.65); gains = (1.0, 0.55, 0.42, 0.28, 0.18, 0.12)
+        decays = (0.9, 2.2, 3.4, 4.8, 6.5, 8.0); beats = (0.6, 0.9, 1.3, 1.5, 1.8, 1.1)
+        ph = [0.0] * 12; y1 = 0.0
+        for i in range(n):
+            t = i / RATE; u = i / n; v = 0.0
+            for k in range(6):
+                for s2 in (0, 1):
+                    ph[2 * k + s2] += 2 * math.pi * f0 * ratios[k] * (1 + (0.5 if s2 else -0.5) * beats[k] / (f0 * ratios[k])) / RATE
+                    v += 0.5 * gains[k] * math.exp(-decays[k] * t) * math.sin(ph[2 * k + s2])
+            hum = 0.25 * math.sin(math.pi * min(1.0, t / (0.7 * secs))) * math.sin(ph[0] * 0.5)
+            x = rnd.random() * 2 - 1; y1 = 0.6 * y1 + 0.4 * x
+            knock = y1 * math.exp(-t / 0.003) * 0.6
+            out.append((0.42 * v + hum * (1 - u) + knock) * min(1.0, t / 0.002) * (1 - u) ** 0.5)
+        return out
+
+4b. MIXES: replace the "DUALER_STEADFAST.WAV" and "DUALER_STEADHIT.WAV" entries (and their v1 comment) with
+    # Steadfast v2 (2026-10-17, user: gfx/sfx sucks - try something new): the ground's breath rising (sub swell + a slow
+    # reversed earth rumble), then a deep bronze shield GONG with its long resonant hum as the shields descend, a soft
+    # metal shimmer of the plate ringing out and two quiet high chimes; no Earth-sphere cast sample (the parry only as a faint, very slowed metal knock under the gong).
+    "DUALER_STEADFAST.WAV": [("synth:subswell:38:62:0.75", 0.45, 0.00, None, 0.15),
+                             ("Attack/Earth.WAV", 0.35, 0.00, 0.75, 0.0, -0.8, 0.25),
+                             ("synth:bronzering:98:2.6", 0.9, 0.62, None, 0.9, 1.0, 0.0, 0.0, 1.6),
+                             ("synth:bronzering:196:1.8", 0.30, 0.64, None, 0.8, 1.0, 0.0, 0.0, 1.6),
+                             ("Attack/Parry.WAV", 0.18, 0.62, 0.5, 0.4, 0.42),
+                             ("synth:shimmer:1.8", 0.35, 0.75, None, 0.0),
+                             ("synth:bell:784:1.4", 0.14, 0.95, None, 0.6, 1.0, 0.06),
+                             ("synth:bell:1175:1.2", 0.09, 1.30, None, 0.6, 1.0, 0.06)],
+    # per landing hex (sound 1): the shield settling onto the unit - a small bronze ring after a soft air rush, timed to
+    # the shield's touch-down ~0.75 s after the landing (patch_tc_steadfast_fx_v1.py driver, T_LAND 0.52 x 52 ticks)
+    "DUALER_STEADHIT.WAV":  [("Attack/Wind.WAV", 0.075, 0.00, 0.8, 0.4, 1.4, 0.4),
+                             ("synth:bronzering:294:0.9", 0.15, 0.74, None, 0.5, 1.0, 0.0, 0.0, 1.5),
+                             ("synth:bell:1568:0.5", 0.04, 0.76, None, 0.3)],
+
+4c. DRIVE: "DUALER_STEADFAST.WAV": 1.6 -> 3.2 ;  "DUALER_STEADHIT.WAV": 1.5 -> 1.0 (or delete it - a drive != 1 would
+    normalise the deliberately quiet hit up to -1 dB).   FADE_OUT: add "DUALER_STEADFAST.WAV": 1.0.
+    (scratch mix: cast 3.22 s rms ~8.0k peak 29.2k; hit 1.64 s peak ~4.7k = Sanctify-hit level.)
+
+== 5. Apply order (game closed) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply        (DualDF 4400-4425)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply       (DUALER_STEADFAST / STEADHIT v2)
+  py -3.10 build_dual_sphere_icons_v1.py --apply     (SpellIcn 218 v2)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply    (Spells.pfs 218: slots 2 blank + slot 3)
+  py -3.10 patch_tc_steadfast_fx_v1.py               (dry run: sites land->0x441680, nf->0x445900, show->0x443e30)
+  py -3.10 patch_tc_steadfast_fx_v1.py --apply
+  VEH startup check.
+Revert: patch_tc_steadfast_fx_v1.py --revert (refuses if something chained in front of land/nf/show since; LIFO).
+⚠ Chain: while applied, scripts that (re)decode the land site 0x40C609 (patch_tc_sanctify_field_v1, gravitywell_field)
+or the kind-0x26 nf/show sites (crosswind_fx, ashes, hellfire_portal, soulsiphon slot users of 0x42A5E9/0x430059) see
+our cave as the site target -> revert this first, re-run them, re-apply this.
+
+== Notes ==
+ * Shields only on hexes whose unit NextStrike found ([fx+0x2C]) is alive, on the caster's side and not a machine
+   (= the units that actually get 0xC5).  Empty / enemy hexes: nothing drawn (slot 2 is blank now).  The landing
+   sound (cue 1, DUALER_STEADHIT) still plays per landing hex - it is a quiet air-rush + small bronze ring timed to the
+   shield touch-down ~0.75 s after the landing.
+ * Driver lifetime 52 ticks (~1.5 s) after each landing; the combat step waits for the effect list, so the last
+   shield adds ~1.5 s before control returns (Crosswind-delay lesson - shorten slot 3 / f18 if the user notices).
+ * Unverified in game: anchor -48/-112 (hex-centre point = canvas (48,112); stones ring the feet at y 104), shield
+   rest height (chest, canvas y 72 = 40 px above the point); [te+0x10] = caster combat object (side byte +0x45),
+   as used by the Soul Siphon / Crosswind caves.

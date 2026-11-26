@@ -1,0 +1,2128 @@
+November 22nd 2026
+Version 1.37.437 released:
+
+:mystery:  Miscellaneous: :mystery:
+.          - AoWDevX improvements:
+.               - Added "Map Level Vision" tab to Map Settings
+.                    - Allows Night Vision requirement to be toggled on/off for each map level (ie: for maps that use terrain inversion aka surface terrain underground)
+.               - Fog of War preview toggle now shows currently selected Player's vision range instead of always Independent
+.               - Added "City Names" tab to Map Settings
+.                    - Random city name generator, toggleable on/off (default on)
+.                    - Selectable name set:
+.                         - Vanilla AoW: all city names from custom/campaign scenarios have been compiled and sorted by race (with separate section for random race). Random names are generated from this list (located in Dict/xCityNamesV.mld) when selected.
+.                         - Alternate name sets: currently none, but mapmakers can submit for inclusion
+.                    - Update Nameless function for existing/work-in-progress maps
+.                    - When a city is placed on the map (random race by default), its name will be randomly generated
+.                    - When a random race city is customized to a specific race, its name will be randomly generated/updated to one of the correct race
+.                    - If the mapmaker has manually edited the city name, changing its race will not update to a new randomly generated name
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed a Classic Turns bug with multi-level abilities that caused issues with level-ups and units disappearing upon reload
+.          - Fixed/removed Firmament accuracy penalty (suffered by units without Night Vision, as they would underground)
+
+November 21st 2026
+Version 1.37.436 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed: Multiplayer games on very "busy" maps were prone to occasionally locking up in tactical combat, due to pending world map actions persisting into combat action queue, blocking every action behind it
+
+November 21st 2026
+Version 1.37.435 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed: Hurl Skull still cost 25 instead of 20 as intended
+.          - Expanded error log system:
+.               - Logs game state data when nothing executes for longer than 15 seconds (not triggered by simple idling)
+.                    - If the game ended up executing (ie: hang up was due to a player with an open combat pop-up), the log is appended accordingly to dismiss as false flag
+.               - Manual log hotkey (CTRL+F) to record game state data at any time, with in-game chime/bottom bar text display to confirm successful log
+.          - Manual restore hotkey (CTRL+R, host only)
+.               - Bypasses "hard hangs"/game lock-ups (ie: when no one can move, save, or exit the game without Task Manager)
+.               - Saves game, passes to clients, instant reload without exiting game
+.               - Notifies clients that host initiated manual restore
+.               - Records game state data to error log
+
+November 20th 2026
+Version 1.37.434 released:
+
+:razed: Structures: :razed:
+.          - Players can now migrate cities to their own race, even if they don't own a city of their own race, as long as there is at least one unrazed city of their own race on the map (regardless of owner or if independent)
+
+:scrollolololol: Spells: :scrollolololol:
+.          - Slow now doubles movement cost instead of halving movement (which made ranged abilities/spellcasting unusable)
+.          - Depths of Plenty now grants extra gold income in Abyss map levels (+1 on surface [including sky], +2 underground, +3 in depths, +4 in any abyss level)
+.          - Angel Wings now allows units to travel between sky levels (similarly to Flying)
+
+:gigachad: Abilities: :gigachad:
+.          - Hurl Skull modified:
+.               - Deals full damage on target hex only, and AOE hexes deal -50% damage
+.               - Level-up cost reduced from 25 to 20
+
+:pimp: Units: :pimp:
+.          - Cyclops GFX polished (more "gritty", less cartoony)
+.          - Undead Skull Thrower now has Night Vision
+
+:surprise: Items: :surprise:
+.          - Items no longer disappear when a leader/hero surrenders, instead they are dropped as they would upon death
+
+:mystery:  Miscellaneous: :mystery:
+.          - Sword icon now displays above turn indicator when a player has a combat pop-up active
+.          - When game is started in windowed mode, it now starts up maximized
+.          - Status effect ability descriptions updated to show stat decreases
+.          - AoWDevX improvements:
+.               - New toggleable spell ban list in Map Settings (remove from research, still attainable via wizard's tower/scroll)
+.               - New toggleable ability ban list in Map Settings (remove from leader customization and level-up, still attainable via items)
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - When the host dies in a multiplayer LAN game with three players or more, host status is now passed to client successfully
+.          - Out of Sync handler added with three options:
+.               - Restore (host only: saves game, passes to clients, instant reload without exiting game) / Wait for host (client only)
+.               - Save and exit
+.               - Exit without saving
+.          - Connection Lost handler added:
+.               - Similar options to Out of Sync handler
+.               - Restores game without exiting to menu by forcing all players to wait until reconnected (and forcing lost player to reconnect)
+.               - If connection loss was due to client crash to desktop (ie: game closed), the active game will be visible as a joinable IPX/LAN lobby, and the game resumes upon client rejoining
+.               - Cancellable if lost player doesn't rejoin
+.               - Only triggered by connection loss, not manually leaving the game
+.          - When a game is restored via either handler, turn status is also saved and reloaded (ie: AI/player turns that were ended remain ended)
+.          - Tactical Combat Out of Sync/Connection Lost handler added:
+.               - Saves the host's game state, passes to clients, and reloads tactical combat to the exact moment it dropped (without exiting to menu)
+.          - Fixed a dismissible/non-crashing autocombat error that could pop up under certain circumstances
+.          - When a flying transport crosses map levels via sky terrain, it no longer sets the movement of the units it is transporting to zero
+.          - Units without flying/floating/etc on sky terrain (ie: Air Galley destroyed, enchantment dispelled, etc) now correctly die
+.          - Fixed graphical glitch when Ooze and Oil Spring are cast over each other (no longer flashes, and oil always stays on top)
+.          - Expanded error log system:
+.               - Automatically creates accompanying save files in X/Bug Report folder with each error log entry
+.               - Can now be turned off in AoWSetup (on by default)
+
+November 14th 2026
+Version 1.37.433 released:
+
+:scrollolololol: Spells: :scrollolololol:
+.          - Independent heroes can now cast level 1 Cosmos spells
+
+:pimp: Units: :pimp:
+.          - Hydra: Path of Decay removed
+
+:mystery:  Miscellaneous: :mystery:
+.          - Error Log text file added to X folder
+.               - Records all error messages
+.               - Records additional details for all Out of Sync instances
+.          - Sky terrains now reveal map levels below regardless of map level
+.          - Sky terrain transparency now spans multiple map levels when stacked
+.          - AoWDevX improvements:
+.               - Surface terrain palette tabs added to underground (ie: surface terrain is no longer contained within Dirt/Objects/etc tabs)
+.               - Added map level up/down mouse hotkey (Mouse Forward + Scrollwheel)
+.               - Added F5 hex grid (and mouse hotkey: ScrollWheel-Click)
+.               - Added visibility toggle mouse hotkey (Mouse Back + Scrollwheel)
+.               - Added terrain brush size mouse hotkey (Mouse Back + Scrollwheel Tilt Left/Right)
+.               - Recently added cloud variants (Sandstorm, Snowstorm, Holy Cloud, Death Cloud) can now be placed underground
+.               - Elven Ruins can now be placed underground
+.          - Title screen logo edges improved
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed a couple in-game RNG instances that relied on system clock based random rolls instead of synced multiplayer RNG generator (ie: Out of Sync)
+.          - AoWDevX screenshot function fixed for sky terrains, and exported file name default format improved (sort by map level)
+.          - Improved transition between cross-level water and ice (ie: adjacent surface water and cave water no longer have weird shoreline)
+.          - Fixed bug that often occurred when initiating combat on crops shared between structures (game didn't correctly assign combat map)
+.          - Underground wasteland Spring of Life GFX added
+
+November 7th 2026
+Version 1.37.432 released:
+
+:pimp: Units: :pimp:
+.          - Cyclops added
+.               - New level 4 unit, not producible (exploration site defender)
+
+:scrollolololol: Spells: :scrollolololol:
+.          - Summoned unit Resistance against Dispel Magic (being unsummoned) changed from "7" to "(unit level X 2) + 1 for each medal"
+
+:mystery:  Miscellaneous: :mystery:
+.          - Ice/Lava/Sky/Clear Sky/Chasm teleporters added
+.          - Improved terrain transitions for Sky/Clear Sky/Chasm
+.          - AoWDevX improvements:
+.               - Map Previews:
+.                    - Export minimap as PNG
+.                    - Export map as PNG (current view or entire map level)
+.                    - Option to export current map level only or all map levels
+.                    - Option to add decorative frame to exported image
+.               - Missing Resources Locator:
+.                    - Display all missing resource IDs and locations (right click to center on map)
+.               - Missing abilities (ie: from Ziggurat maps) are now removed instead of crashing
+.               - Regenerate Units:
+.                    - Refreshes stats, abilities, etc of all units on map
+.               - Additional sorting option for heroes and items (sort by "User" alphabetically)
+.               - Improved mousewheel map scrolling
+
+:start_the_damn_game: Map Playlist: :start_the_damn_game:
+.          - Highpass added (created by And G, edited to an unknown extent by BXL, lightly edited by me)
+
+November 4th 2026
+Version 1.37.431 released:
+
+:gigachad: Abilities: :gigachad:
+.          - Construct now allows roads to be built underground
+
+:mystery:  Miscellaneous: :mystery:
+.          - Autosave expanded:
+.               - After each combat seen by the player (ie: displayed in event log), the game will autosave to alternating save files without overwriting regular autosave ("autosave.asg", "autosave - combat.asg", "autosave - combat2.asg")
+.          - AoWDevX improvements:
+.               - Roads can now be placed on underground dirt
+.               - Teleporter settings UI now displays Z coordinate as map level name rather than a number (ie: Surface vs 0, Abyss III vs 5, etc)
+.               - Map level display (bottom left of UI) modified to better accommodate map level names, which were partially obstructed/cut off
+.          - Auto-Updater improvements:
+.               - If AoWDevX is open, the user will be prompted to close it before the update resumes
+.               - Update progress bar can now be minimized
+.               - Update progress bar now displays flavour text while waiting
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed: Some combat map terrain was glitched, which was caused by the recently added new terrains
+.          - Fixed: Teleporters were broken on the new map levels
+.               - Note to mapmakers: Existing teleporters on new map levels (Firmament, Abyss I-XXV) will need to be manually adjusted, sorry! (Z coordinate will be incorrect)
+.          - Fixed: Hydra "missed attack" SFX layer was missing
+
+November 1st 2026
+Version 1.37.430 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed: Sky/Clear Sky/Chasm terrains could cause errors when attempting to enter structures
+
+November 1st 2026
+Version 1.37.429 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed: Magic Sanctuaries could be razed in-game but setting them to razed in the editor causes error messages
+
+November 1st 2026
+Version 1.37.428 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed: added missing image libraries that were causing water/ice to crash the editor if placed over sky/chasm
+
+November 1st 2026
+Version 1.37.427 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed: typing "repair" at the title screen caused an access violation error instead of prompting to redownload the latest update
+
+November 1st 2026
+Version 1.37.426 released:
+
+:surprise: Items: :surprise:
+.          - Scroll items function added (and item GFX restored)
+.               - Available for mapmaker use (not added to default item library)
+.               - Scroll items hold up to seven spells, which are added to a spellcaster's spell book while held (but not other spellcasters of the same faction)
+
+:gigachad: Abilities: :gigachad:
+.          - Hurl Skull ability cost increased from 15 to 25
+
+:razed: Structures: :razed:
+.          - Magic Sanctuaries can now be razed/rebuilt (75 gold / 1 turn)
+.          - Water teleporters added
+.          - Terrain variants added for structures that were missing them (Pyramid in snow, underground Ziggurat, etc)
+.          - Cities/farms can now be directly adjacent to one another
+.               - When crops are shared between structures, crop income is given to:
+.                    - 1: A city rather than a farm;
+.                    - 2: The larger city;
+.                    - 3: If same size, the city whose centre is nearer;
+.                    - 4: If still tied, the city (or farm) placed first on the map in the editor
+
+:mystery: Miscellaneous: :mystery:
+.          - Ranged ability descriptions (when right-clicked) now show base ATK/DMG, damage type(s) and projectile count
+.          - New map levels added for mapmaking
+.               - Firmament: map level above surface
+.               - Abyss: up to 25 map levels below depths
+.               - New terrains (all fully animated): Sky/Clear Sky/Chasm (flying/floating only)
+.               - New combat maps for sky/clear sky/chasm
+.          - New cloud variants added, currently for mapmaking only (ie: similar to Poison Clouds, which are 4 ATK / 3 DMG)
+.               - Sandstorm (6 ATK / 1 DMG, physical damage, does not target Azrac units)
+.               - Snowstorm (6 ATK / 1 DMG, cold damage, does not target units with Cold Protection)
+.               - Holy Cloud (5 ATK / 2 DMG, holy damage, only targets evil/pure evil units)
+.               - Death Cloud (5 ATK / 2 DMG, death damage, only targets good/pure good units)
+.          - AoWDevX mapmaking QoL improvements:
+.               - Cross-level terrain palettes added
+.               - Terrain previews for developer terrain (previously blacked out)
+.               - Added new larger base terrain brush size (largest used to be 5 hexes wide, now 13 hexes wide)
+.               - Toggleable autosave added
+.                    - Configurable timer
+.                    - Alternates between "autosave - [file name].hsm" and "autosave2 - [file name].hsm"
+.               - Signs can now have "unlimited" text characters (Windows 30,000+ textbox character limit still applies)
+.                    - Signs with long text can now be scrolled using the mouse wheel
+.               - Leader/Hero name text character limits increased from 15 to 64
+.                    - Added text characters beyond the original limit are displayed in red (editor only) to notify the mapmaker they may not display as intended in-game
+.               - Item name text character limits increased from 20 to 64
+.                    - Added text characters beyond the original limit are displayed in red (editor only) to notify the mapmaker they may not display as intended in-game
+.               - Modified ability/spell editor UI to accommodate more screen resolutions (ability cost and spell combat info could get cut off)
+.               - Item max gold cost increased from 1000 to 9999 (flavour only, doesn't affect campaign item transfer)
+.               - Unused "Eagle's Nest" custom structure:
+.                    - GFX/side image updated for mapmaking
+.                    - Now its own structure instead of Builder's Guild variant (no income, own combat map and structure UI, etc)
+.                    - Requires Mountaineering/Flying/Floating/etc to cross
+.               - Structures and cave entrances placed on surface terrain underground are now the appropriate surface terrain variant (without needing to do any terrain/structure inversion tricks)
+.          - Added new "repair" command at title screen
+.               - Typing "repair" will prompt the user to redownload the latest update
+.          - Minor polish/updates to a few spell descriptions
+.          - Minor polish/update to Phoenix GFX
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Enchantment abilities are no longer bugged when added to items (and grant enchantment ability with no upkeep)
+.          - Fixed: Title screen background image loop would stretch/glitch on some widescreen resolutions
+
+October 24th 2026
+Version 1.37.425 released:
+
+:scrollolololol: Spells: :scrollolololol:
+.          - Summon spells can now be used in combat
+.               - Summoned unit will be spawned in front of caster (in the direction caster is facing) if valid hex, otherwise will search for valid hex similarly to overworld before spawning
+.               - Summoned unit enters battlefield with no movement until the following turn
+
+:gigachad: Abilities: :gigachad:
+.          - Increased Hurl Skull cost from 12 to 15
+
+:mystery: Miscellaneous: :mystery:
+.          - Updating AoWx no longer overwrites audio settings
+.          - Audio settings now available within AoWSetup
+.          - AoWSetup sound effect now linked to game SFX volume setting
+.          - Right-clicking outside of game windows (ie: unit windows, relations, spell book, etc) now closes them
+.          - Clicking another unit within the unit panel, while a unit window is open, now updates the unit window without needing to close the previous one first
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed bug where spells with random GFX elements (and thus slightly different animation durations between machines) would cause Out of Sync if the next action had its input buffered before the animation ended, causing it to take effect at slightly different times between machines
+.          - Previous patch had fixed a vanilla bug with shared event logs, however I had only fixed the text contents and not the text colour or icons (so it was still bugged, now fixed)
+.          - Fixed bug with new Hurl Skull ability
+.               - The damage AOE was wider than its target AOE, and damage was repeated multiple times per AOE hex (lol)
+
+October 24th 2026
+Version 1.37.424 released:
+
+:mystery: Miscellaneous: :mystery:
+.          - Auto-updater optimizations intended to reduce getting flagged by anti-virus
+
+October 23rd 2026
+Version 1.37.423 released:
+
+:mystery: Miscellaneous: :mystery:
+.          - Further polishing of title screen easter egg monologue (title song now fades back in at specific drum section instead of where it faded out)
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed vanilla exploit where Observe function (usable via "O" hotkey) revealed the movement of concealed units
+.               - Also added a concealment check for units using spells, abilities, etc (so summoning a unit with concealment, while concealed, won't call the Observe function to center camera on action, however the GFX will still be visible and possibly seen by other players. Summoning a unit without concealment will draw the Observe function though).
+.          - Fixed: Summon Hell Hound (Death/Fire dual-sphere) was intended to be Level 1, not Level 2 (which locked out research of subsequent Death/Fire spells)
+.          - Fixed a memory leak that could cause Out of Sync that involved cross-referenced crop visibility counts (tied to new Bountiful Harvest spell) and elemental weakness ability checks
+.          - Fixed a vanilla bug where reloading a game could cause errors with shared combat event logs (ie: two players who both saw the same battle occur before saving/reloading), tied to the removal mechanics for events older than 3 turns disappearing upon reload.
+
+October 22nd 2026
+Version 1.37.422 released:
+
+:leader: Leaders: :leader:
+.          - Leaders and Possess/Possessed (attainable via rare items or very expensive level-up):
+.               - If a Leader possesses a unit, or a possessed Leader dies and becomes an Incarnate, it passes on a new Leader's Soul ability, which makes the Incarnate/possessed unit the new Leader, reduces its upkeep to 0, locks its morale to High, and prevents disbanding.
+.               - If an Incarnate or possessed unit with Leader's soul possesses another unit, Leader's Soul continues to transfer.
+.               - If an Incarnate that originates from a possessed Leader dies, that player loses.
+.               - Only the original owner of a dead Leader can resurrect it (50% chance to select leader instead of random dead hero), at which point it auto-joins (can't roam as independent) and resumes being their Leader. Any incarnate with Leader's Soul disappears as the soul rejoins the body, or any possessed unit with Leader's Soul loses the ability and is no longer possessed.
+
+:scrollolololol: Spells: :scrollolololol:
+.          - Hunter's Mark research cost lowered from 45 to 35
+.          - Summon Boar research cost increased from 30 to 40
+
+:pimp: Units: :pimp:
+.          - Djinn DEF lowered from 4 to 2 (because it gains up to +3 DEF against units without True Seeing due to Invisibility)
+.          - Shadow DEF lowered from 4 to 3 (because it gains up to +3 DEF against units without True Seeing due to Invisibility)
+.          - Incarnate DEF lowered from 3 to 1 (because it gains up to +3 DEF against units without True Seeing due to Invisibility)
+
+:mystery: Miscellaneous: :mystery:
+.          - Added Discord desktop app integration (shows Age of Wonders X activity if enabled)
+.          - Multiplayer lobby player/race memory
+.               - When reloading, players no longer need to be reassigned to their race (auto-assigns)
+.          - Multiplayer lobby dropdowns (ie: race assignment, AI behaviour, preferred race, etc) no longer force-close in response to other player actions (such as joining/leaving lobby or setting their own preferred race)
+.          - Realm tab, Heroes section:
+.               - Added "Turn Met" and "Experience" (Turn Met will show "-" on old saves as it wasn't previously tracked)
+.          - Improved fade-in/out effect of easter egg monologue that plays at title screen when player types "inioch"
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - AI retaliation mechanic bug (recently added feature where if you deal damage then run away, they attack you so you can't exploit turn 1 damage spells repeatedly). However, if they couldn't deal damage to you (ground units vs flyer, mundane unit vs physical immunity, etc), they would lock the game up with non-stop failed attack attempts. The AI now abandons retaliation and resumes normal behaviour after a single failed attack attempt.
+.          - Fixed Slow spell icon (now a dual-sphere Earth/Water spell but icon was only green)
+.          - Forgot to add Xergal's Legacy to the map playlist despite mentioning it in changelog 1.37.420 (oops)
+.          - Fixed: some maps had underscores instead of apostrophes in their names
+.          - Fixed: Phoenix had wrong corpse (Great Eagle)
+
+October 21st 2026
+Version 1.37.421 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed an Out of Sync instance that could happen when AI was grouping units together
+
+October 20th 2026
+Version 1.37.420 released:
+
+:scrollolololol: Spells: :scrollolololol: 
+.          - New spells added
+.               - Life:
+.                    - Level 1:
+.                         - Rejuvenate readded (previously replaced with Scorch Terrain, which still exists)
+.                              - Research: 30, Cost: 6
+.                    - Level 2:
+.                         - Repent
+.                              - Combat spell, long range
+.                              - Research: 90, Cost: 4
+.                              - 7 ATK / 1 DMG, Holy Damage
+.                              - Damage increases by +1 if target is neutral alignment, +2 if pure neutral or evil, +3 if pure evil
+.                              - Damage increases by +1 if target has silver medal, +2 if gold medal, +3 if legendary medal
+.                    - Level 3:
+.                         - Sanctify
+.                              - Combat spell, long range, small AOE
+.                              - Research: 120, Cost: 4
+.                              - Creates a small zone that last 3 turns, in which good units gain Fearless and Holy Champion I (Holy Champion II if pure good) and evil/pure neutral units are Panicked (and/or Vertigo if pure evil) 
+.                    - Level 4:
+.                         - Miracle
+.                              - Research: 250, Cost: 7
+.                              - Unit is resurrected until end of combat with random HP (min 30%) and random MP (no minimum)
+.               - Death:
+.                    - Level 1:
+.                         - Wither
+.                              - similar to Rejuvenate, except changes terrain to wasteland and has smaller AOE
+.                              - Research: 40, Cost: 6
+.                    - Level 2:
+.                         - Undying
+.                              - Unit enchantment
+.                              - Research: 80, Cost: 4, Upkeep: 2
+.                              - Grants Death Immunity and Regeneration
+.                    - Level 3:
+.                         - Harvest Souls
+.                              - Combat spell, long range, small AOE
+.                              - Research: 150, Cost: 4
+.                              - Consumes targeted corpses and restores +5 casting points per corpse
+.                    - Level 4:
+.                         - Call of the Dead
+.                              - Combat spell, infinite range
+.                              - Research: 250, Cost: 7
+.                              - Animate all corpses on battlefield as Undead Draugr
+.               - Air:
+.                    - Level 1:
+.                         - Gust
+.                              - Combat spell, breath AOE
+.                              - Research: 50, Cost: 3
+.                              - ATK 8 / DMG 3, Physical damage
+.                              - Pushes all units in AOE one hex away from caster (if hex valid)
+.                    - Level 2:
+.                         - Crosswind
+.                              - Combat spell, infinite range
+.                              - Research: 80, Cost: 5
+.                              - Enemy units suffer -2 ATK for ranged attacks for 3 turns
+.                    - Level 3:
+.                         - Suspend
+.                              - Combat spell, long range, single target (enemy or friendly)
+.                              - Research: 140, Cost: 7
+.                              - ATK 7 (no miss on friendlies)
+.                              - Grants target unit Flying and restricts movement for 3 turns
+.                    - Level 4:
+.                         - Static Shield
+.                              - Combat spell, infinite range, single target
+.                              - Research: 250, Cost: 6
+.                              - Grants target unit Lightning Immunity and Lightning Strike until end of combat
+.               - Earth:
+.                    - Level 1:
+.                         - Mend Walls
+.                              - Combat spell, infinite range, medium AOE
+.                              - Research: 40, Cost: 4
+.                              - Repair all walls in AOE by random amount (each hex rolls individually, no repair if fully broken)
+.                    - Level 2:
+.                         - Depths of Plenty
+.                              - Global spell
+.                              - Research: 90, Cost: 50, Upkeep: 10
+.                              - Mines produce extra gold (+1 on surface, +2 underground, +3 in depths)
+.                    - Level 3:
+.                         - Steadfast
+.                              - Combat spell, long range, small AOE
+.                              - Research: 130, Cost: 5
+.                              - Friendly units within AOE gain additional defense based on remaining movement (+1 DEF if >50%, +2 DEF if full movement)
+.                    - Level 4:
+.                         - Tectonic Shift
+.                              - Global Spell
+.                              - Research: 250, Cost: 75, Upkeep: 15
+.                              - Slowly changes terrain across the map, spawning hills and mountains, and digging/burying tunnels (increased in depths)
+.               - Water:
+.                    - Level 1:
+.                         - Crashing Wave
+.                              - Combat spell, breath AOE
+.                              - Research: 40, Cost: 4
+.                              - ATK 8 / DMG 3, Physical/Wall damage
+.                              - Pushes all units in AOE one hex away from caster (if hex valid)
+.                    - Level 2:
+.                         - Rite of the Seas
+.                              - Global spell
+.                              - Research: 90, Cost: 50, Upkeep: 10
+.                              - Shipyard productions spawn with Silver Medal but income reduced by 1 gold
+.                    - Level 3:
+.                         - Summon Sea Serpent
+.                              - Research: 140, Cost: 40, Upkeep: 5
+.                    - Level 4:
+.                         - Flash Flood
+.                              - Combat spell, infinite range, targets all units without Floating/Flying/Wind Walking
+.                              - Research: 200, Cost: 6
+.                              - 4 ATK / 7 DMG, Physical damage
+.                              - Displaces all targetable units
+.                              - -50% damage and displacement against units with Swimming, Liquid Form, Swampwalk, or Water Walking
+.                              - No damage and -50% displacement against units with Sailing
+
+.               - Fire:
+.                    - Level 1:
+.                         - Scorch Terrain moved from Level 2 to Level 1
+.                              - Fire previously had one extra spell compared to other spheres, so no new T1 Fire spell added
+.                              - Research: 25, Cost: 5
+.                    - Level 2:
+.                         - Smokescreen
+.                              - Combat spell, long range, large AOE
+.                              - Research: 50, Cost: 4
+.                              - Lingering AOE applies debuff to melee/projectile accuracy to units without True Seeing (same as Invisibility) within the AOE, lasts 3 turns
+.                    - Level 3:
+.                         - Wall of Flames
+.                              - Combat spell, long range, small AOE
+.                              - Research: 70, Cost: 4
+.                              - Spawns flames on outer hexes of AOE that linger for 3 turns, enemies moving through flames or beginning turn on it suffer fire damage (same as Fire Barrier)
+.                    - Level 4:
+.                         - Pyroclasm
+.                              - Global Spell
+.                              - Research: 200, Cost: 75, Upkeep: 10
+.                              - Slowly transforms medium/large mountain across the map into volcanoes
+.                              - Existing volcanoes spawn 1-3 lava hexes when cast, new volcanoes spawn 1-2 lava hexes
+.                              - Volcanoes have a 50% chance of spawning lava in one random adjacent hex per turn
+.                              - Lava has a 50% chance of spreading to one random adjacent hex per turn, then drops to 10%
+.                              - Existing underground lava also expands
+.               - Cosmos
+.                    - Level 1:
+.                         - Magic Missile
+.                              - Combat spell, long range
+.                              - Research: 50, Cost: 4
+.                              - 7 ATK / 1 DMG, 3x projectiles, Magic damage
+.                    - Level 2:
+.                         - City Spy
+.                              - Global spell, city enchantment
+.                              - Research: 80, Cost: 15, Upkeep: 2
+.                              - Reveals city income, upgrade level, status, production, and vision
+.                    - Level 3:
+.                         - Royal Ambition
+.                              - Global spell
+.                              - Research: 150, Cost: 50, Upkeep: 7
+.                              - Diplomatic bonuses and penalties are doubled for the caster's race
+.                    - Level 4:
+.                         - Essence Shift
+.                              - Global Spell
+.                              - Research: 250, Cost: 50
+.                              - Target mana node (regular or elemental) or altar, transform to element matching the caster's highest sphere count (or randomized tiebreaker)
+.               - Secret
+.                    - Level 1:
+.                         - Lucky
+.                              - Unit enchantment
+.                              - Research/Wizard Tower Cost: 77, Cost: 7, Upkeep: 1
+.                              - Grants +3 RES
+.                    - Level 2:
+.                         - Mimic
+.                              - Combat spell
+.                              - Research: 100, Cost: 5
+.                              - Caster copies the last spell that was cast in current combat by any player (for Mimic's cost)
+.                              - If no spell was previously cast, caster casts Dispel Magic for Mimic's cost unless cancelled
+
+.                    - Level 3:
+.                         - Reversal
+.                              - Combat spell, long range, single target (friendly or enemy)
+.                              - Research: 150, Cost: 7
+.                              - Swaps target unit's ATK/DEF and RES/DMG until end of combat
+.                    - Level 4:
+.                         - Transmutation
+.                              - Global Spell
+.                              - Research: 300, Cost: 75, Upkeep: 25
+.                              - Research points become gold income (halts research)
+
+.          - Dual-sphere spells added
+.               - Spell level available for research equal to total sphere pair count minus one
+.                    - Excluding Life/Death, which still can't be combined
+.                    - Opposed spheres (Earth/Air, Fire/Water) only reach up to spell level 3
+.                    - Example: 1 Fire + 1 Water = level 1 Fire/Water spells, 2 Earth + 1 Water = level 2 Earth/Water spells,  etc
+.               - At least one spell of each sphere within a pair must be researched before dual-sphere spells are available
+.               - Fire/Death spells:
+.                    - Level 1:
+.                         - Summon Hell Hound
+.                              - Research: 50, Cost: 5, Upkeep: 2
+.                    - Level 2:
+.                         - Blood Pact
+.                              - Combat spell, infinite range
+.                              - Research: 90, Cost: 4
+.                              - Grants Bloodlust to friendly units (similar to High Prayer)
+.                    - Level 3:
+.                         - Ashes to Ashes
+.                              - Combat spell, short range
+.                              - Research: 120, Cost: 5
+.                              - 9 ATK / 1 DMG, variable repeat, Death/Fire/Physical damage
+.                              - Consumes all corpses on the battlefield. For each corpse consumed, spell gains an additional strike.
+.                    - Level 4:
+.                         - Hellfire
+.                              - Combat spell, long range
+.                              - Research: 300, Cost: 5
+.                              - Great Hail clone that also deals Death and Fire damage
+.               - Fire/Life spells:
+.                    - Level 1:
+.                         - Martyr
+.                              - Combat spell, infinite range, single friendly target
+.                              - Research: 40, Cost: 3
+.                              - Grants +2 ATK/DMG/DEF/RES, but unit dies at end of combat
+.                    - Level 2:
+.                         - Cleansing Flame
+.                              - Unit enchantment
+.                              - Research: 50, Cost: 3
+.                              - Removes most debuffs (cursed, entangled. frozen, poisoned, stunned, webbed, charmed, dominated, seduced... not burning or vertigo), heals +3 HP, and inflicts burning
+.                    - Level 3:
+.                         - Summon Phoenix
+.                              - Research: 120, Cost: 50, Upkeep: 8
+.                    - Level 4:
+.                         - Holy Starfire
+.                              - Combat spell, long range
+.                              - Research: 300, Cost: 6
+.                              - Great Hail clone that also deals Holy and Fire damage
+.               - Fire/Earth spells:
+.                    - Level 1:
+.                         - Oil Spring
+.                              - Combat spell, long range, small AOE
+.                              - Research: 30, Cost: 3
+.                              - Targeted units get Fire Weakness until end of combat. If targeted unit is already burning, also takes fire damage (10 ATK / 2 DMG)
+.                    - Level 2:
+.                         - Lionheart
+.                              - Unit enchantment
+.                              - Research: 60, Cost: 3, Upkeep: 1
+.                              - Grants Fearless and +2 DMG
+.                    - Level 3:
+.                         - Forge Blast
+.                              - Global spell (target city)
+.                              - Research: 110, Cost: 50
+.                              - Resets city production and damages units in city
+.                    - Level 4:
+.                         - Arms Race
+.                              - Global spell (city enchantment)
+.                              - Research: 250, Cost: 75, Upkeep: 10
+.                              - Enchanted city productions take one less turn (minimum one turn to complete)
+.               - Fire/Air spells:
+.                    - Level 1:
+.                         - Sandstorm
+.                              - Combat spell, long range, large AOE
+.                              - Research: 30, Cost: 3
+.                              - 8 ATK / 1 DMG, random repeat (like Swarm but within a target AOE), Physical damage
+.                              - Double damage against flyers
+.                    - Level 2:
+.                         - Implosion
+.                              - Combat spell, short range (bypasses obstructions)
+.                              - Research: 70, Cost: 4
+.                              - 8 ATK / 8 DMG, Fire/Physical/Wall damage
+.                    - Level 3:
+.                         - Frenzied Charge
+.                              - Combat spell, infinite range
+.                              - Research: 100, Cost: 5
+.                              - Grants friendly units Fury and Haste until end of combat
+.                    - Level 4:
+.                         - Drought
+.                              - Global spell
+.                              - Research: 250, Cost: 75, Upkeep: 15
+.                              - Slowly changes terrain across the map to desert, including some water
+.               - Fire/Water spells:
+.                    - Level 1:
+.                         - Blood Boil
+.                              - Combat spell, long range, single target (bypasses obstructions)
+.                              - Research: 30, Cost: 3
+.                              - 7 ATK / 4 DMG, Physical damage
+.                              - Grants Bloodlust, can't target machines
+.                    - Level 2:
+.                         - Scald
+.                              - Combat spell, long range, single target (bypasses obstructions)
+.                              - Research: 70, Cost: 4
+.                              - 8 ATK / 4 DMG, Physical damage
+.                              - +50% damage against units with Cold Weakness
+.                              - -50% damage against machines
+.                    - Level 3:
+.                         - Steam Power
+.                              - Global spell
+.                              - Research: 100, Cost: 50, Upkeep: 8
+.                              - Double income from Builder's Guilds and Shipyards
+.                              - Builder's Guild and Shipyard productions take one less turn (minimum one turn)
+.                              - All Construct ability actions are 50% cheaper and take one less turn (minimum one turn)
+.               - Earth/Death spells:
+.                    - Level 1:
+.                         - Summon Dire Wolf
+.                              - Research: 40, Cost: 6, Upkeep: 2
+.                    - Level 2:
+.                         - Rot Away
+.                              - Combat spell, long range, small AOE
+.                              - Research: 80, Cost: 4
+.                              - 7 ATK / 2 DMG, Physical/Poison damage
+.                              - +50% damage against machines (except Undead)
+.                              - Inflicts Rot (machines only, unit may lose 1HP per turn for 3 turns)
+.                    - Level 3:
+.                         - Summon Werewolf
+.                              - Research: 130, Cost: 40, Upkeep: 5
+.                    - Level 4:
+.                         - Thousand Threads
+.                              - Combat spell, long range, small AOE
+.                              - Research: 250, Cost: 6
+.                              - Attempts to Web all units in AOE
+.               - Earth/Life spells:
+.                    - Level 1:
+.                         - Awaken Spirit
+.                              - Combat spell, infinite range
+.                              - Research: 40, Cost: 4
+.                              - Grants +1 ATK/DMG/DEF/RES to all friendly creatures (level 2 or lower)
+.                    - Level 2:
+.                         - Blessing of the Forest
+.                              - Combat spell, infinite range
+.                              - Research: 80, Cost: 4
+.                              - Grants all friendly units Barkskin (+1 DEF, +1 RES, Fire Weakness, Lightning Weakness)
+.                    - Level 3:
+.                         - Golden Age
+.                              - Global Spell
+.                              - Research: 150, Cost: 75, Upkeep: 10
+.                              - All cities produce 25% more income
+.                    - Level 4:
+.                         - Summon Ent
+.                              - Research: 250, Cost: 50, Upkeep: 6
+.               - Earth/Air spells:
+.                    - Level 1:
+.                         - Summon Mammoth
+.                              - Research: 50, Cost: 8, Upkeep: 4
+.                    - Level 2:
+.                         - Hurl Boulder
+.                              - Combat spell, long range
+.                              - Research: 80, Cost: 3
+.                              - ATK 5 / DMG 8, Physical/Wall damage
+.                    - Level 3:
+.                         - Gravity Well
+.                              - Combat spell, long range, small AOE
+.                              - Research: 150, Cost: 5
+.                              - 7 ATK / 2 DMG, Physical damage
+.                              - Deals +50% damage to units with Floating, Flying, or Windwalking
+.                              - AOE effect persists, which inflicts Grounded on units with Floating, Flying or Windwalking until they leave the AOE (can be hit by ground units and Tremors)
+.               - Earth/Water spells:
+.                    - Level 1:
+.                         - Slow readded and fixed (previously replaced with Hunter's Mark, which still exists)
+.                              - Combat spell, infinite range
+.                              - Research: 30, Cost: 3
+.                    - Level 2:
+.                         - Summon Crocodile
+.                              - Research: 70, Cost: 6, Upkeep: 3
+.                    - Level 3:
+.                         - Swampwalk
+.                              - Unit enchantment
+.                              - Research: 130, Cost: 3, Upkeep: 2
+.                              - Grants Forestry, Poison Immunity, and Swimming
+.                    - Level 4:
+.                         - Overgrowth
+.                              - Global spell
+.                              - Research: 250, Cost: 75, Upkeep: 8
+.                              - Slowly causes dense vegetation to grow over the map
+.               - Water/Life spells:
+.                    - Level 1:
+.                         - Holy Water
+.                              - Combat spell, short range (breath style AOE)
+.                              - Research: 40, Cost: 3
+.                              - 7 ATK / 3 DMG, Holy damage (inflicts Turn Undead)
+.                    - Level 2:
+.                         - Bountiful Harvest
+.                              - Global spell
+.                              - Research: 80, Cost: 40, Upkeep: 5
+.                              - Crops yield +1 gold (farms and cities)
+.                    - Level 3:
+.                         - Blessed Dew
+.                              - Global spell
+.                              - Research: 150, Cost: 50, Upkeep: 7
+.                              - Friendly units heal 5HP at the beginning of each turn
+.                    - Level 4:
+.                         - World Healer
+.                              - Global spell
+.                              - Research: 250, Cost: 75, Upkeep: 15
+.                              - Slowly causes grass to grow over the map (persists after spell removed)
+.               - Water/Death spells:
+.                    - Level 1:
+.                         - Soul Siphon
+.                              - Combat spell, medium range
+.                              - Research: 50, Cost: 3
+.                              - 8 ATK / 4 DMG, Death damage
+.                              - Heals caster equal to damage inflicted
+.                    - Level 2:
+.                         - Plague
+.                              - Global spell
+.                              - Research: 90, Cost: 40, Upkeep: 5
+.                              - City nearest to caster suffers morale penalty and -50% income (except Undead)
+.                              - Plagued cities roll for poison damage against garrisoned units (like Poison Plants)
+.                              - Each turn, spreads to another nearby city (can also spread to own cities)
+.                    - Level 3:
+.                         - Black Tide
+.                              - Global spell
+.                              - Research: 150, Cost: 60, Upkeep: 8
+.                              - Enemy units suffer -30% movement penalty in water
+.                    - Level 4:
+.                         - Summon Hydra
+.                              - Research: 250, Cost: 50, Upkeep: 7
+.               - Water/Air spells:
+.                    - Level 1:
+.                         - Misty Step
+.                              - Combat spell, short range
+.                              - Research: 40, Cost: 3
+.                              - Teleports caster a short distance (can bypass walls)
+.                    - Level 2:
+.                         - Flashfreeze
+.                              - Combat spell, short range
+.                              - Research: 90, Cost: 4
+.                              - 7 ATK / 2 DMG / 3x repeat, Cold damage
+.                    - Level 3:
+.                         - Nimue's Favour
+.                              - Global spell
+.                              - Research: 150, Cost: 60, Upkeep: 8
+.                              - Friendly units gain +30% movement bonus in water
+.                    - Level 4:
+.                         - Ice Age
+.                              - Research: 250, Cost: 75, Upkeep: 15
+.                              - Slowly changes terrain across the map to snow, and water to ice
+.               - Air/Death spells:
+.                    - Level 1:
+.                         - Banshee Gale
+.                              - Combat spell, long range, large AOE
+.                              - Research: 50, Cost: 4
+.                              - 7 ATK / 1 DMG, Death/Physical damage
+.                              - Displaces units within the AOE (like Winds of Fury but not as far)
+.                              - Inflicts Panicked
+.                    - Level 2:
+.                         - Suffocate
+.                              - Combat spell, medium range, single target (bypasses obstructions)
+.                              - Research: 90, Cost: 4
+.                              - 8 ATK / 1 DMG / 5x repeat, Physical damage (can't target machines/undead)
+.                    - Level 3:
+.                         - Borrow Time
+.                              - Combat spell, long range, single friendly target
+.                              - Research: 150, Cost: 6
+.                              - Target friendly unit does not die when it reaches 0 HP, but dies at end of next turn
+.                    - Level 4:
+.                         - Summon Succubus
+.                              - Research: 250, Cost: 50, Upkeep: 8
+.               - Air/Life spells:
+.                    - Level 1:
+.                         - Heavenly Chorus
+.                              - Combat spell, infinite range
+.                              - Research: 40, Cost: 3
+.                              - Removes Panicked from all friendly units and increases morale
+.                    - Level 2:
+.                         - Inspiration
+.                              - Combat spell, long range, small AOE
+.                              - Research: 90, Cost: 4
+.                              - Grants friendly (non-machine) units within the AOE +1 RES, Fearless and Haste
+.                    - Level 3:
+.                         - Second Wind
+.                              - Combat spell, long range, single friendly target
+.                              - Research: 150, Cost: 6
+.                              - Restores 5 HP and 50% movement.
+.                    - Level 4:
+.                         - Angel Wings
+.                              - Unit enchantment
+.                              - Research: 250, Cost: 7, Upkeep: 5
+.                              - Grants Death Weakness, Fire Weakness, Flying, Lightning Weakness, Physical Weakness
+.          - Enchantments can now be cast on allies in combat
+.          - Shock Wave now pushes units back one hex (if valid)
+.          - Summon Gold Dragon upkeep increased from 8 to 10
+.          - Summon Black Dragon upkeep increased from 8 to 10
+.          - Summon Air Elemental upkeep increased from 6 to 8
+.          - Increase Magic Sight research from 75 to 90
+.          - Winds of Fury cost increased from 3 to 4
+:dum_fuk: AI Improvements: :dum_fuk: 
+.          - AI diplomacy improvements:
+.               - AI now sends tributes to players
+.                    - Relations must be polite or better, must be at peace or allied
+.                    - Peace (Polite):
+.                         - Chance to send = (race relations / 10)
+.                         - Amount = 5 to 25 gold or mana
+.                    - Peace (Friendly):
+.                         - Chance to send = (race relations / 10)
+.                         - Amount = 10 to 50 gold or mana
+.                    - Alliance (Polite):
+.                         - Chance to send = (race relations / 5)
+.                         - Amount = 25 to 75 gold and/or mana
+.                    - Alliance (Friendly):
+.                         - Chance to send = (race relations / 5)
+.                         - Amount = 50 to 100 gold and/or mana
+.                         - Added 5% windfall chance = 100 to 250 gold and/or mana
+.               - AI can now send gold/mana with peace/alliance requests
+.                    - Chance to send = (race relations / 2)
+.                    - Amount = 1-50 gold and/or mana
+.               - AI now sends suggestions of war/alliance break
+.                    - Only suggests against races it dislikes
+.                    - Wary:
+.                         - Chance to send = 5%
+.                         - Amount = (race relations towards player minus race relations towards suggested race)
+.                    - Hateful:
+.                         - Chance to send = 10%
+.                         - Amount = (  (race relations towards player minus race relations towards suggested race)  x1.5)
+.               - AI can now threaten to attack
+.                    - Race relations must be neutral or worse
+.                         - Neutral = 5%
+.                         - Wary = 10%
+.                         - Hateful = 15%
+.          - AI "Main Stack" improvements:
+.                    - Better logic/priority for grouping strong units with leader and increased likelihood of casting higher tier unit enchantments
+.                    - Removed some AI spellcasting restrictions (when an AI spellcaster cast a spell on the overworld map, all other spellcasters it owned were less likely to cast any spells)
+.                    - Unless the only units within one turn range are allies or independents, the AI now generally tries to keep around half of its spellcasting points available in case of attack/assassination, unless already channeling high level global spells
+.          - AI can now cast enchantments on units outside of its caster's party, similarly to players (but prioritizes own party first)
+.          - Improved AI risk assessment for exploration sites
+.                    - Fixed defender combat strength assessment (the AI did not correctly "see" defenders nor assess its own strength correctly, specifically for exploration sites)
+.                         - Combat strength assessment is still imperfect, mostly due to ability weighting, but nevertheless improved
+.                         - If an exploration site's defenders are all level 1 units, their perceived combat strength is halved (to counteract combat strength assessment being most flawed for level 1 units, where overweight ability scores are least offset by stats)
+.                    - Leaderless parties:
+.                         - If available nearby with sufficient strength, the AI will be more likely to use a leaderless stack to attempt exploration sites.
+.                         - Party moves towards unexplored sites at 1.0x combat strength, but will not attempt if less than 1.25x
+.                         - At 2.5x combat strength, priority increases for moving towards exploration sites within 12 hex range and attempting them
+.                         - Weak parties near unexplored sites will wait for nearby reinforcements:
+.                              - Below 0.5x combat strength: ignore exploration site
+.                              - 0.5x to 1.0x: wait up to two turns for friendly units within an 8 hex radius
+.                              - 1.0x to 2.0x: wait up to one turn for friendly units within a 6 hex radius
+.                    - Leader parties:
+.                         - Leader moves towards unexplored sites at 1.75x combat strength, will not attempt if less than 2.0x or less than 75% HP
+.                         - At 3x combat strength, priority increases for moving towards exploration sites within 12 hex range and attempting them
+.                         - Will wait for nearby reinforcements:
+.                              - Below 0.75x combat strength: ignore exploration site
+.                              - 0.75x to 1.5x: wait up to two turns for friendly units within an 8 hex radius
+.                              - 1.5x to 4x: wait up to one turn for friendly units within a 6 hex radius
+.          - AI can no longer be baited by dropping items (will ignore dropped items until player-controlled leaders/heroes are roughly one turn away, unless AI believes itself to be overwhelmingly more powerful)
+
+:gigachad: Abilities: :gigachad: 
+.          - Channeler I/II/III added
+.               - Level up cost: 10 per level
+.               - Increases casting points by 30% / 50% / 100%
+.          - Tame Animal added
+.               - Level up cost: 6
+.               - Similar to Dominate but targets creatures with variable effectiveness
+.                    - 6 ATK vs level 1 creatures
+.                    - 5 ATK vs level 2 creatures
+.                    - 4 ATK vs level 3 creatures
+.                    - 3 ATK vs level 4 creatures
+.                    - 6 ATK vs level 1 creatures
+.               - Cannot target creatures with Fearless
+.               - Cannot target the following additional creatures: Beholder, Centaur, Djinn, Fairy, Nymph, Lady of Pain, Satyr, Shadow, Spider Queen, Yeti
+.          - Hurl Skull added
+.               - Level up cost: 12
+.               - Long range, small AOE, 3 ATK / 8 DMG, Death/Fire/Physical/Wall
+.          - Shoot Black Javelin readded (previously replaced with Seeker Bolts, which still exists)
+.               - Level up cost: 15
+.               - 8 ATK / 6 DMG, Death/Physical
+.          - Dispel Magic now interacts with nodes and altars, see Structures
+.          - Conjurer/Enchanter/Evoker/Ritualist spell cost reductions revised from 30% to 33%
+.          - Shoot Javelin cost reduced from 15 to 12
+.          - New GFX/SFX for Seeker Bolts
+:pimp: Units: :pimp: 
+.          - Phoenix added (level 3 flying unit, summonable)
+.          - Air Elemental DEF lowered from 5 to 3 (since Invisibility now grants extra evasion against units without True Seeing)
+.          - The following units gain Tame Animal:
+.               - Druid, Elf Cleric, Nature Elemental, Satyr
+.          - Undead Skull Thrower loses Marksmanship II and Hurl Boulder, and gains Hurl Skull
+.          - Shredder Bolt loses Marksmanship II and Shoot Javelin, and gains Shoot Black Javelin
+
+:razed: Structures: :razed: 
+.          - Nodes produce extra mana when a unit with Dispel Magic is on them
+.               - Extra mana = (Dispel Magic ability level) X 2
+.               - Does not stack
+.          - Altars charge faster when a unit with Dispel Magic is on them
+.               - Turn reduction = Dispel Magic ability level
+.               - Does not stack
+.          - Bridges can now be constructed
+.               - Cost: 50 gold, 3 turns to complete
+.               - Can be built over water, ice, and lava
+.               - Any invalid unit (ie: boats) upon completion are moved to nearest valid hex
+.          - Rebuilding cities now takes one turn per hex (instead of always five turns)
+.          - Exploration site PVP tactical combat added
+.               - Attacking another stack on an exploration site will begin combat inside the exploration site
+.               - Adjacent stacks do not participate (similar to PVE exploration site combat)
+.          - Structure defender lists (including dungeon prisoners, etc) expanded from 10 to 25 possibilities
+
+:mystery:  Miscellaneous: :mystery: 
+.          - Hex grid (F5) now configurable via in-game display settings (and AoWSetup):
+.               - Extra (3 pixel width)
+.               - Default (2 pixel width)
+.               - Vanilla (1 pixel width)
+.          - Added "zero spell sphere" map option (allows leader customization without being forced to select spheres on maps intended to restrict magic, ie: Desolate Maugogom)
+.          - Unit GFX second layer (ie: glow effects) can now be animated
+.          - Added blue enchantment particles to cities when enchanted with Fountain of Life (previously had no permanent GFX)
+.          - Add left/right arrow keys as hotkeys for flipping pages in spell books
+.               - Mousewheel left/right tilt is bound to arrow keys by default (configurable), so mousewheel tilt flips pages too
+.          - Mouse scroll wheel function previously added to mana distribution slider, now scroll wheel left/right tilt also allows finer slider adjustment (similar to clicking slider)
+.          - Surface lava can no longer be changed to grass by Path of Life/Rejuvenate or wasteland by Path of Decay/Wither (but is still changed to Wasteland by Path of Frost)
+.          - Added Tutorial confirmation pop-up to prevent accidental clicks at title screen
+.          - "Load Game" now displays saves in chronological order (newest first) by default instead of alphabetical
+.          - Title screen easter eggs
+.               - Random flavor text in bottom left corner (can be turned off via AoWSetup)
+.               - Type "inioch" to play an easter egg intro monologue and to cycle flavor text
+.               - Type "ziggurat" for a surprise!
+.          - Replaced in-game help section weblink (aowx.org instead of ageofwonders.com)
+.          - Auto-update function added
+.               - Configurable in AoWSetup -> Developer:
+.                    - Auto-Updates: Automatic (default), Ask before installing, or Off
+.                         - Automatic: downloads in the background while AoWx is running, then installs when you quit the game
+.                         - Ask: asks at game start whether to update
+.                    - Check for Updates:
+.                         - Scheduled (default): at system start-up (after a 2 min delay to avoid start-up lag), daily at 4:20PM, and when the game is launched
+.                         - Only when the game runs
+.               - Title screen shows "AoWx is up to date!" or "Update available!" above the version number (hover/click to check or download)
+.               - Security: every update is verified before it is installed, and anything that fails is rejected and deleted
+.                    - Each release publishes a small update notice on AoWx.org, digitally signed with a private key that exists only offline on my PC (encrypted with a passphrase)
+.                    - The updater only accepts a notice carrying that signature, and only for a newer version
+.                    - The installer is downloaded from GitHub and must exactly match the fingerprint (SHA-256) inside the signed notice
+.                    - What this means: to push a malicious update, an attacker would need my offline private key and its passphrase. Taking over my GitHub account or the AoWx.org website alone is not enough. It also means nothing uploaded to my GitHub automatically/unintentionally (for example by tools I use, like Claude) can reach players until I personally publish the matching signed update notice to AoWx.org, as a final manual check.
+:start_the_damn_game: Map Playlist: :start_the_damn_game: 
+.          - Xergal's Legacy added
+.          - Lord of the Rings updated
+.          - Desolate Maugogom leader spheres set to 0 to allow leader customization while retaining the map's intended spellcasting restrictions
+
+:dum_fuk: Bug Fixes: :dum_fuk: 
+.          - If a player captured a unit but their party was full, the attacking 8-stack and captured unit would be placed on the same hex, and could only be moved in a specific order. Now, captured units will instead be moved to an adjacent valid hex (similar to summoning a unit with a full stack).
+.          - When a unit had Leadership V, other units in the party would receive the correct bonuses but incorrectly displayed Leadership IV received (fixed)
+.          - Breath attack obstacles/targeting were previously fixed but the breath animations were sometimes janky (fixed)
+
+September 23rd 2026
+Version 1.37.410 released:
+
+:dum_fuk: AI Improvements: :dum_fuk:
+.          - Tactical combat logic upgrades:
+.               - Hero/leader targeting logic modified:
+.                    - Fear of retaliation against heroes reduced by 50% (ie: AI targets heroes more aggressively)
+.                    - Fear of retaliation against leaders removed entirely (ie: AI targets leaders much more aggressively)
+.               - Status effect recognition (ability score modifier used for action selection, target priority, fear of retaliation, etc):
+.                    - Melee:
+.                         - Entangle Strike: +50% weighting
+.                         - Lightning Strike: +30% weighting
+.                         - Cold Strike: +25% weighting
+.                    - Ranged:
+.                         - Stunned (Cosmic Breath, Doom Gaze, Lightning Bolts): +50% weighting
+.                         - Frozen (Cold Breath, Frost Bolts): +25% weighting
+.               - Leader/Hero self-preservation modified and "final stand" added
+.                    - Most leader/hero actions aside from Spellcasting were restricted while other friendly units still existed. These restrictions are no longer hardlocked.
+.                    - Self-preservation weighting is now proportional to total friendly unit combat value relative to self-value, with an added multiplier/modifier based on starting vs current army strength (ie: a heavily guarded leader generally remains conservative/risk-averse but can now perform more actions, and gradually becomes more aggressive as their army strength decreases, culminating in hyper aggressive/desperate behaviour targeting enemy leader/hero if available once army is defeated)
+.               - Combat unpredictability:
+.                    - When comparing melee vs ranged scores for decision making, the AI has a 10% chance to select the opposite action. Does not apply to level 1 and level 2 units. Does not apply if either action has a score of zero or less (ie: suicidal melee against low value target, fully obstructed ranged attack, etc)
+.                    - Every turn, heroes have a 15% chance to lose 50% fear of retaliation for that turn
+.                    - Every turn, heroes have a 10% chance to lose all fear of retaliation for that turn
+.                    - Every turn, leaders have a 10% chance to lose 50% fear of retaliation for that turn
+.                    - Every turn, leaders have a 5% chance to lose all fear of retaliation for that turn
+.                    - To avoid out-of-sync errors in multiplayer, these RNG injections are not "true" RNG, but instead based on a complex static formula with dynamic variables that are shared/identical between players to always produce same result between host/clients in such a way that is, practically speaking, unpredictable (ie: attacker/defender map position coordinates, attacker/defender stats and unit IDs, number of friendly/enemy units, and number of completed actions and turns are all used as dynamic values in this formula)
+.               - Leader/hero touch ability priority fixed (appeared to be pulling a '1' flag as a 0.01 multiplier? Unless intentional by original devs? Now passes a mid-mark 0.5 multiplier)
+.               - Healing combat priority logic modified:
+.                    - Units can now self-heal, rather than only heal other units (similar to player)
+.                    - Wound weighting variable modified from (max HP/current HP) to ( 1 + (missing HP/max HP) )
+.                    - Poisoned status adds the equivalent of missing 3 HP to priority calculations
+.                    - Leaders/heroes are now capable of healing themselves (not considered in vanilla despite units being able to do so)
+.                    - Tiered situational flags/variables added
+.                         - T1 is a leader/hero missing at least 40% of max health
+.                         - T2 is a leader/hero missing HP at a value equal to or greater than Healing value being considered
+.                              - Leaders/heroes have a 1.00 multiplier towards healing T1 or T2 targets
+.                              - Leaders/heroes have a 2.00 multiplier towards self-healing upon reaching T1
+.                              - Leaders/heroes have a 0.25 multiplier towards healing T3 targets
+.                              - Retreat & Heal: If a T1 or T2 target is able to move out of range of enemies without incurring attacks of opportunity, it will do so prior to executing Healing.
+.                         - T3 is everything else
+.                              - Mortal Danger flag/modifier (T3 only): 1.5x multiplier added to priority if remaining HP is equal or lesser than expected damage received from enemies that can reach it
+.                              - Hopeless flag/modifier (T3 only): if unit in Mortal Danger has a low combat strength relative to party, and if being healed would not remove it from Mortal Danger prediction, it is instead categorized as Hopeless and receives a 0.25x modifier instead of 1.5x
+.                    - Ability waste avoidance: priority scales down in proportion to wasted healing potential (ie: using Healing III, which restores 10 HP, to only heal 4 HP on an otherwise high priority healing target)
+.                    - Future use considerations: high value units, even if unhurt, pull priority away from low value units in proportion to friendly-to-enemy strength ratio with an added fadeaway timer multiplier
+.                    - Reconsideration: in vanilla, healing is no longer considered in most situations once a unit has attacked that turn (which didn't matter because it typically wasted its healing immediately before attacking anyways). Healing is now considered after every action.
+.                    - Calculations use multilevel variables (5/7/10) rather than flat rate (5)
+.                    - Calculations are capped by missing HP (ie: multilevel variables are capped at 1 if a given unit is only missing 1 HP)
+.               - Improved melee vs ranged decision making
+.                    - A "decay" is applied to melee score in proportion to distance from potential target, however scales back once potential target is within melee range, and scales back further based on melee strength
+.               - Once walls have been breached, the target value of ram units drops to essentially zero.
+.               - The delay between AI units moving has been reduced significantly, particularly in large battles.
+.               - Improved projectile logic
+.                    - Shoot Now vs Move & Shoot decision making improved:
+.                         - Before:
+.                              - If an available shot was partially obstructed, the AI would evaluate other hexes to shoot from based only on binary logic ("Does moving to this hex present a lower obstruction chance?" --> Yes/No)
+.                         - Now:
+.                              - If an available shot is partially obstructed, the AI evaluates other hexes to shoot from based on graduated logic (ie: evaluating 50% vs 40% obstructions will yield proportionate multipliers for each option calculation)
+.                              - Opportunity cost of giving up an available shot to reposition injects a 0.65 penalty multiplier into calculation
+.                                   - If the target is a hero, the penalty multiplier is harshened to 0.45
+.                                   - If the target is a leader, the penalty multiplier is harshened to 0.30
+.                              - Mortal Danger flag (noted above) incurs an additional 0.50 penalty multiplier to Move & Shoot
+.                              - Hopeless flag (noted above) negates Move & Shoot option entirely
+.                    - Move & Shoot approach modified to be more lax on acceptable landing hex (ie: approaching Archers can settle for position with slight obstruction rather than moving too closely in search of perfect position)
+.               - Leader/Hero level-up logic modified:
+.                    - Marksmanship is now gated behind ownership of a ranged attack
+.                    - Marksmanship weighting increased from 5/5 to 20/20
+
+:gigachad: Abilities: :gigachad:
+.          - Leadership I/II/III/IV/V now only applies to other units in the party (not self)
+.          - Conjurer I/II/III added
+.               - I: Reduce research cost of summoning spells by 30%
+.               - II: Reduce casting cost of summoning spells by 30%
+.               - III: Reduce upkeep of summoning spells by 30%
+.               - Cost changed from 15 to 5 (per level)
+.          - Enchanter I/II/III added
+.               - I: Reduce research cost of unit enchantments by 30%
+.               - II: Reduce casting cost of unit enchantments by 30%
+.               - III: Reduce upkeep of unit enchantments by 30%
+.               - Cost changed from 15 to 5 (per level)
+.          - Evoker I/II/III added
+.               - I: Reduce research cost of combat spells by 30%
+.               - II: Reduce casting cost of combat spells by 30%
+.               - III: Reduce casting cost of combat spells by 50%
+.               - Cost changed from 15 to 5 (per level)
+.          - Ritualist I/II/III added
+.               - I: Reduce research cost of global spells by 30%
+.               - II: Reduce casting cost of global spells by 30%
+.               - III: Reduce upkeep of global spells by 30%
+.               - Cost changed from 15 to 5 (per level)
+.          - Holy/Unholy Champion I/II/III added
+.               - I: +1 ATK / +1 DMG
+.               - II: +2 ATK / +2 DMG
+.               - III: +3 ATK / +3 DMG
+.               - Similarly to Monster/Hero Slaying I/II/III, bonuses now apply to short and medium ranged projectiles (but not long range).
+.               - Cost changed from 5 to 3 (per level).
+.          - Path of Frost modified:
+.               - Changes Water to Ice (unchanged)
+.               - Changes Lava to Wasteland
+.               - Changes surface terrains to Snow (unchanged)
+.          - Swimming cost reduced from 15 to 10
+
+:pimp: Units: :pimp:
+.          - Legendary medal units now gain the following:
+.               - Archers/ranged units: additional level of Marksmanship
+.               - Mage units and some other units: additional level of multilevel abilities
+.               - Most humanoid units: Leadership I, or an additional level of Leadership if already owned
+.               - Some other thematic abilities added throughout unit roster, but generally restrained to above or similar
+.          - Legendary medal units now display "Legendary" below Exp in the unit window
+.          - Mage unit leadership modified:
+.               - Mage units that didn't have Leadership I now gain it
+.               - Mage units that had Leadership I instead have Leadership II, etc
+
+:scrollolololol: Spells: :scrollolololol:
+.          - Town Quake modified:
+.               - Before:
+.                    - 7 ATK / 5 DMG against units
+.                    - 70% chance to destroy walls
+.               - Now:
+.                    - 7 ATK / 5 DMG against units on surface (unchanged)
+.                    - 9 ATK / 5 DMG against units underground if city has no walls or wood walls
+.                    - 7 ATK / 5 DMG against units underground if city has stone walls (unchanged)
+.                    - 80% chance to destroy wood walls on surface
+.                    - 90% chance to destroy wood walls underground
+.                    - 50% chance to destroy stone walls on surface
+.                    - 60% chance to destroy stone walls underground
+.          - Vortex modified:
+.               - Before:
+.                    - 8 ATK
+.                    - 10 DMG against units with Sailing
+.                    - 7 DMG against units with Swimming
+.                    - 0 DMG against all other units
+.                    - Cost: 10
+.               - Now:
+.                    - 10 ATK
+.                    - 7 DMG and consumes 0-8 MP against units with Sailing
+.                    - 5 DMG and consumes 0-12 MP against units with Swimming
+.                    - 2 DMG and consumes 0-6 MP against all other ground units
+.                    - 0 DMG and never consumes MP against units with Flying, Floating, or Wind Walking
+.                    - Cost: 15
+.          - Ooze now extinguishes flames and removes Burning status
+.          - Freeze Water changed to Freeze Terrain:
+.               - Changes Water to Ice (unchanged)
+.               - Changes Lava to Wasteland
+.               - Changes surface terrains to Snow
+.          - Ice Storm (including cast from Altar of Ice) modified:
+.               - Changes Water to Ice (unchanged)
+.               - Changes Lava to Wasteland
+.               - Changes surface terrains to Snow (unchanged)
+.          - Level Terrain now spawns terrain-appropriate rocks (and a mix of rocks and cracks underground) instead of bare terrain
+
+:surprise: Items: :surprise:
+.          - "Use" slot items can now grant stat increases
+.          - Items can now grant HP and MP in addition to other stats
+.          - Items can now decrease stats
+.          - 200+ new item graphics added (most added to item library, remainder still available for mapmaking)
+.          - Existing item library also updated with new abilities/stats/etc
+
+:mystery: Miscellaneous: :mystery:
+.          - Group movement fixed/improved
+.               - Pathfinding fixed (individual paths no longer impede each other)
+.               - On overworld/strategic map, group selected units share a single target hex:
+.                    - Group selected stackable units will now move and stack on target hex
+.                    - Group selected non-stackable parties will now maintain grouping and assemble around target hex (ie: move together to avoid getting splitstacked)
+.          - Default player name (editable in multiplayer pre-lobby menu) is now updated by leader customization as well
+.          - Event tab only skips to bottom when mouse cursor is not within its display area
+.          - In-game indication alerts all players when editor is open during gameplay (green flashing icon by turn indicators)
+.          - In-game chat notification alerts all players when a saved game (asg file) is open during gameplay
+.          - In-game indication alerts all players when second instance of game is running during gameplay (red flashing icon by turn indicators)
+.          - In-game chat notification alerts all players when a second instance of the game is opened during gameplay
+.          - Lightning damage can inflict Burning status on Machines
+.          - Death Storm/Divine Storm/Pestilence (spells and altars) modified:
+.               - Vertigo can now be inflicted by storms (previously, storms could only inflict Cursed and Poisoned)
+.               - Status effects now roll against RES (previously, all damaged units were automatically inflicted with status effects)
+.          - Holy/Unholy Woods and Poison Plants modified:
+.               - Vertigo/Cursed can now be inflicted by Holy/Unholy Woods (previously, only Poison Plants could inflict Poisoned)
+.               - Status effects now roll against RES (previously, all damaged units were automatically inflicted with status effects)
+.          - Map coordinates (X, Y, Z) now displayed in-game
+.          - Mouse wheel scrolling functionality added to race assignment and preferred race dropdown selections in multiplayer lobbies
+.          - Hero library lightly modified (updated abilities/costs, etc)
+
+:start_the_damn_game: Map Playlist: :start_the_damn_game:
+.          - Map items/heroes updated
+.          - Dozens of campaign typos corrected
+.          - Leader/hero ability costs etc fixed on first scenarios of vanilla and custom campaigns
+.          - Note: there is still a lot of updating left to be done on later campaign scenarios (heroes, items, balance tweaks, etc)
+
+:mana: Modding Tools: :mana:
+.          - AoWDevX improvements:
+.               - Multiple instances of AoWDevX (or any other editor variant) can be opened simultaneously
+.               - Item editing UI modified to allow previously noted item changes
+.               - "Go to" function now also centers on items/heroes located within exploration sites
+.               - Function/button added to toolbar to delete all unused heroes from map
+.               - Function/button added to toolbar to delete all unused items from map
+.               - Button added for existing "Fog of War" function
+.               - "Shrinking circle" GFX added for the recently added Map Validation centering function
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Breath attacks interactions with partial obstructions have been fixed (ie: using a breath attack in a narrow crypt corridor now targets/hits enemies within range correctly, etc)
+.          - Crash event triggered by game mishandling ability update when a hero enters combat while carrying an unequipped item with a multi-level ability that is of a lower level than the same ability granted by a different non-item source (ie: hero had unequipped item that granted Leadership III while being granted Leadership IV from a Frost Queen)
+.          - Recently added new abilities were not displayed in the unit side panel during tactical combat
+.          - Poison Plants wasteland terrain GFX added (existed in vanilla image libraries but wasn't set correctly)
+.          - Magic management tab now updates dynamically instead of at beginning of turn (ie: upgrading Spellcasting mid-research did not update research timer until next turn, or until mana distribution was interacted with)
+.          - Missing GFX for Magic Sight (upload error in last release, oops)
+.          - Conjurer/Enchanter/Evoker/Ritualist bugs fixed:
+.               - When a player attempted to cast a spell while having remaining casting points that were below the spell's original cost but above the reduced cost, unintended game/UI behaviour could occur.
+.               - When a player cast a unit enchantment in tactical combat, the spell's original cost was used instead of its reduced cost.
+.               - When a player cast a combat spell in auto combat, the spell's original cost was used instead of its reduced cost.
+
+September 3rd 2026
+Version 1.37.409 released:
+
+:mystery:  Miscellaneous: :mystery: 
+.          - Bug fix: The game froze (hard lock, both tactical and auto combat) when a player was defeated while still owning a unit spawned by Recall Spirits or Animate Dead in an earlier combat
+.                     - The Summoned effect on units that persisted after combat was not linked to its unit, so the engine could never finish removing the defeated player's enchantments
+.                     - Those Summoned effects are now correctly linked when the unit joins the army (also repairs affected units in existing saved games when loaded)
+.                     - Dispel Magic can now remove the Summoned effect from those units
+.                     - The engine now also drops any enchantment it cannot dispel instead of freezing
+
+September 3rd 2026
+Version 1.37.408 released:
+
+:mystery:  Miscellaneous: :mystery: 
+.          - Bug fix: Resuming/reloading a multiplayer saved game (including autosaves) left all players permanently stuck on the "Waiting for other players" screen
+.                     - The host was waiting for a leader-customization confirmation from each player, but leader customization is (correctly) skipped when loading a game already in progress, so the wait could never end
+.                     - Vanilla engine bug that never surfaced because vanilla defaults "Customize Leaders" to off; AoWx defaults it to on as of recent update
+
+:start_the_damn_game: Map Playlist: :start_the_damn_game: 
+.          - Dozens of campaign typos corrected
+
+
+September 1st 2026
+Version 1.37.407 released:
+
+:leader: Leaders/Heroes: :leader:
+.          - Leader/hero mana generation modified:
+.               - Before: 5/10/20/40/80 (based on Spellcasting level)
+.               - Now: (Spellcasting level) x 1.5 x Resistance
+
+:pimp: Units: :pimp: 
+.          - Fire Elementals and Fire Sprites are healed by fire damage and lava
+.                     - Mixed damage does not heal (ie: Fireball spell, Salamander Strike, etc that do Fire/Physical damage have no healing effect)
+.                     - Walking over lava heals 1 HP per hex
+.                               - Does not apply if being transported
+.                               - Applies in overworld and combat
+.          - Water Elementals are healed by water
+.                     - Swimming over water heals 1 HP per hex
+.                               - Does not apply if being transported
+.                               - Applies in overworld and combat
+.          - Water Elementals can no longer cross lava, despite having Fire Immunity, unless enchanted by Wind Walking or transported
+.          - Earth Elementals are healed by dirt
+.                     - Walking over dirt heals 1 HP per hex
+.                               - Does not apply if being transported
+.                               - Applies in overworld and combat
+
+:gigachad: Abilities: :gigachad: 
+.          - Conjurer added
+.                     - Passive ability, costs 15 skill points
+.                     - Reduces casting cost of summoning spells by one third
+.          - Enchanter added
+.                     - Passive ability, costs 15 skill points
+.                     - Reduces casting cost of unit enchantment spells by one third
+.          - Evoker added
+.                     - Passive ability, costs 15 skill points
+.                     - Reduces casting cost of combat spells by one third
+.          - Ritualist added
+.                     - Passive ability, costs 15 skill points
+.                     - Reduces casting cost of global spells by one third (excluding summons)
+.          - Missing description for Magic Sight enchantment ability added
+
+:razed: Structures: :razed: 
+.          - Exploration sites now roll unique random results for defenders/prisoners (ie: previously, two Monster Lairs on the same map would roll the same random defenders if set to the same strength, or "random" strength)
+.          - Elemental Nodes heal and apply Nature's Blessing to certain units:
+.                     - Air Node:
+.                               - Air Elemental, Frost Queen, Silver Dragon
+.                     - Earth Node:
+.                               - Druid, Earth Elemental, Ent, Forest Dragon, Nature Elemental
+.                     - Fire Node:
+.                               - Dwarf First Born, Fire Elemental, Fire Sprite, Hell Hound, Yaka Avatar
+.                     - Water Node:
+.                               - Frost Queen, Water Elemental
+.                     - Life Node:
+.                               - Astra, Gold Dragon, Nature Elemental, Spirit Puppet, Greater Spirit Puppet
+.                     - Death Node:
+.                               - Black Dragon, Hell Hound, Resurrected Dragon, Shadow Dragon, Spider Queen, all Undead units
+.                     - Mana Node:
+.                               - Elder Dragon, Syron
+:scrollolololol: Spells: :scrollolololol: 
+.          - Raise Terrain modified:
+.               - Now works underground
+.                    - Creates temporary earth on dirt hexes
+.               - Now works on lava
+.                    - Creates temporary dirt on lava hexes (both surface and underground)
+.                    - When cast on temporary dirt over lava, creates temporary wasteland mountains (on surface) or temporary earth (underground)
+.                    - Temporary wasteland mountains and temporary earth revert to permanent dirt (ie: casting Raise Terrain over lava twice permanently turns lava into dirt)
+.          - Added magic glow effect to temporary terrain created by Raise Terrain (ie: similar to Freeze Water)
+.
+:mystery:  Miscellaneous: :mystery: 
+.          - AI Improvements:
+.                     - AI Item Interactions
+.                          - AI now picks up items from the ground and equips them, and also picks up "Use" slot items if inventory isn't full
+.                          - AI now evaluates item strength based on total granted stat/ability cost
+.                          - AI will switch out equipped items with better found items, and ignore any weaker items
+.                     - AI Exploration Site Interactions
+.                          - AI can now initiate combat against exploration sites
+.                          - AI evaluates exploration site defender combat strength and ignores if own strength is less than 1.5x stronger
+.                          - Exploration site target priority scales with AI party combat strength advantage (ie: the stronger the AI party is compared to defenders, the higher the likelihood the AI will attempt exploration)
+.          - Underground earth/rock now block vision (ie: can no longer see through walls)
+.          - Fixed: When navigating to own Leader's unit window via the Event tab portrait or picking up an item (as opposed to clicking unit within a party), the "cycle unit" arrows did not appear below the unit GFX preview. These are now added and are mouse wheel scrollable.
+.          - Similar to above, "cycle unit" arrows now added to enemy/independent unit windows, and are gated to prevent revealing concealed units within a party.
+.          - Multiplayer out of sync fix improved (fixed instances in previous fix that would cause AI unit movement to appear instantaneous/skip movement animations to maintain timing/RNG seed, which could also manifest in single-player)
+.          - Modified Mind Decay tactical combat RNG result host/client propagation (should fix multiplayer desyncs)
+.          - Bug fix: Rare occurrence where wall damage in auto-combat could cause a dismissible/non-crashing "BitError" pop-up due to mishandling of wall HP bar display
+.          - Bug Fix: "Exception during Draw" could occur in very specific instances (ie: when in a city production screen, if the mouse was hovering over specific UI elements and the player was scrolling around to preview the city tactical map, the game would also attempt to scroll a non-scrollable UI element and display an error)
+.
+.          - Full modding suite:
+.               - Can be launched from AoWSetup
+.               - New GUI for AoWxBard
+.               - New GUI for AoWxGen
+.               - AoWxImg added:
+.                    - Modernized version of ILBMaker (image library import/export tool)
+.                    - Automatically sets all parameters/settings when adding images to libraries
+.                         - Can be manually changed
+.                         - Image type templates (portrait, item, unit, etc) for quickly setting parameters of newly created libraries
+.                    - "Image resizing" no longer required
+.                    - Import/export last-opened directory memory
+.               - AoWxInk added:
+.                    - Modernized version of MLDEdit
+.                    - Multi-language auto-translation function
+.                    - Potential typo search/point function, with "add to dictionary" option to remove falsely flagged typos from future typo searches
+.               - AoWxQuest added:
+.                    - Modernized version of AoWCGE (campaign editor)
+.                    - Campaign events can be dragged and dropped into position on campaign map instead of manually entering X/Y coordinates
+.                    - Extensive view/hide filtering of campaign events on map for reduced clutter/impediments
+.                    - Alternate view: Flow Chart
+.                    - Campaign events have togglable numbering
+.                    - Potential typo search/point function, with "add to dictionary" option to remove falsely flagged typos from future typo searches
+.                    - Red underlining of typos
+.                    - Book page image previews
+.                    - Campaign validator (checks for errors, broken event links, etc)
+.               - Miscellaneous AoWDevX performance improvements and subtle QoL upgrades
+
+:start_the_damn_game: Map Playlist: :start_the_damn_game: 
+.          - Custom and vanilla campaigns now both playable
+.                    - Toggle option in AoWSetup to switch between campaigns
+.                    - Known issues: both custom and vanilla campaigns need updating (ie: heroes with negative skill points, etc)
+.          - Reign of Chaos added (vanilla map missing from playlist) 
+
+
+August 23rd 2026
+Version 1.37.406 released:
+
+**:AoWx: AoWx version 1.37.406 uploaded! :AoWx:**
+https://aowx.org/
+https://aow.heavengames.com/downloads/showfile.php?fileid=1230
+
+:surprise: Items: :surprise: 
+.          - Fixed abilities on "Use" slot items (ie: Marksmanship on bows works correctly now, etc)
+.          - Fixed Spellcasting on items (now correctly castable without requiring Spellcasting as a base ability)
+.          - Fixed Healing on items (now usable outside of combat, and no longer infinite use in combat)
+
+:pimp: Units: :pimp: 
+.          - Fixed Spider Queen base stats oversight (didn't reflect multi-level Leadership bonus)
+
+:mystery:  Miscellaneous: :mystery: 
+.          - Fixed AI pathfinding bug
+.               - On rare occasion (or not so rare on huge "busy" maps like Athendore), the AI could get stuck in an infinite loop of failed movement attempts along a valid route that was rendered invalid before it executed, causing the AI to never end its turn. The pathfinding logic will now force a "no movement" condition onto a stuck unit/party following 20 failed movement attempts.
+.          - Added mouse hotkeys to game directly
+.               - Customizable within AoWSetup
+.               - Age of Wonders X Launcher retired (used to run AoWx.exe along with separate hotkey script simultaneously, no longer required and removed)
+.               - Scroll of Slickness retired (hotkey script, now incorporated into game engine itself instead of running separately)
+.          - Added mouse scrolling to mana power distribution window
+.          - Added mouse scrolling to unit window for cycling between units (ie: arrows below unit preview)
+.          - Changed multiplayer lobby default settings:
+.               - Customize Leaders now defaults to On
+.               - Allow Tactical Combat now defaults to Always
+.               - Always View TC now defaults to On
+.          - AoWx Installer executable replaces zip upload
+.               - No more manual drag and drop installation
+.               - Automatically installs Showscene/Mapviewer patch and configures IPX/LAN (while auto-detecting 32-bit vs 64-bit operating systems as required for Direct Play)
+.               - Multiple installation options including automatic configuration of read/write access to install directory and setting all executables to Run as Administrator
+.          - Fixed: end-turn hotkeys didn't activate end-turn symbol animation
+.          - Arrow keys now work when selecting scenarios/saves
+.          - Changed load/save timestamp format to YYYY-MM-DD HH-MM-SS
+.          - Guard vs Guard Area in-game text now properly differentiates unit behaviors (instead of simply displaying "Guarding" for both)
+
+August 15th 2026
+Version 1.37.405 released:
+
+:mystery:  Miscellaneous: :mystery: 
+.          - AI Improvements:
+.                     - Infinite Range Spell Reaction
+.                          - Defenders no longer wait while taking damage (ie: AI would not move until attacker was in range or walls were breached, allowing spells like Swarm to be exploited against the AI while they stood still indefinitely). Now, defenders will react to any damage by charging forward.
+.                     - Attack/Retreat Reaction
+.                          - If an attacker retreats without inflicting any damage, the AI defender will not react (unchanged vanilla behaviour).
+.                          - If an attacker retreats after inflicting any damage, the AI defender will pursue the attacker on the overworld map and reinitiate combat as the attacker.
+.                          - AI players only (not independents): any stacks within 6 hexes of the retaliating defender will also attempt to join the combat if able.
+.                          - Once the retreating attacker is killed or out of movement range, the AI defender will return to its original location and resume previous behavior.
+.                     - AI Tactical Combat Improvements:
+.                          - All units are now aware of opportunity strikes from adjacent enemies. 
+.                               - Prior to performing an action, the vanilla AI evaluates available options and assigns each a score based on multiple criteria (own unit combat strength, target combat strength, ability/spell damage potential, etc).
+.                               - If an action would provoke an opportunity attack, that action's score is now lowered based on the combat strength of the adjacent enemy, the amount of adjacent enemies, and the remaining HP of the moving unit.
+.                          - AI Leader/Hero passiveness
+.                                    - Vanilla AI has a self-preservation multiplier for heroes/leaders, which has been reduced as follows:
+.                                         - Heroes lowered from x2 to x1 (removed)
+.                                         - Leaders lowered from x4 to x2
+.                                    - Vanilla AI has a x0.5 multiplier to "melee strike" action score for heroes/leaders which has been increased to x0.8
+
+:start_the_damn_game: Map Playlist: :start_the_damn_game: 
+.          - Tribute to the Fall updated (by Alcedes) 
+
+August 13th 2026
+Version 1.37.404 released:
+:mystery:  Miscellaneous: :mystery: 
+.          - Bug fixes ("Exception occured during TArmyCombatMoveTE"):
+.                     - Missed crash instance in last update related to Healing I/II/III ability level check in autocombat
+.                     - Missed crash instance in last update related to Lifestealing I/II/III ability level check in autocombat
+.          - AoWSetup.exe updated:
+.                - Bypassed registry check (some users only had "Install/Exit" available due to Setup not finding registry values required to confirm game is already installed) 
+.                - Updated Play/Editor buttons to run AoWx.exe and AoWDevX.exe instead of vanilla counterparts
+.                - Enabled 'Developer' options tab (use at own risk)
+.                - Added a toggle option for Cheat Mode in 'Developer' options tab
+.                     - Enables single-player cheats available in vanilla via "beatrix" command
+.                     - When toggled, use "Play" button in AoWSetup to run with cheats enabled
+
+August 12th 2026
+Version 1.37.403 released:
+:mystery:  Miscellaneous: :mystery: 
+.          - Bug fixes ("Exception occured during TArmyCombatMoveTE"):
+.                     - Multilevel abilities would crash game in specific instances (ie: immediately in first Campaign scenario)
+.                     - Wall damage in particular had some bugged interactions with multilevel abilities
+.                     - Previous map abilities/HP auto-update had bugged interaction with combat that could store/pass along faulty data and crash
+.                     - Ability lookups now fail safely instead of crashing if given invalid data (shouldn't be required but just in case)
+.          - AoWSetup.exe updated to include new "Fullscreen (Optimized)" video setting
+.          - AoWxGen.exe landmass presets finetuned:
+.                - Classic (default) had too much water, Isles and Continents unchanged
+
+August 11th 2026
+Version 1.37.402 released:
+:razed: Structures: :razed: 
+.          - Spring of Life modified:
+.                - All terrain except wasteland:
+.                     - Heals/blesses all living units
+.                     - No effect on undead
+.                - Wasteland:
+.                     - Same effect as poison cloud on all living units, no longer heals/blesses
+.                     - Heals/blesses undead
+.          - Exploration sites (monster lairs, dungeons, etc) can now be entered in tactical combat in multiplayer:
+.                - Previously tried/failed/removed feature, much more polished now and should be bug-free 
+.                - Observing players are pulled into the combat and see exactly what the exploring player sees, revealing the site map as the explorer reveals it
+.                - Site defenders still engage immediately instead of waiting to be spotted (from a previous update but fixed bug that sometimes caused "TCAIError")
+
+:scrollolololol: Spells: :scrollolololol: 
+.          - Secret spells (re)added (original secret spells previously changed to Cosmos or repurposed, which caused Wizard Towers preset to random Secret spells to be empty)
+.                - Summon Mermaid (readded, original had been repurposed to Summon Spirit which still exists):
+.                     - Level 1 global, 6 cost, 3 upkeep
+.                - Magic Sight:
+.                     - Grants unit Night Vision and True Seeing
+.                     - Level 2 enchantment, 5 cost, 1 upkeep
+.                - Void Step:
+.                     - Teleports caster to valid target hex up to 8 hexes away
+.                          - Target invalid hex will warp to closest valid hex instead (similar to how Summon spells retarget to valid hex)
+.                          - Allows initiating combat against structures with walls (and bypassing walls in tactical combat)
+.                     - Level 3 combat, 5 cost
+.                - Summon Silver Dragon:
+.                     - Level 4 global, 100 cost, 12 upkeep (same as Syron)
+
+:mystery:  Miscellaneous: :mystery: 
+.          - AoWxGen.exe added:
+.                - RNG Map and Image-to-Map generator
+.                     - Generated maps appear in Scenario\Custom named by their RNG seed
+.                     - Four empty "xTemplate" canvas files are installed into Scenario\Custom (do not modify)
+.                - Generation modes:
+.                     - Random Map Batch: two maps of each size (S/M/L/XL) using default random settings
+.                     - Custom RNG Map (each option is user selectable):
+.                          - Map size (Small/Medium/Large/Extra Large)
+.                          - Map levels (Surface only / add Underground / add Depths)
+.                          - Players 2-12 or random (weighted by size)
+.                          - Terrain inversion (None/Limited/Extensive)
+.                          - Landmass presets: Classic / Isles (many small islands) / Continents (few large landmasses)
+.                          - Terrain style presets: Classic, Grasslands, Woodlands, Arctic, Desert, Highlands, Marshlands, Desolate, Apocalyptic (can combine up to 3)
+.                          - Terrain style preset strength: 1 (subtle) to 9 (extreme), default 5
+.                     - Image to Map: turns any picture into playable maps (creates one map of each size)
+.                - Every generated map includes:
+.                     - Terrain generation trained on AoWx full map playlist, with extra weighting allocated to After the Fall and Violence Begets Violence
+.                     - Cities (neutral and racial) with names, randomized walls and defenders; farms with crops, mines, power nodes, towers, exploration sites, arenas, blood shrines, reflecting pools, coastal shipyards and builder's guilds
+.                     - Road networks connecting the map (bridges over rivers and narrows) and teleporters, including the occasional one-way
+.                     - Cave systems: two-entrance tunnels and pockets, flooded connectors, under-sea passages between landmasses, down-entrances to the lava-heavy Depths, plus underground cities and dressed caverns on every map
+.                     - Signs with location-relevant text (directions to cities, structure lore, terrain warnings)
+.                     - Full player starts: each leader is a copy of a same-level hero of their race (copied heroes removed from library to avoid duplication), equal rolled starting parties for all players (15% of maps grant every player a bonus hero), players start in/near a city of their race and size, race-appropriate locations (Dwarf/Dark Elf/Goblin may start underground; no small-island starts except Lizardmen)
+.          - Out of Sync error when interacting with recruitable independent stacks in LAN fixed
+.          - New "Fullscreen (Optimized)" graphics setting
+.               - Fullscreen at the same resolution as windowed mode
+.               - ALT+Tab in and out of game no longer causes weird colour glitch
+.          - Mouse scroll wheel now works for the following:
+.               - Scenario selection window
+.               - Leader portrait selection
+.               - Leader customization and hero level-up abilities
+.               - Event window (map scrolling locked when cursor over event window)
+.               - Unit abilities/descriptions
+.          - Intro video re-encoded (better compatibility with Windows 10/11, reduces size from 90mb to 33mb)
+.          - Maps now auto-update abilities and HP on all units/leaders/heroes
+.               - Fixes all scenarios broken by multi-level abilities or similar glitch
+.               - Units no longer spawn with partial HP in instances where their HP was updated after they were placed on map
+.          - AoWDevX.exe modified:
+.                - Fixed: Found bug where some new features may not work for other users/PCs
+.                - Unit floaters expanded (in some instances, units could not be viewed/selected when modifying productions within release.hss due to vanilla editor limitations)
+:start_the_damn_game: Map Playlist: :start_the_damn_game: 
+.          - New Maps added:
+.                     - A Cry in the Heartwood Forest (lightly modified old map from AoWH that was previously password-locked)
+.                     - Conquest of Norquist (lightly modified old map from AoWH that was previously password-locked)
+.                     - Icy Embrace (lightly modified old map from AoWH that was previously password-locked)
+
+July 27th 2026
+Version 1.37.401 released:
+
+:razed: Structures::razed: 
+.          - Reflecting Pools can be razed/rebuilt
+.          - All units now pre-installed
+.          - Can construct Tower underground
+.          - Arena:
+.                - Cost to reach medals revised:
+.                     - Silver: (1 gold X unit level) per XP
+.                     - Gold: (2 gold X unit level) per XP
+
+:scrollolololol: Spells: :scrollolololol: 
+.          - AI combat spell logic modified
+.                - Hunter's Mark:
+.                     - Priority increased (AI rarely, if ever, cast it before), only cast once per combat
+.                - Ooze:
+.                     - Priority unchanged, only cast once per combat
+.                - Terror:
+.                     - Priority unchanged, only cast once per combat
+.                - Turn Undead:
+.                     - AI will only cast if it is the only way it can inflict damage to enemy
+.          - Sphere Selection restrictions revised:
+.                - Earth/Air & Fire/Water spheres can be combined (to a maximum of 4 within each pair, ie: combinations of 0/4, 1/3, 2/2)
+.                - Life/Death still can't be combined 
+.          - Animate Dead:
+.                - Units spawned persist after combat
+.                     - Units get "Summoned" instead of "Resurrected"
+.                          - Mana upkeep:
+.                               - Undead Draugr / Hell Hound / Bone Ram = 2 mana
+.                               - Undead Knight / Undead Abomination = 3 mana
+.                               - Bone Horror / Wraith = 6 mana
+.                               - Resurrected Dragon = 8 mana
+.                - Units spawned based on corpse:
+.                     - Infantry etc still spawn Undead Draugr
+.                     - Corpses of horse/cavalry units (excluding Boar/Frog/Wolf Riders)
+.                          - 80% chance to spawn Undead Knight
+.                          - 20% chance to spawn Undead Draugr
+.                          - Corpses of Undead Knights have a 50% chance to spawn Undead Draugr
+.                     - Corpses of "notable humanoids" (ie: mages, small/medium T3/T4 humanoids, etc)
+.                          - 80% chance to spawn Undead Abomination
+.                          - 20% chance to spawn Undead Draugr
+.                          - Additional 10% chance to spawn Wraith (70/20/10)
+.                               - Yaka Avatar, Djinn, Frost Queen, Leprauchaun, First Born, Avenger, Spider Queen
+.                          - Additional 10% chance to spawn Bone Horror (70/20/10)
+.                               - Orc Warlord
+.                          - Corpses of Undead Abomination have a 50% chance to spawn Undead Draugr
+.                     - Corpses of "ethereal/magic/etc" units
+.                          - Fairy, Spirit Puppet
+.                               - 90% chance to spawn Undead Draugr
+.                               - 10% chance to spawn Wraith
+.                          - Shadow, Demon, Greater Spirit Puppet
+.                               - 80% chance to spawn Undead Draugr
+.                               - 20% chance to spawn Wraith
+.                          - All Elementals, Glow, Astra, Incarnate, Reaper, Ent
+.                               - 20% chance to spawn Undead Draugr
+.                               - 80% chance to spawn Wraith
+.                          - Corpses of Wraith have a 50% chance to spawn Undead Draugr
+
+.                     - Corpses of large units
+.                          - Elephant, Beholder, Sandworm, War Elephant, Yeti, Mammoth Rider, Basilisk, Giant, Mole, Titan, Troll, Karagh, Beetle, Sea Serpent, Syron, Minotaur, Hydra
+.                               - 80% chance to spawn Bone Horror
+.                               - 20% chance to spawn Undead Draugr
+.                               - Additional 10% chance to spawn Bone Ram (70/20/10)
+.                                    - All Elephant/Mammoth units
+.                          - Corpses of Bone Horror have a 50% chance to spawn Undead Draugr
+.                     - Corpses of dragon/wyvern units (excluding eagles, etc)
+.                          - 80% chance to spawn Resurrected Dragon
+.                          - 20% chance to spawn Undead Draugr
+.                          - Corpses of Resurrected Dragon have a 50% chance to spawn Undead Draugr
+.                     - Corpses of turtle units
+.                          - 80% chance to spawn Bone Ram
+.                          - 20% chance to spawn Undead Draugr
+.                     - Corpses of Wolf/Wolf Rider/Werewolf/Fire Sprite units
+.                          - 80% chance to spawn Hell Hound
+.                          - 20% chance to spawn Undead Draugr
+.                          - Corpses of Hell Hound have a 30% chance to spawn Undead Draugr
+
+.          - Recall Spirits:
+.                - Units spawned persist after combat
+.                     - Units get "Summoned" instead of "Resurrected"
+.                          - Mana upkeep:
+.                               - Spirit Puppet = 2 mana
+.                               - Greater Spirit Puppet = 3 mana
+.                               - Nordic Glow = 6 mana
+.                               - Gold Dragon = 8 mana
+.                               - Astra = 10 mana
+.                - Units spawned based on corpse:
+.                     - Infantry etc:
+.                          - 80% chance to spawn Spirit Puppet
+.                          - 20% chance to spawn Greater Spirit Puppet
+.                     - "Notable/magical/etc" corpses (ie: mages, many T3/T4 units, etc)
+.                          - 20% chance to spawn Spirit Puppet
+.                          - 80% chance to spawn Greater Spirit Puppet
+.                          - Additional 10% chance to spawn Nordic Glow (70/20/10)
+.                               - Frostling Shaman, Yeti, Ice Drake, Ice Dragon
+.                          - Corpses of Greater Spirit Puppets have a 50% chance to spawn Spirit Puppet
+.                     - Frost Queen only:
+.                          - 20% chance to spawn Spirit Puppet
+.                          - 40% chance to spawn Greater Spirit Puppet
+.                          - 40% chance to spawn Nordic Glow
+.                     - Ent, Elementals, Nordic Glow:
+.                          - 20% chance to spawn Spirit Puppet
+.                          - 60% chance to spawn Greater Spirit Puppet
+.                          - 20% chance to spawn Nordic Glow
+.                     - Gold Dragon, Elder Dragon:
+.                          - 90% chance to spawn Greater Spirit Puppet
+.                          - 10% chance to spawn Gold Dragon
+.                     - Astra, Reaper
+.                          - 80% chance to spawn Greater Spirit Puppet
+.                          - 20% chance to spawn Astra
+.          - Hunter's Mark changed from 7 ATK to 9 ATK
+.          - Level Terrain SFX added (previously blank)
+
+:pimp: Units: :pimp: 
+.          - Unit Levelling revised
+.                     - XP Calculations:
+.                               - Units require 10 experience for each promotion. *(unchanged)*
+.                               - ~~Units gain no experience from units with a level lower by 3.~~ Removed. Units always gain minimum 1 experience.
+.                               - Units gain 1 experience from units with a level lower by 2. *(unchanged)*
+.                               - Units gain 2 experience from units with a level lower by 1.*(unchanged)*
+.                               - Units gain 5 experience from units of the same level. *(unchanged)*
+.                               - Units gain 5 experience for each additional level of the target unit. *(unchanged)*
+.                               - A silver/gold medal unit is ranked as one/two additional level(s).
+.                                         - Now also applies to experience granted when killed (previously only calculated for own XP gain when killing another unit).
+.                               - Units always gain at least 1 experience from a level 2 unit. *(unchanged)*
+.                               - Units always gain at least 2 experience from a level 3 unit. *(unchanged)*
+.                               - Units always gain at least 5 experience from a level 4 unit. *(unchanged)*
+.                     - Unit HP levelling past gold medal fixed/revised
+.                               - For every 10 experience gained by a gold medal unit, their HP increased by 2HP. *(unchanged)*
+.                               - Unit HP maximum cap added:
+.                                         - T1 Units: Max HP = Base HP multiplied by 3*
+.                                         - T2 Units: Max HP = Base HP multiplied by 2.5*
+.                                         - T3 Units: Max HP = Base HP multiplied by 2*
+.                                         - T4 Units: Max HP = Base HP multiplied by 1.5*
+.                                         - *Units can always gain HP a minimum of three times, even if it grants them max HP higher than above formula. (Example: Leprauchaun has base 7 HP and caps out at 13 HP.)
+.                               - Legendary Medal added:
+.                                         - When a gold medal unit continues levelling and reaches their max HP cap, they gain Legendary Medal.
+.                                         - Units with Legendary Medal also gain +1 ATK / +2 RES.
+.                                         - Units with Legendary Medal grant an additional 10 experience when killed.
+.          - Capturing a unit with Charm/Dominate/Seduce now only grants 1 XP regardless of unit level (including heroes)
+.          - Unit morale debuffs revised
+.                     - Good/Cheerful: no debuff (unchanged)
+.                     - Okay: -1 ATK / -1 RES (instead of DEF/RES)
+.                     - Poor: -2 ATK / -2 RES
+.                     - Terrible: -3 ATK / -3 RES
+.          - Unit movement and/or attack animation speed reduced by varying amounts
+.                     - War Elephant, Ent, Mammoth Rider, Hydra, Werewolf
+.
+
+:gigachad~1: Abilities: :gigachad~1: 
+.          - Hero Slaying I/II/III added (gives bonuses against heroes/leaders)
+.                     - I: +1 ATK / +1 DMG
+.                     - II: +2 ATK / +2 DMG
+.                     - III: +3 ATK / +3 DMG
+.                     - Ability Cost: 5 per level
+.          - Monster Slaying I/II/III added
+.                     - I: +1 ATK / +1 DMG
+.                     - II: +2 ATK / +2 DMG
+.                     - III: +3 ATK / +3 DM
+.                     - Ability Cost: 3 per level
+.          - Hero Slaying and Monster Slaying apply to melee and short/medium ranged attacks, but not long ranged attacks
+.                     - stacks with Marksmanship
+.                     - stacks with each other when applicable (ie: Hero gets an item that gives Monster ability)
+.          - Leadership I/II/III/IV/V added
+.                     - I: +1 ATK / +0 DEF
+.                     - II: +1 ATK / +1 DEF
+.                     - III: +2 ATK / +1 DEF
+.                     - IV: +2 ATK / +2 DEF
+.                     - V: +3 ATK / +3 DEF
+.                     - Ability Cost: 5 per level
+.                     - Various units with Leadership edited accordingly
+.          - Lifestealing I/II/III added
+.                     - I: +1 HP
+.                     - II: +2 HP
+.                     - III: +3 HP
+.                     - Ability Cost: 10 per level
+.          - Lifestealing now works with Round Attack
+.          - Charge I/II/III added
+.                     - I: +2 DMG
+.                     - II: +3 DMG
+.                     - III: +4 DMG
+.                     - Ability Cost: 3 per level
+.          - Parry I/II/III added
+.                     - I: -2 ATK
+.                     - II: -3 ATK
+.                     - III: -4 ATK
+.                     - Ability Cost: 3 per level
+.          - Healing I/II/III added
+.                     - I: +5 HP
+.                     - II: +7 HP
+.                     - III: +10 HP
+.                     - Ability Cost: 5 per level
+.          - Marksmanship V added
+.                     - I: +1 ATK / +0 DMG (unchanged)
+.                     - II: +2 ATK / +1 DMG (unchanged)
+.                     - III: +3 ATK / +1 DMG (unchanged)
+.                     - IV: +4 ATK / +2 DMG (unchanged)
+.                     - V: +5 ATK / +2 DMG
+.                     - Ability Cost: 3 per level
+.          - Turn Undead V added
+.                     - I: 6 ATK / 4 DMG (unchanged)
+.                     - II: 7 ATK / 5 DMG (unchanged)
+.                     - III: 8 ATK / 6 DMG (unchanged)
+.                     - IV: 9 ATK / 7 DMG (unchanged)
+.                     - V: 10 ATK / 10 DMG
+.                     - Ability Cost: 3 per level
+
+.          - Dispel Magic IV/V added
+.                     - I: 30% success rate if touch attack lands (unchanged)
+.                     - II: 40% success rate if touch attack lands (unchanged)
+.                     - III: 50% success rate if touch attack lands (unchanged)
+.                     - IV: 60% success rate if touch attack lands
+.                     - V: 70% success rate if touch attack lands
+.                     - Ability Cost: 1 per level
+.          - Wall Crushing I/II/III added
+.                     - I: 2-5 DMG range
+.                     - II: 3-10 DMG range
+.                     - III: 4-15 DMG range
+.                     - Ability Cost: 3 per level
+.                     - (Old DMG value for Wall Crushing was 2-6. Wood Walls have 5HP, Stone Walls have 25HP).
+.          - Path of Sand added
+.                     - Changes terrain to desert/sand, similarly to Path of Life/Decay/Frost
+.                     - Ability Cost: 8
+.          - Protection abilities modified
+.                     - 50% damage negation unchanged
+.                     - Resistance against corresponding status effect changed from +2 to +3 RES
+.          - Weakness abilities added (Cold, Death, Fire, Holy, Lightning, Magic, Physical, Poison)
+.                     - 50% extra damage from corresponding damage type (rounded up)
+.                     - Resistance debuff against corresponding status effect (-3 RES)
+.                     - Weakness/protection cancel each other out if a unit has both
+.                     - Immunities override weaknesses if a unit has both
+.                     - Applies to overworld damage, similarly to protections (ie: spells, storms, etc)
+.          - Units/Heroes without Night Vision suffer the following reduced accuracies underground:
+.                     - Melee: -1 ATK
+.                     - Short range projectiles: no penalty
+.                     - Medium range projectiles: -1 ATK
+.                     - Long range projectiles: -2 ATK
+.          - Units/Heroes without True Seeing suffer the following reduced accuracies against units with Invisibility:
+.                     - Melee: -3 ATK
+.                     - Short range projectiles: no penalty
+.                     - Medium range projectiles: -2 ATK
+.                     - Long range projectiles: -3 ATK
+. 
+.          - CPU Leader/Hero level up logic expanded:
+.                     - CPU now chooses from the following list with dynamic weighting (value when unaffordable/value when affordable)
+.                               - ATK: 100/100
+.                               - DEF: 255/255
+.                               - RES: 50/50
+.                               - DMG: 50/50
+.                               - HP: 100/100
+.                               - Archery: 5/5
+.                               - Charge I/II/III: 25/25 
+.                               - Cold Immunity: 5/5
+.                               - Cold Strike: 25/500
+.                               - Death Immunity: 5/5
+.                               - Death Strike: 5/5
+.                               - Dominate: 10/100
+.                               - Doom Gaze: 25/250
+.                               - Extra Strike: 25/50
+.                               - Fire Immunity: 5/5
+.                               - Fire Strike: 10/10
+.                               - First Strike: 250/5000
+.                               - Frost Bolts: 5/5
+.                               - Healing I/II/III: 50/50
+.                               - Hero Slaying I/II/III: 75/150
+.                               - Holy Immunity: 5/5
+.                               - Holy Strike: 5/5
+.                               - Leadership I/II/III/IV/V: 50/50
+.                               - Lifestealing I/II/III: 25/75
+.                               - Lightning Bolts: 5/25
+.                               - Lightning Immunity: 5/5
+.                               - Lightning Strike: 250/5000
+.                               - Magic Bolts 10/10
+.                               - Marksmanship I/II/III/IV/V: 5/5
+.                               - Monster Slaying: 25/25
+.                               - Parry: 30/30
+.                               - Poison Strike: 10/10
+.                               - Round Attack: 5/5
+.                               - Seeker Bolts: 25/250
+.                               - Spellcasting: 250/2000
+.          - Construct: Build Road cost reduced from 10 gold per hex to the following:
+.                     - No vegetation/obstacles/etc = 2 gold
+.                     - Light vegetation/bones/etc = 2 gold
+.                     - Rocks/mushrooms/etc = 3 gold
+.                     - Dense vegetation = 5 gold
+:mystery:  Miscellaneous: :mystery: 
+.          - Vastly improved game manual (navigable html)
+.          - AoWx now has its own registry files, separate from any other installs
+.                - This means having both AoWx and Zig installed will no longer mess up PBEM settings in the registry files
+.                - AoWx registry location:
+.                     -  HKEY_CURRENT_USER\SOFTWARE\Triumph Studios\Age of Wonders X
+.                - AoW vanilla registry location:
+.                     - Steam: HKEY_CURRENT_USER\SOFTWARE\Valve\Steam\Apps\61500
+.                     - GOG: HKEY_CURRENT_USER/SOFTWARE/GOG.com/Age of Wonders
+.                     - CD: HKEY_CURRENT_USER\SOFTWARE\Triumph Studios\Age of Wonders
+.          - Hero/Leader level-up events now center on original location instead of hero (no more tracking)
+.          - Multiplayer lobby QoL improvements
+.                - Default race selection changed from "Free" to "CPU Emperor"
+.                - Preferred race selection now overrides "CPU Emperor"
+.                - Forced/Taken mechanic for host override still functional
+.          - Blue/Green unit blood types added
+.          - Unit movement range preview fix
+.                - Movement range is now accurately shown for parties containing mixed units with/without Cave Crawling/Forestry/Mountaineering
+.          - AoWDevX.exe replaces old DevEd (various Editor upgrades/fixes)
+.                - Opening a scenario/ruleset while another is already open no longer lags the editor
+.                - Switching back and forth between opening maps and opening Release.hss no longer crashes editor
+.                - Open Map and Open Mapset functions each remember their own last opened directory
+.                - Mouse scroll wheel now works for all horizontal/vertical scroll bars (but not map scrolling)
+.                - Restored vanilla "Developer Only" toggle for leader/hero faces
+.                - Updated Help/About section
+.          - AoWxBard.exe added to Songs folder
+.                - Drag & drop a WAV/MP3 file onto it to convert IT (Impulse Tracker) audio file compatible with in-game soundtrack
+.                     - Automatically balances volume level with rest of soundtrack
+.                     - Applies custom EQ (mostly low/mid bass curve adjustment and dynamic compression)
+.                     - WAV highly recommended (MP3 may have degraded quality from overcompression)
+.                     - Sets in-game song name to match WAV file name
+.                     - Sets IT file name to abbreviated (max 8 character) title for game compatibility (ie: Hall of Heroes -> HALLHERO.IT)
+.          - New songs (11) added*
+.                - Ashen Steppe
+.                - Blackwater Lake
+.                - Gabriel's Last Stand
+.                - Hall of Heroes
+.                - Isle of Burbatak
+.                - Last Goodbye
+.                - Mining Outpost
+.                - Northern Trade Route
+.                - Prelude to War
+.                - Subterranean Path
+.                - Uniting the Clans
+.                - *Songs are available for mapmaking but aren't currently assigned to any maps
+.          - Scroll of Slickness modified (mouse-only hotkey script)
+.                - Mouse Forward button no longer selects leader (makes end turn hotkey combo smoother)
+
+:start_the_damn_game: Map Playlist: :start_the_damn_game: 
+.          - Search for Excalibur:
+.                     - roaming heroes rebalanced 
+
+
+August 1st 2025
+Version 1.37.330 released:
+
+Miscellaneous:
+
+- Scroll of Slickness added (mouse-only hotkey script)
+\-- Works in both windowed and fullscreen mode
+\-- Adds mouse controls using back/forward mouse side buttons as modifiers:
+\--- ScrollWheel Up/Down/Left/Right - Scroll Map
+\--- MouseForward + ScrollWheel Up/Down - Map Level Up/Down
+\--- MouseBack + ScrollWheel Up/Down - Next/Previous Unit
+\--- MouseBack or MouseForward + ScrollWheel Left/Right - Done (hides unit from cycle until next turn)
+\--- MouseBack or MouseForward + LeftClick - Select Leader
+\--- MouseBack + RightClick - ESC (closes most in-game popups)
+\--- MouseForward + LeftClick + RightClick - End Turn
+\--- MouseBack + MouseForward - Save Game
+\--- ScrollWheelClick - Show Grid
+\--- MouseBack or MouseForward + ScrollWheelClick - Center on Unit
+
+- Age of Wonders X - Launcher.exe added
+\-- Launches both AoWx.exe and AoWx - Scroll of Slickness.exe
+\-- Automatically closes Scroll of Slickness when the game exits
+\-- Game can still be run without Scroll of Slickness by launching AoWx.exe directly
+\-- Scroll of Slickness can be opened/closed manually mid-game (multiplayer-safe)
+
+- AoW\.exe replaced with a renamed version of the launcher
+\-- Prevents players from accidentally launching the wrong executable in multiplayer
+
+- Showscene patch and IPX Wrapper included for convenience
+
+
+- Items:
+
+- 80 new item graphics added:
+\-- 15 helmets
+\-- 12 armors
+\-- 13 weapons
+\-- 13 shields
+\-- 10 rings
+\-- 17 use items
+
+- 13 additional item graphics added to game files (not in libraries; available for mapmaking)
+
+
+- Abilities:
+
+- Dispel Magic I/II/III:
+\-- Now have sound effects (same as the spell)
+
+
+- Map Playlist:
+
+- "King of the Hill" added (new original map by Alcedes)
+- New items added to most maps (excluding maps with their own custom items)
+
+
+
+
+July 13th 2025
+Version 1.37.320 released:
+
+- Abilities:
+- Dispel Magic I/II/III cost reduced from 2 to 1
+- Doom Gaze cost reduced from 20 to 15
+- Magic Strike cost reduced from 3 to 2
+- Shoot Javelin cost reduced from 40 to 15
+- Fire Musket cost reduced from 20 to 15
+- Black Breath cost reduced from 3 to 2
+- Cold Breath cost reduced from 5 to 3
+- Cosmic Breath cost reduced from 6 to 5
+- Divine Breath cost reduced from 3 to 2
+- Frost Bolts cost reduced from 6 to 5
+- Lightning Bolts cost reduced from 8 to 7
+- Hurl Boulder cost reduced from 12 to 10
+
+- Spells:
+- Swarm:
+. - ATK reduced from 8 to 7
+. - Damage type changed to Fire + Physical
+- Cold Breath mana cost reduced from 3 to 2
+- Hunter's Mark mana cost reduced from 3 to 2
+- Ooze mana cost increased from 1 to 2
+- Shock Wave mana cost reduced from 6 to 5
+- Level Terrain mana cost reduced from 25 to 15
+- Raise Terrain mana cost reduced from 40 to 25
+- Fountain of Life mana cost reduced from 25 to 15
+- Healing Shower mana cost reduced from 15 to 10
+- Cloud of Ashes mana cost reduced from 13 to 10
+- Fire Halo research cost increased from 40 to 60
+- Scorch Terrain mana cost reduced from 10 to 5, research cost reduced from 60 to 30
+- Fire Barrier mana cost reduced from 15 to 10, upkeep removed (lasts 3 turns)
+- Warmonger mana cost reduced from 40 to 25, upkeep increased from 8 to 10
+- Flood mana cost reduced from 100 to 50, upkeep increased from 15 to 25
+- Recall Spirits:
+. - Changed from Level 2 to 1
+. - Research cost reduced from 70 to 30
+- Turn Undead:
+. - Changed from Level 1 to 2
+. - Research cost increased from 30 to 70
+. - Mana cost increased from 3 to 4
+. - ATK increased from 6 to 9
+. - DMG reduced from 5 to 2
+. - Range reduced from Long Range (12) to Short Range (4)
+- Holy Woods mana cost reduced from 15 to 10
+- Evil Woods mana cost reduced from 15 to 10
+- Conceal Area mana cost reduced from 15 to 10
+- Crusade mana cost reduced from 50 to 40
+- Death Ray
+. - Changed from level 2 to 1
+. - Research cost reduced from 80 to 50
+- Disease Cloud
+. - Changed from Level 1 to 2
+. - Research cost increased from 50 to 80
+. - Mana cost increased from 3 to 4
+. - ATK increased from 6 to 8
+. - DMG reduced from 3 to 1
+. - Damage type changed to Death + Poison
+. - Range increased from Long Range (12) to Infinite Range
+- Mind Decay restored from Infinite Range to Long Range (12)
+- Anti Magic Shell mana cost reduced from 40 to 25
+
+- Units:
+- Elf Ranger attack SFX revised
+- Ballista attack SFX fixed
+- Ent description updated
+
+- Heroes/Leaders:
+- 61 new portraits added
+- Hero library expanded
+
+- City Diplomacy:
+- Razing/looting cities relation penalty decreased from -100 to -60.
+- City status/defender score calculations revised:
+. - Neutral, Weak, No walls = Unrest
+. - Neutral, Weak, Wood walls = Unrest
+. - Neutral, Weak, Stone walls = Stable (no longer Unrest)
+. - Neutral, Average, No walls or greater = Stable
+. - Neutral, Strong, No walls or greater = Stable
+
+. - Wary, Weak, No walls = Unruly
+. - Wary, Weak, Wood walls = Unruly
+. - Wary, Weak, Stone walls = Oppressed (no longer Unruly)
+. - Wary, Average, No walls or greater = Oppressed
+. - Wary, Strong, No walls or greater = Oppressed
+
+. - Hostile, Weak, No walls = Unruly
+. - Hostile, Weak, Wood walls = Unruly
+. - Hostile, Weak, Stone walls = Unrest (no longer Unruly)
+. - Hostile, Average, No walls = Unrest
+. - Hostile, Average, Wood walls = Oppressed (no longer Unrest)
+. - Hostile, Average, Stone walls = Enslaved (no longer Unrest)
+. - Hostile, Strong, No walls or greater = Enslaved (no longer Oppressed)
+
+- Miscellaneous:
+- Custom structures border images updated:
+. - Elven Court Ruins
+. - Tower of the Rift
+. - Wizard's Tower Ruins
+. - Tabernacle
+
+- Map Playlist:
+- Tribute to the Fall added (new original map by Alcedes)
+- Sprint to Power added (new original map by Alcedes)
+- Land of Merhal added (by Queen Elquein, edited by me)
+- Kayland added (by The Groll, edited by me)
+- The Eye of Yaka updated
+. - Leader/Hero starting abilities fixed
+- Swirlmount updated
+. - Azrac Air Galley fixed
+. - Leader/Hero starting abilities fixed
+- Violence Begets Violence updated
+. - exploration sites set to random defenders/items
+. - heroes removed from lizard cities/defenders revised
+. - guarded reflecting pool w/item added in forest
+. - guarded reflecting pool w/item added underground
+
+
+April 19th 2025:
+Version 1.37.311 released:
+
+Units:
+- Werewolf race changed from Undead to None.
+- Basilisk attack SFX fixed.
+
+Miscellaneous:
+- Tower of the Rift (custom dungeon structure) fixed. Previously, exploring this structure underground would cause it to revert to vanilla dungeon graphic once completed.
+- Wizard's Tower (additional custom version that is an exploration site) fixed. Previously, exploring this structure would cause it to revert to vanilla castle ruin graphic once completed.
+
+Map Playlist:
+- Buried added (new original map by me)
+- Sixfold Arena added (by Bing Xi Lao)
+- Search for Excalibur added (by The Groll, edited by me)
+. - Also updated since last played:
+. - Frostling start updated to help AI survive turn 1 attack by two Doom Bats (removed +2 ATK from leader, added Monster Slaying and Vision I, replaced two Frostling Swordsmen with two Archers)
+. - Crypt south of Orcs fixed (empty)
+. - Monster Lair west of Lizards fixed (empty)
+. - Item library doubled, excluding Excalibur (due to large amount of exploration sites with random item amounts sometimes spawning empty)
+. - Lord Vermin's items buffed (time release hero that spawns on turn 30)
+. - Excalibur buffed
+- Mirrored Oasis updated (By Bing Xi Lao, edited by me)
+. - Starting heroes gain Strike but also get Monster status
+- Spice Marshes updated (by Bing Xi Lao, edited by me)
+. - Leader starting abilities revised (to avoid negative skill points)
+- Warlords updated (by Paradox)
+. - Spellcasting V item nerfed to Spellcasting III
+. - Human start position rebalanced (T1 cities have less defenders, comparably to other races)
+- Violence Begets Violence updated
+. - Added T4 Undead city hidden underground
+. - Revised underground T3 Azrac cities (replaced stone walls with wood walls, weakened garrison)
+. - Revised T1 and T2 Highmen/Undead cities to Humans
+. - Leader starting abilities revised
+. - Indie wolves/spiders repositioned
+. - Monster Lair north east of Dwarves fixed (empty)
+. - Indie wolves repositioned
+. - Underground "lava signature" removed/replaced with text bubble
+- Legend Has It updated
+. - Fixed some empty exploration sites
+. - Underground "lava signature" removed/replaced with text bubble
+- An Uneasy Silence updated
+. - Fixed resurrection heroes
+. - Underground "lava signature" removed/replaced with text bubble
+- Cults & Keepers updated
+. - Underground "lava signature" removed/replaced with text bubble (but trolling messages left untouched)
+- Before the Fall updated
+. - Underground "lava signature" removed/replaced with text bubble
+
+
+
+February 8th 2025
+Version 1.37.310 released:
+- Multiplayer:
+	- Exploration sites (crypts, monster lairs, dungeons, etc) can now be explored using Tactical Combat in LAN games, and other players can always watch the combat (or not, depending on whether "Always view TC" setting is enabled).
+
+- Tactical Combat:
+	- Defenders in exploration sites no longer wait until they are within the player's vision range. Instead, they will immediately begin moving/attacking (which not only makes exploration sites more difficult/more exciting/less exploitable, but also greatly speeds up tactical combat for the benefit of other players who are forced to wait/watch).
+- Spells:
+	- Slow replaced with Hunter's Mark.
+		- 7 ATK, one enemy target combat spell, long range
+		- Inflicts -1 DEF & -1 RES until end of combat (or dispelled)
+		- Research points increased from 30 to 45
+		- Cost increased from 2 to 3
+		- Concealment research points lowered from 40 to 30.
+- Abilities:
+	- Trail of Darkness radius increased to 5
+- Miscellaneous:
+	- Three new "chicken heroes" added in last update removed. (They were supposed to be "Editor only" portraits, to be used exclusively in Mirrored Oasis, however for some reason were still appearing in leader customization, sullying the game. So I got rid of them.)
+- Map playlist update:
+	- Greed's Paradise added (by Alcedes)
+	- Mirrored Oasis updated (by Bing Xi Lao, edited by me):
+	- Weak extra starting heroes names/portraits changed
+
+
+December 19th 2024
+Version 1.37.302 released:
+- minor bugfix
+
+
+December 14th 2024
+Version 1.37.301 released:
+- This release was a significant update intended to open up our local LAN sessions to online multiplayer, supported by its own Discord server.
+- This release did not have a maintained changelog, however it was the culmination of shared knowledge and collaboration between Bing Xi Lao (Ziggurat Mod), Chosen One (Evolved Mod), and myself - with some early guidance by And G.
+- This release introduced the "Challenge Mode" (formerly Cult of Storms campaign).
+
+
+April 28th 2021
+Version 1.37.204 released:
+- bugfix / typo corrections
+
+
+April 25th 2021
+Version 1.37.203 released:
+- another bugfix
+
+
+April 24th 2021
+Version 1.37.202 released:
+- bugfix for custom campaign.
+
+
+October 17th 2020
+Update v1.37.116 released:
+- HP cost 10 bug fix
+- MP cost 3 bug fix
+- Charm / Dominate cost revised
+- Heroes bugfix (some heroes had negative skill points when leveling up)
+
+
+October 13th 2020
+Age of Wonders X initial release:
+- The initial release did not have a maintained changelog.
+- This release was my first foray into hex editing engine files. Most major modifications were largely based on reverse engineering AoW+ (by And G) with some vanilla features reinstated and some additional (simple) hex edits.
+- This release introduced the "Human Perspective" custom campaign.
+
+
+~2010-2020
+LAN-MP Ruleset era:
+- Vastly obsolete by modern standards, LAN-MP Ruleset was a rudimentary modpack based on vanilla engine files and modified release files (via DevEd).

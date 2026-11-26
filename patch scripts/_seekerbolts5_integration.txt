@@ -1,0 +1,90 @@
+SEEKER BOLTS v5 (ability 0x3A) - colours swapped + slimmer projectile (2026-10-18, fork; NOTHING applied live, no
+shared builder edited, no engine/pfs change - ids 7000-7015 unchanged).
+
+User on v4: "reverse the colors - blue becomes gold and gold becomes blue. Make the projectile a bit tighter: don't
+change tail length but make it slightly less wide/fat."
+  * seeker_head5: saturated BLUE glow core (SB_DBLUE) + small white-blue centre inside a soft GOLD halo. The halo is
+    hollowed over the core so the blue does not wash out. Crackling GOLD arcs on the halo edge; orbs light blue / gold /
+    light blue. All radii x0.78: frame-0 lit bbox 30x25 -> 25x21 px.
+  * seeker_trail5: GOLD glow + gold arcs + faint blue rim round the head, then gold wisps with a blue heart and
+    blue-weighted sparks. Lateral sizes x0.78: frame-0 bbox 24x27 -> 18x21. LENGTH unchanged - the engine places frame
+    j at path point pos-4+(7-j)/2.
+  * Impact (7046) unchanged.
+  * On sand the additive glow still brightens toward white-gold, as v4 and the spin-up do.
+  * Preview: tmp\seeker5\preview.png. Top = v4, bottom = v5; grass / sand / grey; 8 head frames + head+trail composite.
+
+---- code: insert before `def build():`, after seeker_impact2 (uses SB_GOLD/SB_EBLUE/SB_SKY/SB_GGLOW/_sb_blob/_sb_rgba) ----
+SB_WBLUE = (215, 240, 255); SB_DBLUE = (30, 95, 255)
+
+
+def seeker_head5(n=8):
+    """Seeker Bolts (0x3A) slot 0 v5 (2026-10-18, user on v4: 'reverse the colours - blue becomes gold and gold becomes
+    blue; make it a bit TIGHTER - don't change the tail length but slightly less wide/fat'): seeker_head4 with the
+    roles swapped - a saturated BLUE glow with a white-blue centre inside a soft GOLD halo, crackling gold arcs on the
+    halo edge, the three orbs now light blue / gold / light blue - and every radius x0.78 (head ~22 % slimmer).
+    Additive 770 at blend 90; 64x64, centre (32, 33) = anchor -32/-33; 8-frame loop."""
+    W = H = 64; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2); ang = np.arctan2(yy - cy, xx - cx); S5 = 0.78
+    cols = (SB_SKY, SB_GOLD, SB_SKY)
+    for k in range(n):
+        t = k / n; fl = 0.9 + 0.1 * math.cos(2 * math.pi * t * 2)
+        acc = np.zeros((H, W, 3), np.float32)
+        hole = 1 - np.exp(-(d / (3.4 * S5)) ** 2)                                  # halo kept off the core so the blue stays blue
+        g = np.exp(-(d ** 2) / (2 * (9.0 * fl * S5) ** 2)) * 0.46 * hole
+        for c in range(3): acc[..., c] += g * SB_GGLOW[c]                          # gold halo (was blue)
+        _sb_blob(acc, xx, yy, cx, cy, 3.6 * S5, SB_DBLUE, 1.00)                    # saturated blue glow core (was gold)
+        _sb_blob(acc, xx, yy, cx, cy, 1.2 * S5, SB_WBLUE, 0.35)                    # small white-blue centre
+        crackle = (0.5 + 0.5 * np.cos(5 * ang + 2 * math.pi * t * 3 + 1.3 * np.sin(3 * ang - 2 * math.pi * t))) ** 6
+        ring = np.exp(-((d - 8.0 * fl * S5) ** 2) / 1.6) * crackle * 0.55
+        for c in range(3): acc[..., c] += ring * SB_GOLD[c]                       # gold arcs (were light blue)
+        R = 12.5 * S5
+        for j in range(3):
+            for s in range(4):
+                a = 2 * math.pi * (t + j / 3.0) - s * 0.22; w = (1 - s / 4.0) ** 1.5
+                x = cx + R * math.cos(a); y = cy + 0.45 * R * math.sin(a)
+                _sb_blob(acc, xx, yy, x, y, 3.0 * S5, cols[j], 0.22 * w)
+                if s == 0:
+                    _sb_blob(acc, xx, yy, x, y, 1.6 * S5, cols[j], 0.85)
+                    _sb_blob(acc, xx, yy, x, y, 0.6, SB_WBLUE, 0.3)
+        out.append(_sb_rgba(acc))
+    return out
+
+
+def seeker_trail5(n=8):
+    """Seeker Bolts (0x3A) slot 1 v5: seeker_trail4 with gold <-> blue swapped (a soft GOLD glow round the head with
+    crackling gold arcs and a faint blue rim, then gold wisps with blue-weighted sparks) and every LATERAL size x0.78
+    (glow radii, arc ring, spark scatter).  The tail LENGTH is unchanged - it comes from the engine placing frame j at
+    path point pos-4+(7-j)/2, not from the art.  Additive 770; 64x64, centre (32, 33)."""
+    W = H = 64; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []; rnd = random.Random(3712)
+    d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2); ang = np.arctan2(yy - cy, xx - cx); S5 = 0.78
+    hole = 1 - np.exp(-(d / (4.0 * S5)) ** 4)
+    glow = (235, 140, 25)
+    sp = [(rnd.uniform(-1, 1), rnd.uniform(-1, 1), j % 3) for j in range(8)]
+    for k in range(n):
+        u = k / (n - 1.0); acc = np.zeros((H, W, 3), np.float32)
+        if k <= 1:
+            s = 1.0 if k == 0 else 0.55
+            g = np.exp(-(d / (13.0 * S5)) ** 2) * hole * 0.30 * s
+            for c in range(3): acc[..., c] += g * glow[c]
+            crackle = (0.5 + 0.5 * np.cos(5 * ang + 1.7 * k + 1.3 * np.sin(3 * ang))) ** 6
+            ring = np.exp(-((d - 11.0 * S5) ** 2) / 1.6) * crackle * 0.5 * s
+            for c in range(3): acc[..., c] += ring * SB_GOLD[c]
+            rim = np.exp(-((d - 6.5 * S5) ** 2) / 1.2) * 0.22 * s
+            for c in range(3): acc[..., c] += rim * SB_EBLUE[c]
+        else:
+            rad = (4.5 * (1 - 0.5 * u) + 1.2) * S5; br = (1 - u) ** 1.1
+            _sb_blob(acc, xx, yy, cx, cy, rad, glow, 0.50 * br)
+            _sb_blob(acc, xx, yy, cx, cy, rad * 0.45, SB_DBLUE, 0.6 * br * (1 - u))
+        for sx, sy, j in sp:
+            x, y = cx + sx * (4 + 11 * u) * S5, cy + sy * (4 + 11 * u) * S5 - 2 * u
+            _sb_blob(acc, xx, yy, x, y, 0.9, (SB_GOLD if j == 0 else SB_SKY), 1.15 * max(0.0, 1 - 1.2 * u) * (k > 0))
+        out.append(_sb_rgba(acc))
+    return out
+---- end ----
+---- rows: REPLACE the two v4 rows ----
+  old: (7000, seeker_head4(), "SBhead%d.BMP", 770, 90, 0x0000), ...
+  new: (7000, seeker_head5(), "SBhead%d.BMP", 770, 90, 0x0000),           # Seeker Bolts slot 0 v5: colours swapped (blue core, gold halo/arcs) + 22 % slimmer (64x64, 8-frame loop)
+  old: (7008, seeker_trail4(), "SBtrail%d.BMP", 770, 80, 0x0000), ...
+  new: (7008, seeker_trail5(), "SBtrail%d.BMP", 770, 80, 0x0000),         # Seeker Bolts slot 1 v5: gold halo/wisps with a blue heart, 22 % narrower (same length)
+
+APPLY (game + editor closed): py -3.10 build_dual_sphere_fx_v1.py --apply ; VEH check.  No sfx / pfs / engine step.

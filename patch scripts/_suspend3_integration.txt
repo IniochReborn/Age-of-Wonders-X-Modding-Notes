@@ -1,0 +1,13 @@
+SUSPEND (214) RANGE FIX - 2026-10-16 (fork; NOT applied live)
+Root cause: tactical range = byte +5 of the spell's combat info (VMT+0x7C GetCombatInfo).  Combat spells copy
+[spell+0x34..0x3B] into it (TCombatSpell.GetCombatInfo 0x557F7258: +4 shots, +5 RANGE, +6 fast-combat targets, +7 side),
+but TUnitSpell.GetCombatInfo 0x5577AC78 (TRemedy and every other unit spell) hard-codes +5 = 0xFF (= unlimited) at
+0x5577AC91, after the side byte.  TRemedy's [spell+0x38] = 12 is never read by the tactical cursor, so no pipeline poke
+can change it (Static Shield's (0x38,4,-1) poke is likewise a no-op; it is unlimited anyway via the 0xFF).
+Fix = patch_suspend_fix_v1.py v2 (upgraded in place): the GCI cave (same address 0x5586D820, still 31 B < its 32-B slot,
+RL cave unmoved) for spell 214 writes side 3 + range 0x0C (Great Hail / Slow / Remedy's 12) and jumps to the epilogue
+0x5577AC95, skipping the 0xFF write; every other unit spell is untouched.  No pipeline change.
+Apply (game closed): py -3.10 patch_suspend_fix_v1.py --apply   ("v1 build found -> upgrading to v2", 21 bytes), VEH check.
+Scratch (tmp\susp3): upgrade -> already applied; v2 --revert of the upgraded file == v1 script's --revert of the live
+file (byte-identical); fresh apply after revert == upgrade (byte-identical); diff vs live = 21 bytes 0x5586D82A-0x5586D83E.
+In-game: Suspend's cursor only reaches 12 hexes; enemies and friends still targetable; Static Shield still unlimited.

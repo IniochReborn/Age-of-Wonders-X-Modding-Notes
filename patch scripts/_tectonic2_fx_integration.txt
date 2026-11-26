@@ -1,0 +1,92 @@
+TECTONIC SHIFT (219) v2 presentation - green particles, map shake, "magical earthquake" sfx (2026-10-17, fork; NOTHING applied live).
+Insert ONLY the code lines between the ---- markers; ast.parse each edited builder afterwards.
+
+== 1. build_dual_sphere_fx_v1.py - REPLACE the whole `def tectonic_dust(n=3):` function with this (same ids 4300-4302, same row) ==
+---- code ----
+def tectonic_dust(n=3):
+    """Tectonic Shift (219) slots 0-2 (v2 2026-10-17, user: particles green): three single frames for Air Mastery's
+    map-wide drift (200x116, additive at low blend, as Ice Age's snow_drift): a faint green earth-magic haze along a
+    wide S-curve, a jagged glowing green fissure (forked crack line with a soft glow) running through it, and pale
+    green grit / pebble specks thrown up beside the crack."""
+    W, H = 200, 116; out = []; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    for v in range(n):
+        rnd = random.Random(2190 + v); ph = v * 2.1
+        acc = np.zeros((H, W, 3), np.float32)
+        for k in range(12):                                                      # dust haze puffs
+            t = rnd.random(); x = 10 + 180 * t; y = 60 + 26 * math.sin(t * 2 * math.pi * 0.9 + ph) + rnd.uniform(-6, 6)
+            g = 0.16 * np.exp(-((xx - x) ** 2 + ((yy - y) / 0.55) ** 2) / 260.0)
+            for c, cv in enumerate((80, 190, 100)): acc[..., c] += g * cv
+        pts = []; x = 14.0; y = 60 + 26 * math.sin(ph) + rnd.uniform(-4, 4)       # the fissure: a jagged walk along the curve
+        while x < 186:
+            pts.append((x, y)); x += rnd.uniform(6, 11)
+            y = 60 + 26 * math.sin((x - 10) / 180.0 * 2 * math.pi * 0.9 + ph) + rnd.uniform(-5, 5)
+        glow = Image.new("L", (W, H), 0); gd = ImageDraw.Draw(glow)
+        gd.line(pts, fill=255, width=5)
+        for k in range(4):                                                       # side forks
+            i = rnd.randrange(1, len(pts) - 1); fx, fy = pts[i]; ang = rnd.uniform(-2.6, -0.5) if k % 2 else rnd.uniform(0.5, 2.6)
+            fork = [(fx, fy)]
+            for s in range(3):
+                fx += 7 * math.cos(ang) + rnd.uniform(-2, 2); fy += 7 * math.sin(ang) * 0.6 + rnd.uniform(-2, 2); fork.append((fx, fy))
+            gd.line(fork, fill=170, width=3)
+        g = np.asarray(glow.filter(ImageFilter.GaussianBlur(3.0)), np.float32) / 255.0 * 0.55
+        for c, cv in enumerate((90, 255, 120)): acc[..., c] += g * cv
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"); dr = ImageDraw.Draw(im)
+        dr.line(pts, fill=(185, 255, 175, 255), width=1)                         # the bright crack core
+        for k in range(40):                                                      # grit and pebbles thrown up
+            t = rnd.random(); x = 10 + 180 * t; y = 60 + 26 * math.sin(t * 2 * math.pi * 0.9 + ph) + rnd.uniform(-22, 22)
+            c = int(rnd.uniform(150, 230)); col = (int(c * 0.55), c, int(c * 0.62), 255)
+            r = rnd.choice((0.6, 1.0, 1.4))
+            if r < 1: dr.point((x, y), fill=col)
+            else: dr.polygon([(x - r, y), (x, y - r), (x + r, y + 0.4), (x + 0.3, y + r)], fill=col)
+        out.append(im)
+    return out
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALER_TECTONIC.WAV" entry with this (test-mixed: 3.2 s, RMS 0.22-0.33 over 0-2.4 s, tails out by 3.0 s) ==
+---- code ----
+    # Tectonic Shift (219) v2 (user: should sound like a MAGICAL earthquake): Tremors' rumble slowed way down and doubled
+    # under a sub-bass groan, with the earth itself ringing - a low struck bell + fifth, a deep choir pad, a shimmer of
+    # magic and an eerie drone - and one deep crack as the plates give way.
+    "DUALER_TECTONIC.WAV":  [("Attack/Earth.WAV", 1.0, 0.00, 3.0, 1.0, 0.62),                    # deep slowed rumble
+                             ("Attack/Earth.WAV", 0.55, 0.40, 2.4, 0.9, 0.78),                   # second rumble layer
+                             ("synth:subswell:44:28:3.2", 0.8, 0.00, None, 1.0),                 # sub-bass groan
+                             ("synth:choir:65.4:2.8", 0.30, 0.25, None, 1.0, 1.0, 0.6),          # deep choir pad (fades in)
+                             ("synth:drone:98:2.8", 0.25, 0.15, None, 1.0),                      # eerie magic drone
+                             ("synth:shimmer:2.8", 0.35, 0.30, None, 1.0, 1.0, 0.5),             # magic shimmer
+                             ("synth:bell:131:2.4", 0.40, 0.60, None, 1.0),                      # the earth ringing (low bell)
+                             ("synth:bell:196:2.0", 0.22, 0.62, None, 0.9),                      #   its fifth
+                             ("Attack/A_Force2.WAV", 0.45, 1.10, None, 0.5, 0.65)],              # one deep crack
+---- end ----
+  and add these keys INSIDE the one-line dicts DRIVE = {...} (line ~711) and FADE_OUT = {...} (line ~709), e.g. right after the opening brace:
+---- code ----
+"DUALER_TECTONIC.WAV": 1.15, 
+---- end ----   (DRIVE)
+---- code ----
+"DUALER_TECTONIC.WAV": 0.6, 
+---- end ----   (FADE_OUT)
+  Scratch render: C:\Users\<user>\.claude\jobs\47241cad\tmp\tshake\DUALER_TECTONIC_v2.wav
+
+== 3. Map shake = NEW script patch scripts\patch_tectonic_shake_v1.py (AoWEPACK.dll + AoWx.exe; no shared-file edits) ==
+  RE: Tremors (combat) jitters every unit HS image offset by RandInt(+-1..3) (msg 0x31010, TCPCK 0x4215BD); the
+  strategic map has nothing like it, so this is a CAMERA shake of the strategic view: AoWx.exe's two ShowScene calls
+  (0x4512C0 / 0x4512D7) -> .xedt cave 0x62FD40 offsets the viewer's scene origin through the clamping setters, draws,
+  restores (visual only; local LCG + InterruptTime; never touches game state -> MP-safe).
+  Triggers (AoWEPACK zone 0x55873C00-0x55873D12): cast = TAirMastery VMT CreateEnchantment slot 0x557EDF80 with
+  [spell+0x10] == 219 (1.8 s, |DX| up to 3-4 px alternating every 40 ms, |DY| <= 2); each new turn of a player who
+  owns an active Tectonic Shift = after the NewTurn broadcast call 0x557569DA (so after the terrain shift) (1.4 s,
+  up to 3 px). Envelope: full for the first half, linear fade, 100 ms attack.
+  Different sites from patch_tectonic_v1.py (CE body jmp 0x557F06E4 / NT 0x5577D293) -> the two scripts apply and
+  revert in ANY order (tested: tectonic --revert / --apply round-trip byte-identical with the shake applied).
+  Exe area: .xedt 0x62FD00-0x62FF00 (vars + magic 'TSHK' + originals, cave) - zero and unreferenced before.
+  Scratch tests: dry-run / apply / "already applied" / revert byte-identical on both files; Unicorn run of the exe
+  cave: origin always restored, callee-saved regs + stack balanced, dest/surface args passed through, |DX| 3 / |DY| 2,
+  idle when no request, edge clamp holds (origin 16 stays >= 16). AoWDevX.exe never written (SizeOfImage guard).
+
+== 4. Apply order (game + editor closed) ==
+  a. edit the fx + sfx builders (sections 1-2), then
+     py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 4300-4302 re-rendered green; no new ids)
+     py -3.10 build_dual_sphere_sfx_v1.py --apply         (Sfx\Zsp\DUALER_TECTONIC.WAV)
+  b. py -3.10 patch_tectonic_shake_v1.py                  (dry-run: zone zero, CE slot prev 0x557f06e4, NT prev 0x557553c4, exe sites free)
+     py -3.10 patch_tectonic_shake_v1.py --apply          (backups AoWEPACK.dll.bak_tshake / AoWx.exe.bak_tshake)
+  c. VEH startup check.   Revert: patch_tectonic_shake_v1.py --revert (exact).
+  ⚠ Ship: AoWx.exe changes too (the exe is in the release anyway).

@@ -1,0 +1,45 @@
+ROYAL AMBITION (230) round 8 (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+Icon: sad-mask eyes redrawn as large slanted teardrops (inner corners raised + pointed, outer corners drooping + rounded);
+4 variants in C:/Users/<user>/.claude/jobs/47241cad/tmp/royal8/variants.png (v7 | A | B (+brows) | C (crescent) | D = chosen).
+New mask (already written): patch scripts/royalambition8_user_mask.png (made by tmp/royal8/mk_mask8.py D).
+SFX: same Herald & Choir composition, louder/more present: horn call +40 % with a quiet octave-up horn doubling (brightness),
+choir +38 % plus an octave-up choir layer, pads (strings, low bell) lowered, sparkle bells +25 %, gentle soft-clip DRIVE 1.5.
+Active-signal RMS: live v7 0.140 -> v8 ~0.26 (CitySpy 0.221, Essence 0.241, RiteSeas 0.426).  Renders in tmp/royal8/:
+DUALCO_ROYAL_v8.wav (chosen, drive 1.5), DUALCO_ROYAL_v8_drive1.0/1.4/1.6.wav, DUALCO_ROYAL_old_v7.wav.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_royalambition: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("royalambition8_user_mask.png")    # v8 10/18: sad eyes = slanted teardrops (inner corners raised)
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_ROYAL.WAV" entry AND its 4 v7 comment lines above it with ==
+---- code ----
+    # Royal Ambition v8 (2026-10-18, user: "sfx hard to hear"): v7 Herald & Choir made present - horn call +40 % with an
+    # octave-up horn doubling, choir +38 % plus an octave-up choir, pads lowered, sparkles +25 %; DRIVE 1.5 (gentle tanh).
+    "DUALCO_ROYAL.WAV":     [("synth:horn:293.66:293.66:0.40", 0.70, 0.00, 0.14, 0.05),
+                             ("synth:horn:146.83:146.83:0.40", 0.26, 0.00, 0.14, 0.05),
+                             ("synth:horn:587.33:587.33:0.40", 0.16, 0.00, 0.14, 0.05),
+                             ("synth:horn:293.66:293.66:0.40", 0.70, 0.17, 0.10, 0.04),
+                             ("synth:horn:146.83:146.83:0.40", 0.26, 0.17, 0.10, 0.04),
+                             ("synth:horn:587.33:587.33:0.40", 0.16, 0.17, 0.10, 0.04),
+                             ("synth:horn:440.00:440.00:0.90", 0.78, 0.30, 0.62, 0.30),
+                             ("synth:horn:220.00:220.00:0.90", 0.30, 0.30, 0.62, 0.30),
+                             ("synth:horn:880.00:880.00:0.90", 0.18, 0.30, 0.62, 0.30),
+                             ("synth:drum:73.42:1.2", 0.55, 0.95, None, 0.5),
+                             ("synth:bell:146.83:2.2", 0.26, 0.95, None, 1.2),
+                             ("synth:strings:146.83:2.2", 0.22, 0.90, None, 1.0, 1.0, 0.25),
+                             ("synth:choir:146.83:2.1", 0.66, 0.95, None, 1.0),
+                             ("synth:choir:293.66:2.0", 0.22, 1.00, None, 1.0),
+                             ("synth:bell:220.00:1.6", 0.24, 1.65, None, 1.0),
+                             ("synth:shimmer:1.8", 0.26, 1.15, None, 0.9, 1.0, 0.3),
+                             ("synth:bell:1174.66:1.0", 0.15, 1.35, None, 0.7),
+                             ("synth:bell:1479.98:1.0", 0.13, 1.50, None, 0.7),
+                             ("synth:bell:1760.00:1.0", 0.12, 1.65, None, 0.7),
+                             ("synth:bell:2349.32:1.0", 0.10, 1.80, None, 0.7)],
+---- end ----
+  DRIVE dict: "DUALCO_ROYAL.WAV": 1.0 -> 1.5      FADE_OUT stays 0.8
+
+== 3. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  (no pipeline / DLL change)

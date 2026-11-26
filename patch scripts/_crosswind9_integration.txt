@@ -1,0 +1,17 @@
+CROSSWIND (213) v8 - no dead wait after the animation (2026-10-17, fork; nothing below is applied live)
+==========================================================================================================
+Engine only: patch_tc_crosswind_fx_v1.py v8 (AoWTCPCK, upgrades a live v7 in place; header 'XXW8').
+NO pipeline / art / builder changes (the look is unchanged - only invisible lifetime is removed).
+
+ROOT CAUSE: TCAbRangedTE.Execute ends the combat step only when the map's WHOLE effect list is empty
+(@0x40CB1D: [[0x469420]+0x11C]+8 != 0 -> 0x40CB69 'still running').  v7: parent kind-0x25 alive to TEND 192;
+every cloud driver lived its full 36-frame x 3-tick = 108-tick sequence (last spawn tick 100 -> 208) although it
+drifts off the field at 16..27 px/tick within ~30-70 ticks.
+  before: step done ~tick 208 (~6.0 s @34.5/s) vs last visible cloud ~140/155/170 (field 900/1300/1700 px)
+  after : step done ~max(particles 132+36 = 168, last cloud culled/faded 141/156/171) ~ the last visible frame
+FIX: NF cave culls a cloud when off-field AND moving away (x < -121 drifting left / x > EXW+120 drifting right):
+[fx+0x10] := -1 -> vanilla expiry (0x42A63B jg -> 0x42E3A3 sets done).  TEND 192 -> PLAST+2 = 134 (GT then stays
+at 133 where the cloud speed is already constant, so late clouds move exactly as before).  Swirls/CA debuff untouched.
+
+APPLY (game + editor closed): py -3.10 patch_tc_crosswind_fx_v1.py --apply   ("v7 build found -> upgrading to v8")
+then the VEH startup check.  REVERT: --revert (byte-identical to the v7 script's revert).

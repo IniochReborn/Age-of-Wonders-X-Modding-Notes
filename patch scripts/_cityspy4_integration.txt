@@ -1,0 +1,153 @@
+CITY SPY (229) EYE v4 (2026-10-18, fork; NOTHING applied live, no shared builder edited, NO engine change).
+User: "needs to fade in/out slower / more smoothly. a bit too solid - more translucent/subtle. the iris needs to become
+more of an OVAL as it reaches the sides (so it looks kind of 3D)."
+ * Translucent: the open eye is drawn at blendValue 52 (mode 258 = opacity %; v3: 80); halo a bit tighter + dimmer,
+   outline / star glints a touch dimmer.
+ * Fades: 0.91 s each (v3: 0.32 s), 26 entries over 20 opacity rows (the centre eye at blend 3..52), smoothstep-eased;
+   fade-in ends on blend 52 == the open eye (seamless), fade-out ends on the blank frame.
+ * 3D iris: sphere model, eyeball radius 5.4 px: at gaze g the iris/pupil are squashed horizontally by
+   cos(asin(g/5.4)) (centre: round; +-4 px: ~0.67 wide oval), a soft darker limbal ring, the highlight rides with it.
+   The almond outline is identical in every frame (no edge flicker).
+ * Timeline (35 ms per entry, patch_cityspy_v1.py v3 picks real time mod the list length -> no engine change):
+   fade in 0.91 / hold 0.39 / look left 0.6 / hold 0.6 / sweep right 0.8 / hold 0.6 / centre 0.5 / hold 0.32 /
+   fade out 0.91 / pause 2.0 = 217 entries = 7.6 s.
+ * New DualDF ids 6343-6396 (blank 6343, gaze 6344-6376, fade rows 6377-6396; live max 6342); v3 rows 6300-6342 stay (unused).
+Previews (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\cityspy4\): eye4.gif (full loop at 35 ms, opacity simulated over a
+city-coloured background), gaze4_strip.png (gaze -4/-2/0/+2/+4 at 6x), v3_vs_v4.png (top v3, bottom v4).
+
+== 1. build_dual_sphere_fx_v1.py (LF) - add this block before `def build():` (the v3 functions stay, unused) ==
+---- code ----
+# ---- City Spy v4 eye (2026-10-18; user: fade in/out slower + smoother, more translucent/subtle, iris becomes an OVAL
+# toward the sides so it reads 3D).  Same v1-look almond, drawn ALPHA 258 like v3 but the open eye at blendValue 52
+# (v3: 80) with a softer, dimmer halo/outline; the fades use 20 rows of the centre eye at blend 2.6 .. 52 (v3: 9 rows,
+# 0.32 s) eased over 0.9 s each.  Gaze = a sphere model: the iris/pupil are discs on a 5.4 px eyeball, so at gaze g
+# the angle th = asin(g / 5.4) and the iris is foreshortened horizontally by cos(th) (oval at the sides), the
+# highlight drifts with it.  Supersampled 4x; the almond outline is IDENTICAL for every frame (no edge flicker).
+CSPY4_N_GAZE = 33                 # gaze -4.0 .. +4.0 px in 0.25 px steps (index 16 = centre)
+CSPY4_FULL = 52                   # open-eye opacity (blendValue %, mode 258)
+CSPY4_NFADE = 20                  # fade rows: blend = FULL * k / 20, k = 1..20 (row 20 == the open eye's own value)
+CSPY4_BALL = 5.4                  # eyeball radius (px) for the foreshortening
+_CSPY4 = None
+
+
+def _cspy4_eye(gaze):
+    Wd, Hd, S = 40, 28, 4; cx, cy = 20.0, 14.0
+    yy, xx = np.mgrid[0:Hd, 0:Wd].astype(np.float32)
+    a, b = 12.0, 6.8
+    u = (xx - cx) / a; v = (yy - cy) / b
+    lid = (1 - np.clip(np.abs(u), 0, 1) ** 2) ** 1.2
+    inside = (np.abs(v) <= lid) & (np.abs(u) <= 1)
+    outline = (np.abs(np.abs(v) - lid) < 0.22) & (np.abs(u) <= 1.04)
+    glow = np.exp(-((xx - cx) ** 2 / (2 * 9.0 ** 2) + (yy - cy) ** 2 / (2 * 5.0 ** 2))) * 0.55
+    halo = (glow > 0.22) & ~inside & ~outline                        # a touch tighter than v3 (0.18): subtler
+    stars = [(5.0, 6.0), (35.0, 8.0), (31.0, 24.0)]
+    st = np.zeros_like(inside)
+    for sx, sy in stars:
+        st |= ((np.abs(xx - sx) <= 0.6) & (np.abs(yy - sy) <= 1.4)) | ((np.abs(yy - sy) <= 0.6) & (np.abs(xx - sx) <= 1.4))
+    Y, X = np.mgrid[0:Hd * S, 0:Wd * S].astype(np.float32); X = (X + 0.5) / S; Y = (Y + 0.5) / S
+    th = math.asin(max(-0.98, min(0.98, gaze / CSPY4_BALL))); c = math.cos(th)
+    gx = cx + gaze
+    ri, rp = 4.2, 1.7
+    re = np.sqrt(((X - gx) / c) ** 2 + (Y - cy) ** 2)                 # elliptical distance: horizontally squashed by cos(th)
+    iris = np.clip(ri - re + 0.5, 0, 1); pupil = np.clip(rp - re + 0.5, 0, 1)
+    hx = gx - 1.6 * c + 0.6 * math.sin(th); hy = cy - 1.8              # highlight rides the curved surface
+    gl = np.clip(1.6 - np.sqrt(((X - hx) / max(c, 0.55)) ** 2 + (Y - hy) ** 2) * 1.5, 0, 1)
+    rim = np.clip(1.0 - np.abs(re - ri) * 1.6, 0, 1) * 0.35           # a soft darker limbal ring sells the roundness
+    R = 225 * (1 - iris) + 200 * iris; G = 210 * (1 - iris) + 60 * iris; B = 245 * (1 - iris) + 220 * iris
+    R = R * (1 - rim) + 110 * rim; G = G * (1 - rim) + 30 * rim; B = B * (1 - rim) + 150 * rim
+    R = R * (1 - pupil) + 30 * pupil; G = G * (1 - pupil) + 8 * pupil; B = B * (1 - pupil) + 50 * pupil
+    R = R * (1 - gl) + 255 * gl; G = G * (1 - gl) + 255 * gl; B = B * (1 - gl) + 255 * gl
+    rgb = Image.fromarray(np.dstack([R, G, B]).clip(0, 255).astype(np.uint8), "RGB").resize((Wd, Hd), Image.BOX)
+    arr = np.asarray(rgb).astype(np.float32)
+    out = np.zeros((Hd, Wd, 4), np.float32)
+    out[..., :3][halo] = (70, 34, 120); out[..., 3][halo] = 255      # dimmer halo than v3 (90, 40, 150)
+    out[..., :3][inside] = arr[inside]; out[..., 3][inside] = 255
+    out[..., :3][outline] = (110, 50, 175); out[..., 3][outline] = 255
+    out[..., :3][st] = (215, 190, 245); out[..., 3][st] = 255
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
+
+
+def _cspy4_frames():
+    global _CSPY4
+    if _CSPY4 is None:
+        _CSPY4 = [_cspy4_eye(-4.0 + 0.25 * k) for k in range(CSPY4_N_GAZE)]
+    return _CSPY4
+
+
+def cityspy_eye4_blank():
+    """City Spy (229) v4: one invisible frame (all colour key) for the hidden pause."""
+    return [Image.new("RGBA", (40, 28), (0, 0, 0, 0))]
+
+
+def cityspy_eye4_gaze():
+    """City Spy (229) v4: 33 open-eye frames, gaze -4..+4 px in 0.25 px steps (index 16 = centre), oval iris at the sides."""
+    return list(_cspy4_frames())
+
+
+def cityspy_eye4_centre():
+    """City Spy (229) v4: the centre-gaze eye alone (one fade row per blend level)."""
+    return [_cspy4_frames()[16]]
+
+
+def _ease4(t):
+    return t * t * (3 - 2 * t)
+
+
+def cityspy_eye4_timeline(base):
+    """City Spy (229) v4 slot-1 list for patch_cityspy_v1.py v3 (35 ms per entry = real time mod len; no engine change):
+    fade in 0.91 s (26 entries over 20 eased levels) / hold 0.39 / look left 0.6 / hold 0.6 / sweep right 0.8 /
+    hold 0.6 / back to centre 0.5 / hold 0.32 / fade out 0.91 / hidden 2.0 s -> 217 entries = 7.6 s.
+    base = first DualDF id: +0 blank, +1..+33 gaze, +34..+53 fade rows 1..20 (row 20 = blend 52 = the open eye)."""
+    BL, G0, F0 = base, base + 1, base + 34
+    def gz(px): return G0 + int(round((px + 4.0) / 0.25))
+    def fd(t): return F0 + max(0, min(CSPY4_NFADE - 1, int(round(_ease4(t) * CSPY4_NFADE)) - 1))
+    NF = 26
+    seq = []
+    seq += [fd((i + 1) / NF) for i in range(NF)]                        # fade in (eased, 20 levels)
+    seq += [gz(0)] * 11
+    seq += [gz(-4.0 * _ease4((i + 1) / 17)) for i in range(17)]         # look left
+    seq += [gz(-4.0)] * 17
+    seq += [gz(-4.0 + 8.0 * _ease4((i + 1) / 23)) for i in range(23)]    # sweep right
+    seq += [gz(4.0)] * 17
+    seq += [gz(4.0 - 4.0 * _ease4((i + 1) / 14)) for i in range(14)]    # back to centre
+    seq += [gz(0)] * 9
+    seq += [fd(1 - (i + 1) / NF) if i < NF - 1 else BL for i in range(NF)]   # fade out (eased) -> blank
+    seq += [BL] * 57                                                   # 2 s hidden
+    return seq
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - group rows: add right AFTER the (6342, cityspy_eye3_centre(), ...) row ==
+---- code ----
+              (6343, cityspy_eye4_blank(), "COspy4z%d.BMP", 258, 52, KEY),        # City Spy (229) v4: invisible frame (hidden pause)
+              (6344, cityspy_eye4_gaze(), "COspy4g%02d.BMP", 258, 52, KEY),       # City Spy (229) v4: open eye at blend 52, gaze -4..+4 px in 0.25 px steps (33), oval iris at the sides
+              (6377, cityspy_eye4_centre(), "COspy4f00_%d.BMP", 258, 3, KEY),     # City Spy (229) v4: fade level 1/20 = the centre eye at blend 3
+              (6378, cityspy_eye4_centre(), "COspy4f01_%d.BMP", 258, 5, KEY),     # City Spy (229) v4: fade level 2/20 = the centre eye at blend 5
+              (6379, cityspy_eye4_centre(), "COspy4f02_%d.BMP", 258, 8, KEY),     # City Spy (229) v4: fade level 3/20 = the centre eye at blend 8
+              (6380, cityspy_eye4_centre(), "COspy4f03_%d.BMP", 258, 10, KEY),     # City Spy (229) v4: fade level 4/20 = the centre eye at blend 10
+              (6381, cityspy_eye4_centre(), "COspy4f04_%d.BMP", 258, 13, KEY),     # City Spy (229) v4: fade level 5/20 = the centre eye at blend 13
+              (6382, cityspy_eye4_centre(), "COspy4f05_%d.BMP", 258, 16, KEY),     # City Spy (229) v4: fade level 6/20 = the centre eye at blend 16
+              (6383, cityspy_eye4_centre(), "COspy4f06_%d.BMP", 258, 18, KEY),     # City Spy (229) v4: fade level 7/20 = the centre eye at blend 18
+              (6384, cityspy_eye4_centre(), "COspy4f07_%d.BMP", 258, 21, KEY),     # City Spy (229) v4: fade level 8/20 = the centre eye at blend 21
+              (6385, cityspy_eye4_centre(), "COspy4f08_%d.BMP", 258, 23, KEY),     # City Spy (229) v4: fade level 9/20 = the centre eye at blend 23
+              (6386, cityspy_eye4_centre(), "COspy4f09_%d.BMP", 258, 26, KEY),     # City Spy (229) v4: fade level 10/20 = the centre eye at blend 26
+              (6387, cityspy_eye4_centre(), "COspy4f10_%d.BMP", 258, 29, KEY),     # City Spy (229) v4: fade level 11/20 = the centre eye at blend 29
+              (6388, cityspy_eye4_centre(), "COspy4f11_%d.BMP", 258, 31, KEY),     # City Spy (229) v4: fade level 12/20 = the centre eye at blend 31
+              (6389, cityspy_eye4_centre(), "COspy4f12_%d.BMP", 258, 34, KEY),     # City Spy (229) v4: fade level 13/20 = the centre eye at blend 34
+              (6390, cityspy_eye4_centre(), "COspy4f13_%d.BMP", 258, 36, KEY),     # City Spy (229) v4: fade level 14/20 = the centre eye at blend 36
+              (6391, cityspy_eye4_centre(), "COspy4f14_%d.BMP", 258, 39, KEY),     # City Spy (229) v4: fade level 15/20 = the centre eye at blend 39
+              (6392, cityspy_eye4_centre(), "COspy4f15_%d.BMP", 258, 42, KEY),     # City Spy (229) v4: fade level 16/20 = the centre eye at blend 42
+              (6393, cityspy_eye4_centre(), "COspy4f16_%d.BMP", 258, 44, KEY),     # City Spy (229) v4: fade level 17/20 = the centre eye at blend 44
+              (6394, cityspy_eye4_centre(), "COspy4f17_%d.BMP", 258, 47, KEY),     # City Spy (229) v4: fade level 18/20 = the centre eye at blend 47
+              (6395, cityspy_eye4_centre(), "COspy4f18_%d.BMP", 258, 49, KEY),     # City Spy (229) v4: fade level 19/20 = the centre eye at blend 49
+              (6396, cityspy_eye4_centre(), "COspy4f19_%d.BMP", 258, 52, KEY),     # City Spy (229) v4: fade level 20/20 = the centre eye at blend 52
+---- end ----
+
+== 2. patch_dual_sphere_spells_v1.py (currently LF - detect the newline), entry 229 - replace the slot-1 line (it keeps the dict's closing `},`) ==
+---- code ----
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [6377] * 4 + [6378] + [6379] + [6380] + [6381] + [6382] + [6383] + [6384] + [6385] + [6386] + [6387] + [6388] + [6389] + [6390] + [6391] + [6392] + [6393] + [6394] + [6395] * 2 + [6396] * 3 + [6360] * 12 + [6359] * 2 + [6358] + [6357] + [6355] + [6354] + [6353] + [6351] + [6350] + [6349] + [6347] + [6346] + [6345] * 2 + [6344] * 20 + [6345] * 2 + [6347] + [6348] + [6349] + [6351] + [6353] + [6355] + [6357] + [6359] + [6361] + [6363] + [6365] + [6367] + [6369] + [6371] + [6372] + [6373] + [6375] * 2 + [6376] * 20 + [6375] + [6374] + [6373] + [6371] + [6370] + [6368] + [6366] + [6365] + [6363] + [6362] + [6361] + [6360] * 11 + [6396] * 2 + [6395] * 2 + [6394] + [6393] + [6392] + [6391] + [6390] + [6389] + [6388] + [6387] + [6386] + [6385] + [6384] + [6383] + [6382] + [6381] + [6380] + [6379] + [6378] + [6377] * 4 + [6343] * 58, -20, -14, f20=2, f18=3)},  # v4 10/18: 35 ms per entry (patch_cityspy_v1.py v3 unchanged: real time mod 217 = 7.6 s): 0.9 s eased fade in / hold / look left / hold / sweep right / hold / centre / 0.9 s fade out / 2 s pause; blend 52, oval iris at the sides
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF += 6343-6396)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 229 slot 1 = the 217-entry timeline)
+  VEH startup check.  No engine / sfx change (patch_cityspy_v1.py stays v3).

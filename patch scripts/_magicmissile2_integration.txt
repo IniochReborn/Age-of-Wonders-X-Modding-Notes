@@ -1,0 +1,64 @@
+MAGIC MISSILE (228) v2 - one launch sound PER BOLT (Magic-Bolt family) + a quieter per-hit impact (2026-10-18, fork;
+NOTHING applied live, no shared builder edited).  Line endings: sfx builder + pipeline = CRLF, fx/icons = LF -> detect
+the newline per file, insert ONLY the code blocks, ast.parse each edited builder afterwards.
+
+RE (why it played once): cue 0 of a projectile spell is played by the CASTER's cast animation (castsnd site 0x421D91),
+which NextStrike starts once, at strike 0.  The kind-6 projectile NewFrame (0x429FBB) already has a vanilla per-
+PROJECTILE launch cue: first frame ([fx+0x10]==0), sound on ([map+0x129]), param 0x34, `cmp [fx+0x18],0x7A` (0x42A027)
+-> play cue 0 of that spell (0x42A02D..0x42A04A); vanilla 0x7A is excluded from the cast-animation cue (0x421D87).
+Engine: NEW patch scripts\patch_tc_magicmissile_v1.py (AoWTCPCK): site 0x42A027 -> cave 0x44D000 (0x7A or 228 ->
+play), and 228 appended to the castsnd exclusion list (0x43C900; 109 of 128 B) -> cue 0 plays ONCE PER BOLT at launch,
+never at the cast.  Cue 1 (DUALCO_MMHIT) per landing unchanged (0x42A0A2).
+"Magic Bolts" = the unit ability 'Allows the unit to attack mid-ranged targets with a bolt of magic' (Ability.pfs) whose
+sound is SFX\ATTACK\MAGICA04.WAV -> the new launch is built on it (pitched up + an under-octave double, a whoosh tear,
+a glint, a shimmer) = same family, not the stock file.
+Variation per bolt was NOT done: a sound-list cue makes TSFXLibrary.Play pick with System.Random (SoundP 0x55405FB9),
+which would desync MP when players' sound settings differ.  Cue 0 must stay a single sound.
+
+== 1. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_MMISSILE.WAV" and "DUALCO_MMHIT.WAV" entries with ==
+---- code ----
+    # Magic Missile v2 (2026-10-18, user: "sfx sucks - play it once per projectile, like Magic Bolts"): cue 0 now plays
+    # at EACH bolt's launch (patch_tc_magicmissile_v1.py) -> a short Magic-Bolt zap (the ability's MAGICA04, pitched up,
+    # with an under-octave double for body), the bolt tearing off (fast wind), a crystalline glint and a little shimmer.
+    "DUALCO_MMISSILE.WAV":  [("Attack/MagicA04.WAV", 0.70, 0.00, 0.70, 0.25, 1.10),
+                             ("Attack/MagicA04.WAV", 0.28, 0.015, 0.60, 0.25, 0.78),
+                             ("Attack/Wind.WAV", 0.30, 0.03, 0.30, 0.20, 2.4, 0.02),
+                             ("synth:bell:1760:0.35", 0.10, 0.00, None, 0.25),
+                             ("synth:shimmer:0.45", 0.14, 0.02, None, 0.25)],
+    # per landing (cue 1, x3): a subtle crystalline impact (peak ~0.33, no DRIVE - not normalised up)
+    "DUALCO_MMHIT.WAV":     [("Attack/MagicA01.wav", 0.28, 0.00, 0.30, 0.18, 1.7),
+                             ("Attack/A_Force1.WAV", 0.16, 0.00, 0.16, 0.10, 1.6),
+                             ("synth:bell:2349:0.4", 0.08, 0.01, None, 0.30)],
+---- end ----
+  DRIVE dict:     "DUALCO_MMISSILE.WAV": 1.4 -> 1.3        (no DRIVE entry for MMHIT)
+  FADE_OUT dict:  "DUALCO_MMISSILE.WAV": 0.25 -> 0.2 ,  "DUALCO_MMHIT.WAV": 0.15 -> 0.12
+  (scratch renders: launch 0.70 s peak 0.86 before normalise, hit 0.41 s peak 0.33; tmp\mm2\DUALCO_MMISSILE_v2.wav,
+   DUALCO_MMHIT_v2.wav, preview_3bolts.wav = three launches 0.25 s apart + their hits)
+
+== 2. patch_dual_sphere_spells_v1.py, entry 228 - replace the sfx line with (comment only changes) ==
+---- code ----
+         sfx=["SFX\\ZSP\\DUALCO_MMISSILE.WAV", ["SFX\\ZSP\\DUALCO_MMHIT.WAV"]]),                   # cue 0 = EACH bolt's launch (patch_tc_magicmissile_v1.py: kind-6 first frame), cue 1 = each landing (0x42A0A2)
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_sfx_v1.py --apply            (rewrites Sfx\Zsp\DUALCO_MMISSILE.WAV / DUALCO_MMHIT.WAV)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply         (comment-only change; harmless to re-run)
+  py -3.10 patch_tc_magicmissile_v1.py                    (dry run: site vanilla | cave zero | castsnd ids [...] | relocs none)
+  py -3.10 patch_tc_magicmissile_v1.py --apply            (backup <game>\backup\AoWTCPCK.dll.bak_mmissile)
+  VEH startup check.
+
+== 4. Chain / LIFO ==
+  * castsnd list: other users (patch_tc_banshee_vortex_v1, hurl boulder, patch_tc_oilgush_cue0_v1) parse + rebuild the
+    list from the live ids, so 228 survives their re-runs; this script's --revert removes only 228.
+  * site 0x42A027 was vanilla; revert THIS first before anything else that would rewrite it.
+
+== 5. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\mm2\) ==
+  * live-copy round trip: apply -> "already applied" -> revert md5 == live (a5ae1c26...) -> fresh apply == first apply.
+  * emu.py (Unicorn, the applied DLL): 0 FAIL / 23 - site+cave routes 0x7A and 228 to the play branch (0x42A02D) and
+    0x7B / 397 / 0 / 0x1E4 to the skip branch (0x42A04F), eax/esp preserved; castsnd skips 228 / 372 / 119 and plays
+    123 / 229.
+
+== 6. Open (not seen in game) ==
+  * The launch cue is the vanilla 0x7A path - assumed [fx+0x10] stays 0 for exactly one frame per bolt (it does for
+    vanilla 0x7A); if a bolt ever "stutters" its sound, that is the place to look.
+  * Three overlapping launches 0.25 s apart sum loudly; lower the 0.70 layer if it's too much.

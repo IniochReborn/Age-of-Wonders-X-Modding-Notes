@@ -1,0 +1,18 @@
+TERRAIN INTERPLAY (2026-10-17, fork): lava under units, Tectonic hills/mountains under units, Pyroclasm converts Tectonic
+mountains.  Scripts only (no builder / pipeline / Spells.pfs change).  NOTHING applied live.
+
+Scripts:
+  patch_terrain_armyhooks_v1.py   NEW  (AoWEPACK zone 0x5587A600..0x5587A800, backup .bak_armyhooks)
+  patch_tectonic_v1.py            v3.1 -> v3.2 in place (backup .bak_tectonic32 = the v3.1 state)
+  patch_pyroclasm_v1.py           v2 -> v3 in place (backup .bak_pyroclasm3 = the v2 state)
+  (old copies: C:\Users\<user>\.claude\jobs\47241cad\tmp\terrain4\patch_tectonic_v1.v31.py / patch_pyroclasm_v1.v2.py)
+
+Apply order (game + editor closed), LIFO because Pyroclasm is chained in front of Tectonic:
+  py -3.10 patch_pyroclasm_v1.py --revert          (the CURRENT v2 is reverted by the new script too: exact, == v2's own revert)
+  py -3.10 patch_terrain_armyhooks_v1.py --apply
+  py -3.10 patch_tectonic_v1.py --apply            (in-place v3.1 -> v3.2; dry run first: "in-place upgrade ours(old) -> v3.2")
+  py -3.10 patch_pyroclasm_v1.py --apply           (fresh v3 on top of Tectonic v3.2)
+  VEH startup check.
+patch_tectonic_shake_v1.py is independent (other sites).
+
+Revert order: pyroclasm --revert -> tectonic --revert -> armyhooks --revert (armyhooks refuses while either uses it).

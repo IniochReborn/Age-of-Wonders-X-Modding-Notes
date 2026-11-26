@@ -1,0 +1,25 @@
+ESSENCE SHIFT (231) v4 - crash fix + target cursor (2026-10-18, fork).  Engine only: NO builder / pipeline / Spells.pfs
+change.  patch scripts\patch_essenceshift_v1.py upgraded IN PLACE to v4 (header ESSHIFT4; v1..v3 zones accepted;
+zone now 0x5587F000..0x55880000, the extra half verified zero + reloc-free).  v3 script copy:
+C:\Users\<user>\.claude\jobs\47241cad\tmp\essence4\patch_essenceshift_v1.v3.py
+
+ROOT CAUSE (WER: AppHangB1 'top level window is idle' x2 at 01:52, no dump -> static RE): v3 was the first build whose
+transform ran - it FREED the old node (SetPlayer(0xFF) + RemoveFromMap + TObject.Free) and placed a new one.  Vanilla
+never frees a game structure at runtime (raze / rebuild / capture are in place via TEs; the only RemoveFromMap+Free
+pairs in AoWEPACK are TItem / TAoWEngine destructors), so cached structure pointers (UI selection, AI caches, player
+memory, token lists) dangle -> use-after-free -> lock.  Secondary: TAoWHSMap.Random ShowMessage('Invalid AoWHSMap.Random
+use') when unsynchronised.
+
+FIX: elemental -> elemental IN PLACE (identical layouts: SetPlayer(0xFF) old class, swap VMT + resource, CreateShadow,
+SetPlayer(owner) new class); power node -> retired (unregistered + removed, never freed) + new node placed; TRandomNode
+refused; [game+0x174] zeroed around SetPlayer (no spurious capture events); static scene invalidated; Random wrapped in
+SynchroniseBegin/End.  Diag dwords @0x5590BD10: +0 stage (9 = done), +4 casts, +8 path (1 in place / 2 replace), +0xC sphere.
+CURSOR: OnValidTarget ([sel+0x18]/[sel+0x1C]) installed by selc for 231 -> wand on valid nodes, crossed wand (0x78) elsewhere.
+
+APPLY (game + editor closed):
+  py -3.10 patch_essenceshift_v1.py            (dry run: "zone ours(old) ... 1758 bytes change")
+  py -3.10 patch_essenceshift_v1.py --apply    (backup backup\AoWEPACK.dll.bak_essence4 = the v3 state)
+  VEH startup check.
+LIFO unchanged: revert Essence Shift before re-running patch_terrain_spells_v1.py / patch_terrain_armyhooks_v1.py.
+Tests (scratch tmp\essence4\): round trip upgrade==fresh apply (f3e79a71), v4 revert == v3 script's revert (fef64694);
+emu4.py (Unicorn, real v4 zone, bases 0x55700000 and 0x56C10000): ALL OK.

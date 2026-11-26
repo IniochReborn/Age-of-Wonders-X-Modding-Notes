@@ -1,0 +1,58 @@
+---
+name: ai-item-loot
+description: "AI heroes path to ground items and equip them (BXL port, build_ai_itemloot.py) — applied 2026-08-31, awaiting test"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: bc99310d-e7a0-464e-8b38-a64c2704c9e7
+  modified: 2026-08-31T09:07:15.696Z
+---
+
+**BXL's AI item pair ported 2026-08-31** (`patch scripts/build_ai_itemloot.py`, one combined script, .bak_aiitemloot; his originals: 2026-07 build_ai_itempickup.py [confirmed working in his tree 7/21] + build_ai_itemtarget.py). Companion to [[ai-explores-sites]].
+
+## What it does
+- **Pickup**: AI-owned heroes (incl. leaders/wizards) standing on ground items equip the first item fitting each empty equip slot (engine's own CanPlaceItem predicate; equip slots 0-5 only, NO backpack — AI can't re-equip from it). Fires on the hero's own NewTurn and on MovedTo.
+- **Targeting**: TItemHS answers AI-target broadcast 0x1200 with priority 10+min(maxObtainValue/10,20) = 10..30 (max-combined into [rec+0] ONLY) → idle AI groups path to loot; armies/cities (50+/100+) always outrank items.
+
+## Edits (AoWEPACK.dll; caves 0x55814840–0x55814A40, **next free 0x55814A40**)
+- cave_pickup @0x55814840 (141B, worker: eax=hero; PIC anchor for [0x558FA040]): strategic-only ([map+0x11C]==0), AI-only ([player+0xA7]!=0 via GetPlayers 0x557544D0 on movsx [hero+0x24]), [hero+0x70] THeroItems present; per slot REFETCH GetItemsOnGround 0x55788C7C (pickup can FREE the TItemHS+list — only the item ID [item+0x14] crosses the mutation; break to next slot after ExecutePlaceItem 0x5578907C); GetItem 0x55794A2C bounds-checked; CanPlaceItem 0x5578674C.
+- cave_nt @0x55814940 (20B): hook = retargeted `call TAbstractUnit.NewTurn` @0x55787FD7 (orig E8 70 8D FF FF); replays the call, gates `cmp bl,[esi+0x24]` (owner's turn), pushad-wrapped worker call.
+- cave_moved @0x55814980 (42B): hook = jmp @0x5578051B over the MovedTo epilogue pops (5F 5E 5B 59 5D); IsClass(THero classref cell [0x55711FAC], PIC anchor) gate; replays pops + ret 4.
+- cave_target @0x558149C0 (127B): TItemHS VMT+0xCC @0x55710244 repointed from inherited thunk 0x55701D4C (slot reloc stays valid); chains inherited first (TArmyHS pattern); guards [msg+0x18]==0 sub-hex, msg==0x1200, ctx [.+2] mode==0; items list = [TItemHS+0xC]; GetObtainValue 0x557945B4 (OUR re-tuned ((cost>>4)*5)+10 — formula still lands 10..30).
+
+## MP safety (his analysis, re-verified)
+Both pickup hooks run on EVERY peer (NewTurn = broadcast 0x20020002 with no locality gate; MovedTo = TArmy.MovedTo iterates members); ExecutePlaceItem is side-effect-clean (no RNG/log/sound/dialog/token) → deterministic on all peers. A TOKEN mint here would be WRONG (N peers → N pickups). Targeting cave only writes an AI-query result — no state.
+
+## v2 (2026-08-31, APPLIED — after user round-1: v1 confirmed working but "all items cost 10 gold in our mod (campaign transfer) → weight by total stat/ability cost; AI should upgrade-swap (equal → no switch); use items → free use slot else ignore")
+- **Item value metric** (cave_value @0x55814840, shared; per-stat costs re-tuned by user same day): `5×att + 10×def + 10×dam + 5×res + Σ ExpandCost(granted abilities)`. RE: item stat bytes [item+0x46 att][0x47 def][0x48 dam][0x49 res] (proved from THeroItems.GetAttack/GetDefense/GetDamage/GetResistance @0x55786354/88/BC/F0); an item IS an ability container (children [[item+8]+4][i], count [item vmt+0x54]); **ability cost = vcall [vmt+0xC8] ExpandCost** (base 0x5574E908 = `mov eax,[ability+0x14]`, ~70 class overrides) = the hero-levelup cost. TItem.GetCampaignTransferPoints just forwards to GetObtainValue (flat) — useless.
+- **Upgrade-swap** (cave_pickup v2 @0x55814B40, 367B): per equip slot 0..5: slot type via GetPositionItemType 0x55786734 (table 0x558E8DB0: pos types 2,0,3,4,1,4 — slots 3&5 share type 4); current = GetPositionItem 0x55786718, value or −1 if empty; best STRICTLY-greater matching ground item → drop old `ExecutePlaceItem(hero, oldID, 0xE)` then place new at slot. Equal → ignored.
+- **Use items** = type [item+0x34]==5 ([+0x38]=charges; type→pos table maps 5→0x0F unequippable): pass 1 places ONE per hook firing into a free inventory slot (finder 0x5578601C on [hero+0x74] → 0..7 or −1; **ExecutePlaceItem pos = 6+slot** — its dispatch: pos<6 equip / 6..13 inventory / 0xE ground-drop, and it revalidates via THero.CanPlaceItem 0x55788D08 + resolves ids from the item registry [map+0xF4] → stale ids no-op).
+- **Targeting v2.1 (user re-tune, same day): GROUP-AWARE, priority 10..75.** cave_target (397B, re-homed @0x55814D40) walks the ASKING group ([msg+0x10] TAIGroupControl → **[gc+0xC] = TAIGroup, a TUnitList**; units via GetUnit 0x5578309C, heroes via IsClass THero classref [0x55711FAC] PIC anchor): an item counts only if some hero would TAKE it (use item → free inventory slot; equip item → matching slot empty or strictly worse by cave_value — same rule as the pickup swap). priority = 10 + min(bestQualifyingValue/2, 65) → good upgrades rival strong-site draws; already-well-equipped groups aren't attracted at all (also kills BXL's loiter risk).
+- Cave layout: value/nt/moved @0x55814840/8A0/8C0 (zone to 0x55814A40, 0x558148F0+ spare), pickup @0x55814B40–0x55814D40, target @0x55814D40–0x55814F00. **Next free 0x55814F00.**
+- THero.AutoPlaceItem @0x5578901C exists (equip-or-backpack; callers 0x55731AC3/0x55731C03 AI-land) — NOT used (would stash equip items in backpack).
+
+## v2.2→v2.3 crash chain (8/31, FIXED — two user-hit AVs via the TE-detail dialog)
+- **"Exception during TEndTurnTE"** (hero NewTurn broadcast → pickup worker → cave_value): AV @0x5581487F then (after v2.2 hardening) @0x55814890, both "read of 00000000" — **cave_value walked [item+8] as a TList of ability children. WRONG: TItem is an ability OWNER — [item+8] = the ability BITSET pointer** (crash = reading bitmask word 1 (=0 for low-id items) as a data-array ptr). The THeroItems getters iterate the CONTAINER ([heroitems+8]+4 array of held items); TItem's own +8 is its bitset (TItem.AddRef/Release @+8?? no — refcount elsewhere; bitset per the itemablvl owner walk).
+- **v2.3 correct model**: for id 0..191: `bt [bits],id` (bit string, engine's own unbounded idiom) → set → global registry ability `[[0x558FA044]+0x80] → GetAbility 0x557501C0(id)` (asserts only on NEGATIVE id, nil for unregistered) → nil+vmt+IsClass(TAbility, cell [0x5570F214]) guards → [vmt+0xC8] ExpandCost (TMultiLevelAbility override is self-contained: next-level cost from [self+0x2C] list). Also hardened: worker gates [hero+4]!=0 (placed) and [hero+0x74]!=0 before the inventory finder (was an unguarded AV path).
+- cave_value now 160B @0x55814840 (zone1 relaid: nt @0x55814900, moved @0x55814920).
+- ⚠ Transitional FOREIGN states during these reworks were cleared by hand (restore 2 hooks + VMT slot, zero 0x55814840-0x55814A40 + 0x55814B40-0x55814F00) — the script's own revert can't cross layout versions.
+
+## v2.4 (8/31): use items were never picked up (user-hit) — **the engine's inventory free-slot finder 0x5578601C returns -1 on an EMPTY list**, and hero inventories start empty (the UI passes grid positions directly; placement `[item vmt+0x48](item, inv, pos-6)` grows the list on demand). Fix: probe positions 6..13 with the engine's own getter **0x55786284 (eax=inv, dl=pos 6..13 → item or 0; 0/out-of-range = free)** in both the pickup use-pass and the targeting would-take check. ExecutePlaceItem inventory dispatch confirmed: pos 6..13 → slot = pos−6, THero.CanPlaceItem gates co-location (strategic) + slot-free via the same getter.
+
+## v2.5 (8/31, third value-cave AV, user-hit @0x55814892 read 0x0E140000): the 192-bit fixed scan read past smaller bitsets. **TItem's own GetAbSet (+0x4C impl 0x5574E0E0, shared TAbilityControl base) = `cmp edx,[item+0xC]; jae false; bt [[item+8]],edx` — [item+0xC] is the BIT CAPACITY and MUST bound every scan.** v2.5 loops id < min([item+0xC],192). (This also explains the v2.2 AV: [item+8]+4 was bitmask word 1.) Rule: when replicating an engine bit-set walk, copy the engine's OWN accessor including its bounds check.
+
+## Notes / watch in test
+- His recorded risk: hero may loiter next to an item it can't equip (item stays a target). Mitigation if seen: answer 0x1200 only if some hero in the asking group can take it.
+- His one ~90% assumption (0x1200 reaches single-hex hotspots) was proven by his in-game confirmation.
+- Vanilla item flow asymmetry (his RE): items LEAVE heroes engine-side (THero.Killed drops all 14 slots), only ENTER via exe UI drag/drop — THero.PlaceItem has 0 DLL callers. TItemHS class id 0x20271.
+- Compound effect with [[ai-explores-sites]]: sites are the main item source; AI now generates AND collects loot.
+
+**10/19 USE ITEMS FIX:** v2.5 assumed Use type 5; ITEMS.PFS Use = type **6** (0 head,1 torso,2 weapon,3 shield,4 ring,6 use; no 5) → heroes never took use items, use-only bags invisible. `patch_ai_itemloot_use_v1.py` (`.bak_aiitemuse`): cave_pickup head 0x55814B40 → new pickup 0x5581C220–0x5581C3B8 with a looped use pass (backpack 6–13, ≤8 places); cave_target imm 5→6 @0x55814DFF/0x55814E47. Revert before build_ai_itemloot. Probe diag_ai_loot_probe.py (FC 0x55743329 skipped-listed field, TGTA, SEND, PICK) for the lair-loot case if it persists.
+
+**10/19 reach fix:** TAIGroupTargetSelector.Score 0x5573C57C = priority −25/turn beyond the first (slowest unit MP 0x55737418) +75 current target; item priority 10+min(v/2,65) → 2–3 turns away loses. `patch_ai_itemloot_reach_v1.py` (`.bak_aireach`; caves 0x5581C3C0–0x5581C479; G 0x5590BFE0 .idata slack): T 0x55814ECF marks item answer, Q 0x55743330 clears, R 0x55743380 refunds 25×turns for 1–3 turns. Apply after itemloot + use_v1, revert before. APPLIED.
+
+**10/19 anti-lure:** `patch_ai_itemloot_antilure_v1.py` (`.bak_aiantilure`; hook 0x55814D7F in cave_target → 0x5581C490, zone 0x5581C480–0x5581C6B6 ALR1): human-owned ([player+0xA7]==0) army with a THero within R = slowest GetMoves/4+1 (cap 12, Chebyshev, same level) of the item → no answer. Pickup unguarded. Tunables HEX_MP 6 / RMAX 8 (user −35 %) (unverified MP per hex). Revert first (after reach/use/itemloot). APPLIED 10/19.
+
+**10/19 priority boost:** `patch_ai_itemloot_prio_v1.py` (`.bak_aiprio`; caves 0x5581F000–0x5581F0F9 APR1): hook 0x55814E96 (empty matching equip slot → value +40) + 0x55814EC0 (priority = 35 + min(v/2, 60)); groups whose current target hex [group+0x38] holds a city or a foreign army get no item answer. Selector: committed current target +75 / needs-help +25 (settings 0x5573C4C0); city answers 50/100/300 (0x55790618); no mission type exists (mode byte [group+0x3C] 2 feasible / 1 needs help). Tunables BASE 35 / CAP 60 / EMPTY_B 40. Revert first (after antilure). APPLIED, VEH 6.
+
+**10/20 site-loot for leaders:** anti-lure was already correct (human-owned THero/TLeader armies only). Orc leader ignored loot because prio_v1's busy rule suppresses item answers for groups whose target is a city (leader = home-city garrison, committed 120+75 = 195) + Score 0x5573C264 −50/−199 when another own committed group targets within 1 hex. `patch_ai_siteloot_leader_v1.py` (zone 0x55835000–0x55835400 SLL1; table 16 cleared sites .idata 0x5590B420–0x5590B4A0 + flag 0x5590B4A0; `.bak_siteloot`): REC 0x557C2A8E in loot drop records (hex, owner, day); PRE 0x55814D7F (before anti-lure): bag on a ≤10-day cleared hex, same player → 230 if group holds the leader else 160; LP 0x55814EC0 uses it + bypasses busy rule; SC 0x5573C60E skips the own-group proximity penalty. Lone leader already allowed (no escort/count rules left). prio_v1 ZONE_HI narrowed to 0x5581F100. Apply after itemloot/use/reach/antilure/prio; revert first. APPLIED 10/20, VEH 6.

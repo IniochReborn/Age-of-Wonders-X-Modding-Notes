@@ -1,0 +1,267 @@
+HURL SKULL v3 art/sfx + SHOOT BLACK JAVELIN v4 colour fix (2026-10-19, fork; NOTHING applied live, no shared builder edited).
+Scratch: C:\Users\<user>\.claude\jobs\47241cad\tmp\bxlabil4\ (art4.py, sfx4.py, prev4.py, previews, WAV renders, pfs v4).
+
+FINDINGS
+  * Black Javelin colour: YES it changed.  Vanilla ARROW.ILB 300-323 are drawMode 0x402 (1026 = smBlended + bmShadow =
+    MULTIPLY), blend 100, white key: the sprite DARKENS the ground, so its black core reads as a black javelin and its
+    light-grey shading nearly vanishes.  Our v3 frames (DualDF 7430-7453) were encoded drawMode 256 (opaque), so the
+    light greys / whites got painted -> a 'plain' grey javelin.  v4 = the vanilla pixels drawn 1026 like vanilla + the
+    halo / soot tail as multiply greys (white = no change); the sprite's own light rim is darkened by the glow so no
+    bright ring shows.  Same ids / canvas -> NO pfs change for record 215.  (javelin_compare.png)
+  * ILB blend modes (aowxlib.ilb.BLEND_MODES): 1 bmAlpha (258), 2 bmBrighten (514, EXPLBIG), 3 bmIntensity (770),
+    4 bmShadow (1026 multiply).  bmBrighten can never draw black, so the dark explosion is 258 alpha.
+  * Hurl Boulder's projectile (TCOMBAT\OBJECTS\BALLS.ILB 7-14) is ~10x9 px on a 64x64 canvas centred 31/33; the new
+    skull body is ~10x12 px (incl. jaw) on the same canvas / anchor.  A full 360-degree spin made a 10-px skull
+    unreadable (a ball with holes), so it now ROCKS / tumbles +-26-34 degrees with the face always legible.
+  * DualDF sprites >= ~256 px wide crashed before (implosion notes) -> the dark explosion is 240x226 (x240/274) and
+    record 214 slot 2's anchor scales to -115/-124 (pfs v4).
+
+---- code: build_dual_sphere_fx_v1.py - insert before `def build():` (keep hurl_skull / black_javelin as fallbacks) ----
+def _aowx_ilb_frames(rel, ids):
+    """Decode vanilla ILB images (RGBA, key -> alpha 0) with the modding-tools reader."""
+    import sys as _s
+    p = os.path.join(HERE, "..", "modding tools")
+    if p not in _s.path: _s.path.insert(0, p)
+    from aowxlib import ilb as _ilb
+    lib = _ilb.read(os.path.join(GAME, "Images", rel)); out = {}
+    for img in lib.images:
+        if img.id in ids:
+            w, h, rows = _ilb.decode_record(lib, img.parts[0])
+            s = Image.new("RGBA", (w, h), (0, 0, 0, 0)); s.putdata([q for row in rows for q in row]); out[img.id] = s
+    return [out[i] for i in ids]
+
+
+def black_javelin2(n=24):
+    """Shoot Black Javelin (0xCD) v4 (2026-10-19, user: 'did the projectile change colour? I thought it was black
+    before'): yes - vanilla ARROW.ILB 300-323 are drawn in MULTIPLY mode (drawMode 0x402 = 1026, blend 100, white
+    key): the sprite DARKENS the ground, so its black core reads as a black javelin and its light-grey shading almost
+    vanishes.  v3 re-encoded the frames as SOLID (256), so the light greys painted over the ground -> a 'plain' grey
+    javelin.  v4 = the vanilla pixels unchanged, drawn 1026 like vanilla, plus the dark glow / smoky tail expressed as
+    multiply greys (white = no change, grey = darken): a 2-px halo and a ~17 px tapering soot tail behind the fletching
+    with drifting specks.  Same 64x64 canvas / anchor / ids (DualDF 7430-7453) -> no pfs change."""
+    src = _aowx_ilb_frames(os.path.join("TCombat", "Objects", "Arrow.ILB"), list(range(300, 300 + n)))
+    out = []
+    for k in range(n):
+        s = src[k]; W, H = s.size; sp = s.load()
+        th = math.radians(15 * k); dx, dy = math.sin(th), -math.cos(th)
+        pts = [(x, y) for y in range(H) for x in range(W) if sp[x, y][3]]
+        cx = sum(p[0] for p in pts) / len(pts); cy = sum(p[1] for p in pts) / len(pts)
+        back = min(pts, key=lambda p: (p[0] - cx) * dx + (p[1] - cy) * dy)
+        bproj = (back[0] - cx) * dx + (back[1] - cy) * dy
+        dark = [[0.0] * W for _ in range(H)]                       # 0..1 darkening amount
+        mask = set(pts)
+        for (x, y) in pts:
+            for oy in range(-2, 3):
+                for ox in range(-2, 3):
+                    X, Y = x + ox, y + oy
+                    if 0 <= X < W and 0 <= Y < H and (X, Y) not in mask:
+                        d = math.hypot(ox, oy)
+                        if d <= 2.3: dark[Y][X] = max(dark[Y][X], 0.40 if d <= 1.0 else 0.26 if d <= 1.5 else 0.13)
+        rnd = random.Random(5300 + k); L = 17.0
+        for step in range(int(L * 3)):
+            t = step / (L * 3.0)
+            px_, py_ = cx + dx * (bproj - t * L), cy + dy * (bproj - t * L)
+            wob = math.sin(t * 7.0 + k) * 1.2 * t
+            px_ += -dy * wob; py_ += dx * wob
+            rad = 1.8 + 1.6 * t; a0 = 0.62 * (1.0 - t) ** 1.1
+            for oy in range(-3, 4):
+                for ox in range(-3, 4):
+                    X, Y = int(round(px_ + ox)), int(round(py_ + oy))
+                    if 0 <= X < W and 0 <= Y < H and (X, Y) not in mask:
+                        d = math.hypot(X - px_, Y - py_)
+                        if d <= rad: dark[Y][X] = max(dark[Y][X], a0 * (1.0 - 0.55 * d / rad))
+        for _ in range(5):
+            t = rnd.uniform(0.45, 1.05)
+            X = int(round(cx + dx * (bproj - t * L) + rnd.uniform(-3, 3))); Y = int(round(cy + dy * (bproj - t * L) + rnd.uniform(-3, 3)))
+            if 0 <= X < W and 0 <= Y < H and (X, Y) not in mask: dark[Y][X] = max(dark[Y][X], 0.4 * (1.1 - t))
+        for (x, y) in pts:                                         # the sprite's own light rim sits INSIDE the glow:
+            nb = [dark[y + oy][x + ox] for oy in (-1, 0, 1) for ox in (-1, 0, 1)   # multiply it by the neighbouring
+                  if 0 <= x + ox < W and 0 <= y + oy < H]                         # darkening so no bright ring shows
+            dark[y][x] = max(nb) * 0.9
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); px = im.load()
+        for Y in range(H):
+            for X in range(W):
+                f = 1.0 - dark[Y][X]
+                if (X, Y) in mask:
+                    r, g, b, a = sp[X, Y]
+                    px[X, Y] = (int(r * f), int(g * f), int(b * f), 255)
+                elif dark[Y][X] > 0.04:
+                    v = int(round(255 * f))
+                    px[X, Y] = (v, v, min(255, v + 6), 255)          # multiply grey (faint cold tint)
+        out.append(im)
+    return out
+
+
+def hurl_skull3(n=12):
+    """Hurl Skull (0xCC) v3 slot 0 (2026-10-19, user: 'not gritty enough; smaller = the Hurl Boulder projectile size;
+    whitish-grey skull, black eyes/mouth, black and red fire glow; evil, dark, gritty'): Hurl Boulder's BALLS.ILB
+    projectile is ~10 x 9 px on its 64x64 canvas (centre 31/33), so the skull is ~9 px wide / 11 px tall incl. the jaw,
+    same canvas / anchor / ids (DualDF 7410-7421).  12-frame loop: the skull TUMBLES (one turn per loop); cracked,
+    pitted grey-white bone with grime, pitch-black sockets / nasal hole / teeth gaps; around it a ragged fire of BLACK
+    smoke tongues and CRIMSON / blood-red flame streaming up, smouldering dark-red embers.  Solid keyed sprite (256):
+    the skull opaque, smoke / flame edges alpha-dithered by rec_for (gritty, broken edges)."""
+    S = 8; W = H = 64; cx, cy = 31.0, 33.0
+    rnd = random.Random(4721)
+    tongues = [(rnd.uniform(-3.4, 3.4), rnd.uniform(7.0, 12.0), rnd.uniform(0, 6.28), rnd.uniform(1.3, 2.1)) for _ in range(9)]
+    smoke = [(rnd.uniform(-4.5, 4.5), rnd.uniform(9.0, 15.0), rnd.uniform(0, 6.28), rnd.uniform(1.6, 2.6)) for _ in range(7)]
+    embers = [(rnd.uniform(-4, 4), rnd.uniform(0, 1), rnd.uniform(0.6, 1.3)) for _ in range(7)]
+    grime = np.random.RandomState(4722).rand(H, W)
+
+    def skull(ang):
+        L = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); d = ImageDraw.Draw(L); k = S
+        def E(x0, y0, x1, y1, c): d.ellipse([(cx + x0) * k, (cy + y0) * k, (cx + x1) * k, (cy + y1) * k], fill=c)
+        def P(pts, c): d.polygon([((cx + x) * k, (cy + y) * k) for x, y in pts], fill=c)
+        def Ln(pts, c, w): d.line([((cx + x) * k, (cy + y) * k) for x, y in pts], fill=c, width=max(1, int(w * k)))
+        rim, bone, lit, shade, blk = (14, 10, 10, 255), (196, 192, 184, 255), (232, 230, 222, 255), (128, 122, 116, 255), (6, 4, 4, 255)
+        E(-5.4, -6.6, 5.4, 3.4, rim)                                         # cranium + rim
+        P([(-3.9, 1.2), (3.9, 1.2), (3.1, 6.2), (-3.1, 6.2)], rim)           # jaw + rim
+        E(-4.8, -6.0, 4.8, 2.8, bone)
+        P([(-3.3, 1.6), (3.3, 1.6), (2.6, 5.6), (-2.6, 5.6)], bone)
+        E(-3.8, -5.0, 1.6, -1.6, lit)                                        # top-left light
+        E(1.4, -2.4, 4.2, 2.6, shade); P([(0.6, 3.0), (3.0, 1.8), (2.3, 4.8), (0.4, 4.8)], shade)
+        E(-4.0, -2.2, -0.4, 1.5, blk); E(0.4, -2.2, 4.0, 1.5, blk)             # deep black sockets
+        P([(-3.6, -2.1), (-0.3, -1.5), (-0.6, -1.0), (-3.6, -1.3)], rim); P([(3.6, -2.1), (0.3, -1.5), (0.6, -1.0), (3.6, -1.3)], rim)   # brow ridge
+        P([(0, 1.6), (-1.0, 3.2), (1.0, 3.2)], blk)                           # nasal hole
+        d.rectangle([(cx - 2.8) * k, (cy + 3.7) * k, (cx + 2.8) * k, (cy + 4.4) * k], fill=blk)   # mouth slit
+        for t in (-1.8, -0.6, 0.6, 1.8):
+            Ln([(t, 3.7), (t, 5.4)], blk, 0.42)                               # teeth gaps
+        Ln([(-1.2, -5.2), (-0.4, -3.6), (-1.0, -2.6)], rim, 0.32)             # cracks
+        Ln([(2.0, -4.6), (1.2, -3.4), (1.9, -2.5)], rim, 0.28)
+        return L.rotate(ang, resample=Image.BICUBIC, center=(cx * k, cy * k))
+
+    out = []
+    for i in range(n):
+        ph = 2 * math.pi * i / n
+        F = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); d = ImageDraw.Draw(F); k = S
+        def tongue(ox, ln, p0, wd, col, sc, a):
+            fl = 0.72 + 0.28 * math.sin(ph * 2 + p0)
+            L = ln * sc * fl + 2.0; w = wd * (0.85 + 0.4 * sc)
+            sway = 1.3 * math.sin(ph + p0)
+            base = (cx + ox * (0.6 + 0.4 * sc), cy - 0.5)
+            tip = (cx + ox * 0.35 + sway, cy - 0.5 - L)
+            pts = [(base[0] - w, base[1] + 2.4), (base[0] + w, base[1] + 2.4),
+                   (base[0] + w * 0.55 + sway * 0.4, base[1] - L * 0.5), tip, (base[0] - w * 0.55 + sway * 0.4, base[1] - L * 0.5)]
+            d.polygon([(x * k, y * k) for x, y in pts], fill=col + (a,))
+        for (ox, ln, p0, wd) in smoke:                                        # black smoke, outermost, ragged
+            tongue(ox, ln, p0, wd, (12, 8, 8), 1.0, 175)
+        d.ellipse([(cx - 6.6) * k, (cy - 6.4) * k, (cx + 6.6) * k, (cy + 5.6) * k], fill=(18, 6, 6, 190))
+        for col, sc, a in (((92, 6, 6), 0.95, 235), ((150, 12, 10), 0.75, 250), ((196, 24, 14), 0.52, 255)):
+            for (ox, ln, p0, wd) in tongues:
+                tongue(ox, ln, p0, wd, col, sc, a)
+            d.ellipse([(cx - 5.8 * sc - 0.4) * k, (cy - 5.6 * sc - 0.6) * k, (cx + 5.8 * sc + 0.4) * k, (cy + 4.6 * sc + 0.4) * k], fill=col + (a,))
+        F = F.filter(ImageFilter.GaussianBlur(S * 0.35))
+        sk = skull(26.0 * math.sin(ph) + 8.0 * math.sin(2 * ph))              # v3b: a rocking tumble keeps the face legible
+        glow = Image.new("RGBA", F.size, (0, 0, 0, 0)); glow.paste((170, 14, 8, 255), mask=sk.split()[3].filter(ImageFilter.MaxFilter(2 * S + 1)))
+        F = Image.alpha_composite(F, glow.filter(ImageFilter.GaussianBlur(S * 0.6)))   # crimson rim glow hugging the skull
+        im = Image.alpha_composite(F, sk)
+        small = np.array(im.resize((W, H), Image.LANCZOS)).astype(np.float32)
+        a = small[:, :, 3]
+        opaque = a > 200
+        lum = small[:, :, :3].mean(2)
+        bonepx = opaque & (lum > 95)
+        g = (grime - 0.5) * 30.0                                              # gritty grime on the bone
+        for c in range(3): small[:, :, c] = np.where(bonepx, small[:, :, c] + g, small[:, :, c])
+        pit = bonepx & (grime > 0.93)                                         # pits / specks
+        for c in range(3): small[:, :, c] = np.where(pit, small[:, :, c] * 0.45, small[:, :, c])
+        small[:, :, 3] = np.where(opaque, 255, np.clip(a * 1.15, 0, 255))
+        img = Image.fromarray(np.clip(small, 0, 255).astype(np.uint8), "RGBA")
+        dr = ImageDraw.Draw(img)
+        for (ex, e0, sp) in embers:                                           # smouldering embers rising
+            t = (i / n * sp + e0) % 1.0
+            x = cx + ex + 1.6 * math.sin(ph + e0 * 6); y = cy - 7 - 11 * t
+            if t < 0.85:
+                dr.point((round(x), round(y)), fill=(int(225 - 90 * t), int(30 - 20 * t), 10, 255))
+        out.append(img)
+    return out
+
+
+_DARK_EXPL = []
+EXPL_SCALE = 240.0 / 274.0                     # DualDF sprites >= ~256 px wide crashed before (implosion notes): 274x258 -> 240x226
+EXPL_BLEND = [90] * 21 + [86, 81, 72, 63, 54, 45, 36, 27, 18]   # vanilla's 100,...,95..20 fade, scaled to a 90 % peak
+
+
+def dark_explosion():
+    """Hurl Skull (0xCC) v3 impact (slot 2): Self Destruct's EXPLBIG.ILB 0-29 re-graded EVIL.  Vanilla draws it in
+    bmBrighten (514: dark pixels add nothing), which can never show black - so v3 draws in bmAlpha (258, blend = the
+    vanilla per-frame fade x0.9) and builds the colour + coverage from the vanilla luminance: the hot core = crimson /
+    blood red (no orange or yellow, the hottest stops at a dark red-orange), the mid body = deep blood red into
+    charcoal, the outer glow = a ragged black-smoke haze (coverage fades with luminance -> Bayer-dithered by rec_for:
+    gritty, broken edges).  Scaled to 240x226 (the >=256-px-wide crash) - record 214 slot 2's anchor scales with it."""
+    if _DARK_EXPL: return _DARK_EXPL
+    src = _aowx_ilb_frames(os.path.join("Effects", "ExplBig.ILB"), list(range(30)))
+    xs = np.array([0, 25, 60, 110, 170, 230, 255], np.float32)
+    R = np.array([6, 14, 40, 105, 165, 205, 220], np.float32)
+    G = np.array([4, 8, 8, 10, 18, 40, 62], np.float32)
+    B = np.array([4, 8, 8, 9, 12, 24, 36], np.float32)
+    AL = np.array([0, 60, 150, 230, 255, 255, 255], np.float32)
+    grit = np.random.RandomState(4790).rand(258, 274).astype(np.float32)
+    for s in src:
+        a = np.array(s).astype(np.float32)
+        lum = a[:, :, 0] * 0.35 + a[:, :, 1] * 0.5 + a[:, :, 2] * 0.15
+        lum = lum * (0.85 + 0.3 * grit)                                       # grain
+        o = np.zeros_like(a)
+        o[:, :, 0] = np.interp(lum, xs, R); o[:, :, 1] = np.interp(lum, xs, G); o[:, :, 2] = np.interp(lum, xs, B)
+        o[:, :, 3] = np.interp(lum, xs, AL) * (a[:, :, 3] > 0)
+        im = Image.fromarray(np.clip(o, 0, 255).astype(np.uint8), "RGBA")
+        im = im.resize((int(round(274 * EXPL_SCALE)), int(round(258 * EXPL_SCALE))), Image.LANCZOS)
+        _DARK_EXPL.append(im)
+    return _DARK_EXPL
+---- end ----
+---- rows: REPLACE the (7410, hurl_skull(), ...) row with the 1st line and the (7430, black_javelin(), ...) row with the 2nd, and add the dark-explosion rows right after them ----
+              (7410, hurl_skull3(), "HSkull%02d.BMP", 256, 0, KEY),          # Hurl Skull (0xCC) v3 slot 0: SMALL gritty bone skull, black sockets, black smoke + crimson fire, rocking tumble (12 frames, 64x64 BALLS canvas)
+              (7430, black_javelin2(), "BJav%02d.BMP", 1026, 100, KEY),     # Shoot Black Javelin (0xCD) v4 slots 0-23: vanilla javelin in MULTIPLY like vanilla (black) + dark glow / soot tail
+              (7460, dark_explosion()[:21], "SKexp%02d.BMP", 258, EXPL_BLEND[0], KEY),   # Hurl Skull v3 slot 2 (pfs v4): dark Self-Destruct blast, black smoke + crimson fire (240x226, 258 alpha)
+              (7481, dark_explosion()[21:22], "SKe21_%d.BMP", 258, EXPL_BLEND[21], KEY),
+              (7482, dark_explosion()[22:23], "SKe22_%d.BMP", 258, EXPL_BLEND[22], KEY),
+              (7483, dark_explosion()[23:24], "SKe23_%d.BMP", 258, EXPL_BLEND[23], KEY),
+              (7484, dark_explosion()[24:25], "SKe24_%d.BMP", 258, EXPL_BLEND[24], KEY),
+              (7485, dark_explosion()[25:26], "SKe25_%d.BMP", 258, EXPL_BLEND[25], KEY),
+              (7486, dark_explosion()[26:27], "SKe26_%d.BMP", 258, EXPL_BLEND[26], KEY),
+              (7487, dark_explosion()[27:28], "SKe27_%d.BMP", 258, EXPL_BLEND[27], KEY),
+              (7488, dark_explosion()[28:29], "SKe28_%d.BMP", 258, EXPL_BLEND[28], KEY),
+              (7489, dark_explosion()[29:30], "SKe29_%d.BMP", 258, EXPL_BLEND[29], KEY),
+---- end ----
+---- MIXES: build_dual_sphere_sfx_v1.py - REPLACE the two v2 SKULL_* entries (from "    # Hurl Skull landing (cue 1)" up to "DUALEW_OVERGROWTH") with ----
+    # Hurl Skull v3 landing (cue 1; 2026-10-19 user: 'a CRUNCH along with a modified explosion; evil, dark, gritty'):
+    # the crunch first and on top - the boulder's A_PUNCH2 pitched down, the undead bone-hit D_UNDEAD, a short rock
+    # crumble (stones.wav) and an A_FORCE1 thud - then Self Destruct's BLAST + Explod1 pitched DOWN (darker, slower)
+    # 30 ms later, under a low sub rumble.  No wraith shriek, no bells (no pings).
+    "SKULL_HIT.WAV":    [("Attack/A_Punch2.WAV", 1.0, 0.00, None, 0.05, 0.82),
+                         ("Hit_Death/D_Undead.WAV", 0.85, 0.00, 0.45, 0.2, 0.9),
+                         ("xSFX/stones.wav", 0.5, 0.01, 0.35, 0.15, 0.8),
+                         ("Attack/A_Force1.WAV", 0.7, 0.00, None, 0.1, 0.72),
+                         ("Attack/BLAST.WAV", 0.75, 0.03, 1.7, 0.8, 0.76),
+                         ("Attack/Explod1.wav", 0.5, 0.03, 1.4, 0.7, 0.70),
+                         ("synth:subswell:42:52:1.3", 0.4, 0.02, None, 0.7)],
+    # Hurl Skull v3 mid-flight (cue 2; user: 'cut the early part, have the latest part start sooner, FADE IN; evil,
+    # dark'): every layer starts INSIDE its source (8th value = offset) - the wail / rasp bodies, scream4's loud last
+    # third - pitched down, plus a low ghoul growl; the whole mix swells in over 0.2 s (FADE_IN) and fades out 0.3 s.
+    "SKULL_SCREAM.WAV": [("Zu/WraithDeath.wav", 0.9, 0.00, 0.85, 0.35, 0.86, 0.0, 0.28),
+                         ("Hit_Death/Screech3.WAV", 0.5, 0.02, 0.75, 0.35, 0.84, 0.0, 0.45),
+                         ("xHero_Death/scream4.wav", 0.42, 0.00, 0.8, 0.4, 0.92, 0.0, 2.05),
+                         ("xSFX/ghoul.wav", 0.35, 0.04, 0.8, 0.4, 0.78)],
+---- end ----
+---- DRIVE: change "SKULL_HIT.WAV": 1.6 -> 1.7 and "SKULL_SCREAM.WAV": 1.5 -> 1.6 ----
+---- FADE_OUT: change "SKULL_HIT.WAV": 0.5 -> 0.6 and "SKULL_SCREAM.WAV": 0.35 -> 0.3 ----
+---- FADE_IN: add  "SKULL_SCREAM.WAV": 0.2,  to the FADE_IN dict (whole-mix swell-in) ----
+
+SFX v3 (renders in scratch: SKULL_HIT.WAV / SKULL_SCREAM.WAV; v2 kept as old_*.WAV)
+  SKULL_SCREAM 0.85 s (was 1.10): every layer starts INSIDE its source (WraithDeath +0.28 s, Screech3 +0.45 s, scream4
+    +2.05 s = its loud last third) pitched down x0.78-0.92, a low ghoul growl under it, 0.2 s fade-in, 0.3 s fade-out.
+    Spectral centroid 2064 -> 1873 Hz (darker).
+  SKULL_HIT 1.73 s: the crunch first and on top (A_PUNCH2 x0.82, D_UNDEAD bone hit, stones.wav crumble, A_FORCE1 x0.72)
+    then BLAST x0.76 + Explod1 x0.70 30 ms later over a 42-52 Hz sub rumble; no shriek, no bells.  Centroid 2150 ->
+    1806 Hz; 'ping' metric (narrow peak > 2 kHz / median) 17 = no tonal pings.
+
+PFS v4 = patch_bxl_ranged_ability_pfs_v4.py (copy into patch scripts\): record 214 tag 8 slot 2 EXPLBIG 0-29 @-131/-142
+  -> DUALDF 7460-7489 @-115/-124, every other slot field (kind 4, f18 0, f20 5) kept = same 30-frame one-shot timing.
+  Scratch round trip on a copy of the live Ability.pfs: dry-run OK, apply, 'already applied', --revert md5 == live.
+  LIFO: revert v4 before reverting pfs v2 (pfs v2 reports FOREIGN while v4 is on - expected).
+  Engine: NO change (slot 2 is still 30 frames; the v3 helper / skip logic keys on the marker, not the image).
+
+APPLY ORDER (game + editor closed)
+  1. paste code + rows into build_dual_sphere_fx_v1.py; py -3.10 build_dual_sphere_fx_v1.py --apply
+     (7410-7421 skull rebuilt, 7430-7453 javelin now drawMode 1026, 7460-7489 new dark explosion)
+  2. paste MIXES / DRIVE / FADE_OUT / FADE_IN into build_dual_sphere_sfx_v1.py; py -3.10 build_dual_sphere_sfx_v1.py --apply
+  3. copy patch_bxl_ranged_ability_pfs_v4.py into patch scripts\; py -3.10 patch_bxl_ranged_ability_pfs_v4.py --apply
+  4. VEH check.  Ship DualDF.ILB, Release\Ability.pfs, Sfx\Zsp\SKULL_HIT.WAV + SKULL_SCREAM.WAV.

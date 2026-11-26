@@ -1,0 +1,35 @@
+SHOCKWAVE PUSH v2: subtler hop puff (2026-10-18, fork; NOTHING applied live)
+User: "Shockwave good but the new white particle effect that plays when a unit is moved is a bit much, make it more subtle."
+
+WHAT THE PUFF IS
+  The pushed unit's hop carrier (kind 0x2F, tagged Gust 212) runs WoF's per-tick swirl loop (0x42BFA5..0x42C0E8). Every
+  tick it spawns one white PARTICLE.ILB orb for EVERY path index in [tick-20, tick]: about 21 per tick, about 315 per push.
+
+FIX: patch_tc_shockwave_push_v2.py (copy from the job scratch tmp\swpuff\ into patch scripts\; it imports v1)
+  * Shockwave's hop carriers are now marked with [fx+0x28] = -6 instead of -5. That field is the cue-1 sound tick, which
+    is never reached either way, so they stay silent.
+  * New hook SKP at 0x42BFD4, 11 B (the loop's per-index count test), going to a cave at 0x450C00..0x450C26 (own zone
+    0x450C00-0x450C40, verified zero, no relocations).
+  * Marked carriers keep 1 index in 4 (((idx + tick) & 3) == 0). That is about 83 orbs per push instead of 315, with the
+    same swirl, art and spread. Gust and Crashing Wave hops are unmarked and unchanged.
+  * MP: the effect loop runs the same way on every client, so the lower particle count is the same everywhere.
+  * State handling:
+    - Live v1 is upgraded to v2 in place: 1 byte in the zone + the SKP site + the SKP cave = 50 bytes.
+    - --revert gives byte-for-byte the DLL from before Shockwave was applied (same md5 as v1's --revert).
+    - A fresh apply onto that DLL matches the in-place upgrade (same md5).
+    - A second apply prints "already applied".
+  * Unicorn (emu.py):
+    - Unmarked carriers keep 21/21 indices and marked ones 6/21 at tick 30.
+    - ebx/esi/edi/esp are preserved.
+    - The count call still gets the path [fx+0x1C].
+  * Revert with v2, never v1. v1's --revert would leave SKP and its cave in place; that is harmless pass-through, and
+    v2's --revert then removes it. LIFO: revert before patch_tc_gust_v1.py.
+  * Too faint or still too much? Set MASK = 1 (1 in 2) or MASK = 7 (1 in 8) in the script and re-run --apply.
+    MASK must be 2^n - 1.
+
+APPLY (game + editor closed)
+  copy C:\Users\<user>\.claude\jobs\47241cad\tmp\swpuff\patch_tc_shockwave_push_v2.py -> patch scripts\
+  py -3.10 patch_tc_shockwave_push_v2.py            (dry run: "upgrading v1 -> v2 in place")
+  py -3.10 patch_tc_shockwave_push_v2.py --apply
+  Then the VEH check. Ship AoWTCPCK.dll.
+  Memory (shockwave-push.md): add v2. SKP 0x42BFD4 -> 0x450C00, marker [fx+0x28] = -6, MASK 3, next free TCPCK 0x450C40.

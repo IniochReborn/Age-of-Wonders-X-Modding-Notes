@@ -1,0 +1,87 @@
+MIMIC (233) v2 - integration (2026-10-18, fork).  Engine: patch scripts\patch_tc_mimic_v1.py upgraded IN PLACE to v2
+(NOT applied live).  Builders: detect the newline per file (pipeline/sfx CRLF, fx/icons LF) and ast.parse afterwards.
+
+WHAT CHANGED
+ * Empty record -> the book pick redirects to the REAL vanilla Dispel Magic (id 8, TDispelMagic.Create @0x557E8993)
+   exactly like a copy: Dispel's side-panel preview / targeting / cursor / gfx / sfx, charged Mimic's cost 5 (hook D),
+   cancellable (the book's normal cancel).  Hook D also sets LAST := the copied id, so a mimicked Dispel counts as the
+   last spell cast (the next Mimic copies Dispel).  MP: unchanged mechanism (the 0x10000 mark rides in the TE).
+ * Category: TDispelMagic's base ctor (0x5577AC34) sets [spell+0x22] = 1 = UNIT spell type (+0x0C = 3: map+combat).
+   Our combat spells poke (0x22,1,0) + (0x0C,1,2) (Suspend / Reversal / Martyr) -> Mimic shows as a COMBAT spell,
+   combat-only.  Its own 233 object stays a Dispel clone (the AI's plain-Dispel path).
+ * AI: never goes through SelectSpell -> an AI Mimic still casts 233 = a plain Dispel (with the Mimic shimmer), not
+   recorded as LAST (unchanged from v1).
+ * Icon: the split star -> a bold question mark split down the mirror axis (left solid, right hollow reflection).
+
+== 1. patch_dual_sphere_spells_v1.py, entry 233 - insert this line right after the donor= line ==
+---- code ----
+         pokes=[(0x22, 1, 0), (0x0C, 1, 2)],                          # v2: COMBAT spell type (Dispel's base ctor sets 1 = unit spell) + combat-only cast context
+---- end ----
+   (optional) replace the desc line with:
+---- code ----
+         desc="Mirrors the last spell cast in this battle by anyone, friend or foe, for Mimic's own cost. If no spell has been cast yet, it casts Dispel Magic instead.",
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py - add this function after glyph_mimic, and in GLYPHS change
+       "mimic": glyph_mimic   ->   "mimic": glyph_mimic2 ==
+---- code ----
+def glyph_mimic2():
+    """Mimic (233) v2 (2026-10-18, user: "a QUESTION MARK instead of a star"): the traced mirror frame
+    (mimic_frame_mask.png) with a bold question mark split down the dashed mirror axis - the left half solid ink, the
+    right half its hollow reflection (outline only), like v1's split star; two glints on the glass."""
+    im = _user_mask_glyph("mimic_frame_mask.png")
+    dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    cx, cy = 20.0, 17.6
+    from PIL import ImageFont
+    font = None
+    for fn in ("ariblk.ttf", "arialbd.ttf", "georgiab.ttf", "timesbd.ttf"):
+        try:
+            font = ImageFont.truetype(fn, int(19.5 * S)); break
+        except OSError:
+            pass
+    q = Image.new("L", im.size, 0); qd = ImageDraw.Draw(q)
+    if font is not None:
+        qd.text((cx * S, cy * S), "?", fill=255, font=font, anchor="mm")
+    else:                                                                                  # fallback: drawn ?
+        qd.arc([(cx - 4.2) * S, (cy - 8.2) * S, (cx + 4.2) * S, (cy + 0.2) * S], 200, 90, fill=255, width=int(2.4 * S))
+        qd.line(P([(cx, cy + 0.2), (cx, cy + 3.4)]), fill=255, width=int(2.4 * S))
+        qd.ellipse([(cx - 1.5) * S, (cy + 5.2) * S, (cx + 1.5) * S, (cy + 8.2) * S], fill=255)
+    bb = q.getbbox()
+    if bb:                                                                                 # centre the glyph's ink on (cx, cy)
+        dx = int(cx * S - (bb[0] + bb[2]) / 2); dy = int(cy * S - (bb[1] + bb[3]) / 2)
+        q = ImageChops.offset(q, dx, dy)
+    im.paste(0, mask=q.filter(ImageFilter.MaxFilter(int(1.2 * S) | 1)))                  # clear glass around the mark
+    left = Image.new("L", im.size, 0); ImageDraw.Draw(left).rectangle([0, 0, int((cx - 0.45) * S), H * S], fill=255)
+    right = Image.new("L", im.size, 0); ImageDraw.Draw(right).rectangle([int((cx + 0.45) * S), 0, W * S, H * S], fill=255)
+    solid = ImageChops.multiply(q, left)
+    outline = ImageChops.subtract(q, q.filter(ImageFilter.MinFilter(int(1.7 * S) | 1)))
+    outline = ImageChops.multiply(outline, right)
+    im.paste(255, mask=solid); im.paste(255, mask=outline)
+    bb = q.getbbox()
+    top, bot = (bb[1] / S, bb[3] / S) if bb else (8.0, 27.0)
+    for y0 in (top - 3.4, bot + 1.2):                                                      # the dashed mirror axis, outside the mark
+        if 3.0 < y0 < H - 3.0:
+            dr.line(P([(cx, y0), (cx, y0 + 1.8)]), fill=255, width=int(0.8 * S))
+    for x, y in ((14.4, 11.0), (26.2, 25.6)):                                              # two glints on the glass
+        dr.line(P([(x - 1.2, y), (x + 1.2, y)]), fill=255, width=int(0.6 * S)); dr.line(P([(x, y - 1.2), (x, y + 1.2)]), fill=255, width=int(0.6 * S))
+    return im
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply        (SpellIcn 233 v2)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply       (233 pokes: combat type)
+  py -3.10 patch_tc_mimic_v1.py                         (dry run: "older build / partial state -> ... in-place upgrade to v2")
+  py -3.10 patch_tc_mimic_v1.py --apply                 (backup backup\AoWTCPCK.dll.bak_mimic2 = the v1 state)
+  VEH startup check.
+
+== 4. Tests (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\mimic2\) ==
+  Script on a copy of the live AoWTCPCK.dll (md5 e49ba965..., v1 applied): v1 recognised -> upgrade; re-run "already
+  applied"; v2 --revert == the v1 script's own --revert == v2 --revert straight from live v1 (md5 4791f90c...); a fresh
+  v2 apply == the upgrade (md5 27457a81...).
+  emu2.py (Unicorn, real v2 caves; TCPCK/AoWEPACK at preferred + two rebased pairs): ALL PASS - v1 checks plus:
+  empty record -> pick 8 + armed; Dispel TE marked/stripped; Dispel cast charged Mimic's cost (no vanilla
+  CombatSpellCast); LAST := 8; next Mimic copies Dispel; AI 233 cast = vanilla clone path, LAST untouched.
+  Icon preview: icon_v1_vs_v2.png (full + 40x35).
+
+== 5. LIFO ==  unchanged: revert patch_tc_mimic_v1.py before anything that rewrites 0x423270 / 0x4238BA / 0x40B32B /
+  0x40B44D / 0x41B398.

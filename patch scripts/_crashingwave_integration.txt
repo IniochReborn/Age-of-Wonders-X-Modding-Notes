@@ -1,0 +1,112 @@
+CRASHING WAVE (220, Water L1) - integration snippets (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+Spec: combat, breath AOE, R40 C4, ATK 8 / DMG 3 Physical + Wall; pushes every unit in the AOE 1 hex away from the caster
+(if valid); "like Gust except blue particles and it does wall damage - blocked by walls but able to damage them".
+Builders' line endings differ: detect the newline per file (fx/icons LF, sfx/pipeline CRLF at the time of writing).
+Insert ONLY the code between ---- code ---- / ---- end ---- and ast.parse each edited builder.
+
+Engine (both already written in patch scripts\, scratch-tested; see the report):
+  * patch_tc_gust_v1.py  -> v7 IN PLACE (every Gust cave serves the family {212, 220}; zone 5 = helpers; SPR keeps 220's
+    spray inside the wall-truncated strike).  Backup of the v6 script: tmp\cwave\patch_tc_gust_v1.v6.py.
+  * patch_tc_crashingwave_v1.py (NEW): walls/gates that block a 220 strike take one 220 hail-style roll per cast.
+New file (already written): patch scripts\crashingwave_user_mask.png (traced from art import export\crashing wave.jpg,
+inner white bands widened: hull close 7 px, gaps +2 px; tmp\cwave\icon_preview_x4.png).
+
+== 1. build_dual_sphere_icons_v1.py ==
+  ICONS:   add   220: "crashingwave",
+  CLOUDS:  add   "crashingwave": 100,          (Water's cloud = image 100)
+  GLYPHS:  add   "crashingwave": glyph_crashingwave,
+  function (next to the other _user_mask_glyph users, e.g. after glyph_tectonic):
+---- code ----
+def glyph_crashingwave():
+    """Crashing Wave (220, Water L1, 2026-10-17): the user's reference art import export/crashing wave.jpg (a curling
+    breaking wave with spiral foam crests and a long tail) TRACED -> crashingwave_user_mask.png (fill 0.98; the thin
+    white bands inside the ink widened: hull = close 7 px, gaps dilated 2 px at 320x280 so they survive 40x35)."""
+    return _user_mask_glyph("crashingwave_user_mask.png")
+---- end ----
+  (no art import export\crashingwave.png exists - keep it that way: icon override trap.)
+
+== 2. build_dual_sphere_fx_v1.py - function before `def build():` + group row (e.g. after the (3042, gust_shock(), ...) row) ==
+---- code ----
+def crashwave_spray():
+    """Crashing Wave (220) slot 1 (2026-10-17, user: like Gust but blue water particles): the sprite of every kind-0x1F
+    spray particle Gust v7's SPR throws along each breath strike (drawn through GFXE's intensity table, fading over the
+    particle's path; played [5200, 5201, 5202, 5203]).  Vanilla Shockwave's own glow orbs (PARTICLE.ILB 0-2, as Gust's
+    gust_shock) re-tinted to sea water - a deep-blue rim, a cyan-teal body and a white foam core - plus a 4th frame of
+    torn spray: three small foam droplets round a cyan blob, so the stream reads as flung water, not light."""
+    lib = ilbcodec.read(PARTICLE); out = []
+    for src in (0, 1, 2):
+        im, r = raw_pixels(lib, src); a = np.asarray(im.convert("RGB")).astype(np.float32)
+        g = a.max(axis=2) / 255.0                                               # 0..1 glow strength
+        core = np.clip((g - 0.62) / 0.38, 0, 1) ** 1.4                           # white foam only in the hottest centre
+        body = np.dstack([25 * g, 125 * g, 255 * g])                             # sea blue / cyan
+        body = body * (1 - core[..., None]) + np.dstack([235 * g, 250 * g, 255 * g]) * core[..., None]
+        out.append(Image.fromarray(np.clip(body, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    W_, H_ = out[0].size
+    yy, xx = np.mgrid[0:H_, 0:W_].astype(np.float32); cx, cy = (W_ - 1) / 2.0, (H_ - 1) / 2.0
+    acc = np.zeros((H_, W_, 3), np.float32)
+    def blob(x0, y0, r, col, k=1.0):
+        g = np.exp(-((xx - x0) ** 2 + (yy - y0) ** 2) / (2 * r * r)) * k
+        for c in range(3): acc[..., c] += g * col[c]
+    blob(cx, cy + 1, 3.2, (45, 150, 255), 0.95)                                  # cyan blob
+    blob(cx, cy + 1, 1.4, (200, 240, 255), 0.7)
+    for dx, dy, r in ((-4.5, -3.0, 1.1), (4.0, -4.0, 1.0), (5.0, 3.0, 0.9)):    # torn foam droplets
+        blob(cx + dx, cy + dy, r, (225, 245, 255), 0.95)
+    out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+---- end ----
+---- code ----
+              (5200, crashwave_spray(), "WTcwav%d.BMP", 770, 50, 0x0000),       # Crashing Wave (220) slot 1: sea-blue spray particle (19x19, kind-0x1F, Gust v7 SPR)
+---- end ----
+
+== 3. build_dual_sphere_sfx_v1.py - MIXES entry (e.g. before "DUALWT_RITESEAS.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # Crashing Wave (220, Water L1 2026-10-17): Gust's timeline in water - the swell drawn back (the big-water wash
+    # REVERSED, slowed) with a sub swell, the CRASH as the breath starts (heavy plunge + wash), the foaming surge rushing
+    # forward (slowed wash, spray hiss, the Water cast under it, air pushed ahead), then a smaller slap + slosh as the
+    # units are thrown back (Gust's hop ~1.6 s).
+    "DUALWT_CRASHWAVE.WAV": [("Moves/waterlg.WAV", 0.6, 0.00, 0.38, 0.05, -0.85, 0.2),
+                             ("synth:subswell:38:70:0.4", 0.45, 0.00, None, 0.1),
+                             ("synth:splash:1.6", 0.85, 0.30, None, 0.6),
+                             ("Moves/waterlg.WAV", 0.75, 0.28, 1.7, 0.8, 0.78, 0.0, 0.10),
+                             ("synth:hiss:1.6", 0.55, 0.35, None, 0.6),
+                             ("Attack/m_Water.WAV", 0.35, 0.25, 1.7, 0.8, 0.85),
+                             ("synth:wind:1.7", 0.18, 0.30, None, 0.8, 1.0, 0.3),
+                             ("synth:splash:0.9", 0.45, 1.58, None, 0.4),
+                             ("Moves/M_Swim1.WAV", 0.35, 1.62, None, 0.3, 0.8)],
+---- end ----
+  DRIVE dict: add   "DUALWT_CRASHWAVE.WAV": 1.3,      FADE_OUT dict: add   "DUALWT_CRASHWAVE.WAV": 0.6,
+  (scratch render 2.56 s, RMS per 0.1 s: rise 0.04->0.33 at the crash (0.3 s), foam ~0.15-0.2, slap 0.17 at 1.6 s, gone
+  by 2.3 s -> tmp\cwave\DUALWT_CRASHWAVE_v2.wav.  No per-hit cue: Gust has none and a breath landing would play cue 1 on
+  every one of the 20 strikes.)
+
+== 4. patch_dual_sphere_spells_v1.py - SPELLS entry (single-sphere Water block, before 221 Rite of the Seas / after 219) ==
+---- code ----
+    dict(id=220, name="Crashing Wave", sphere=6, tier=1, mana=4, research=40,
+         donor="TColdBreath", pfs_donor=118, tc_type=5, icon=220,          # class 5 breath cone as Gust 212; patch_tc_gust_v1.py v7 (family 212/220): push + shake/hop + spray; patch_tc_crashingwave_v1.py: walls
+         pokes=[(0x34, 1, 8), (0x35, 1, 3), (0x36, 2, 0x180), (0x3A, 1, 3)], # ATK 8 / DMG 3 / Physical + Wall (0x100); fast-combat 3 targets; range 4 inherited
+         desc="A crashing wave surges from the caster in a cone: every unit caught in it is struck (attack 8, damage 3, physical) and swept one hex away from the caster, if there is room to land. Walls stop the wave, but they are battered by it.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [340], -2, -2, f20=0),                     # the breath strikes draw nothing (as Gust)
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [5200, 5201, 5202, 5203], -9, -9, f20=1)},   # blue spray particles (Gust v7 SPR, kind 0x1F)
+         sfx=["SFX\\ZSP\\DUALWT_CRASHWAVE.WAV"]),
+---- end ----
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 220)
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF 5200-5203)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (Sfx\Zsp\DUALWT_CRASHWAVE.WAV)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (Spells.pfs 220 + registration, SpellTypes[220] = 5)
+  py -3.10 patch_tc_gust_v1.py                        (dry run: "older build of zone 1 detected -> rewriting it in place",
+                                                       "zone 5 differs -> rewriting it (v7 ...)")
+  py -3.10 patch_tc_gust_v1.py --apply
+  py -3.10 patch_tc_crashingwave_v1.py                (dry run: sites vanilla, zone zero, 302 bytes)
+  py -3.10 patch_tc_crashingwave_v1.py --apply        (backup backup\AoWTCPCK.dll.bak_cwave)
+  VEH startup check.  Ship: DUALWT_CRASHWAVE.WAV via build_release_zip.py --add.
+
+== 6. Chain / revert notes ==
+  * Gust v7 rewrites ITS OWN zones/sites in place (nothing is chained in front of any Gust site today - REC/END/BRE/SPR/
+    SPN/LND/SLT/TCK all point straight at Gust).  --revert of v7 == the v6 script's revert (byte-identical, tested).
+    If any later script chains in front of a Gust site, revert it before re-running Gust (LIFO), as before.
+  * patch_tc_crashingwave_v1.py hooks two vanilla sites (BLK 0x40F06F, LND 0x40C871 - next to but not overlapping Gust's
+    BRE 0x40C87E / SPR 0x40F0A8); applies / reverts in any order relative to Gust (tested both orders).
+  * .idata page slack 0x479ED0..0x47A000 now used: crashing-wave tables 0x479ED0..0x479FE8, Gust family latch 0x479FF0
+    (0x479EC8 = patch_ai_ranged_trace_v1's diagnostic pointer, untouched).

@@ -1,0 +1,58 @@
+GUST (212) v5 - Shockwave-style build-up + released sector arc (2026-10-16, fork; NOT applied live)
+=====================================================================================================
+
+RE - vanilla SHOCKWAVE (id 0x7F, pfs key 137, SpellTypes 0x2C): one kind-0x2C TfxHS at the caster, NewFrame 0x42B2CA:
+  ticks   0-119 BUILD-UP: every tick 20 kind-0x1F particles on swirl paths round the caster (0x402E0C: eax = steps
+          Random(10)+10, edx = radius Random(10) + a pulse 0->7->0->15->0 (t/4, (60-t)/4, (t-60)/2, (120-t)/2), ecx = start
+          angle (k mod 6)*60 + t; stack: Random(360), x, y, Random(2) (= turn direction), &fx+0x1C).
+  tick    120 RELEASE (0x42B766): sound cue 1, then for k = 0..359 (one per DEGREE) a kind-0x1F particle on a straight
+          MakeLinePath (0x402E04) from the caster to the ellipse point (x - (200+R10)*cos, y + (200+R10)*sin/2), 75 steps;
+          every 10th degree 10 more particles to the same end point at 75 + 5*j steps (j = 1..10) = slower trailing
+          layers -> the smooth expanding ring.
+  ticks 151-230: damage messages 0x31010/0x31011 to the 37 hexes round the caster (radius 3) - not visual.
+  Particle look: Shockwave's pfs slot 0 = EFFECTS\PARTICLE.ILB [0, 1, 2, 1] at -9/-9, f20=1 (small blue-white orbs);
+  a kind-0x1F particle shows one fixed frame and fades over its path (GFXE intensity table).
+
+v5 DESIGN (patch_tc_gust_v1.py, AoWTCPCK only):
+  * WAVE (new zone 5 0x445C00-0x446000, 538 B; verified zero + reloc-free), called by TCK every tick of a 212 token:
+      ticks 0..BU-1 (BU = 20): NB = 8 Shockwave swirl particles per tick round the caster (the same 0x402E0C call, radius
+      Rnd(6) + t/2 growing) = the build-up; the breath strikes are HELD during it (TCK returns without throwing).
+      tick BU: the RELEASE = Shockwave's ring restricted to the SECTOR +-HALF (55) deg round the caster -> target
+      direction (atan2 in pixels): one particle per degree on a MakeLinePath to the ellipse point RR (120 + Rnd(5)) x
+      RR*7/8, RSTEP (40) steps, plus NTR (6) slower trailing particles every 10 deg (45..70 steps) -> ~177 particles.
+      Then the strikes start (one every 2 ticks, v4) and land while the arc sweeps through the cone; the push / hop
+      timing is unchanged relative to the last strike.
+  * The per-strike SPR spray (the 'giant circles') is gone: SPR now only replays its 2 instructions for 212.
+  * Visual only: a private LCG in BSS (WRN 0x46C7D4, seeded from the te; WTE 0x46C7CC = te tag, WTK 0x46C7D0 = tick) -
+    never the game's Random, nothing gameplay depends on it.  Constants BU / NB / HALF / RR / RY8 / RSTEP / NTR at the top.
+
+---- patch_dual_sphere_spells_v1.py: entry 212 gfx - slot 1 = SHOCKWAVE'S OWN particle (replaces DualDF 3042-3044) ----
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [340], -2, -2, f20=0),                     # the breath strikes draw nothing
+              1: G.seq_entry("EFFECTS\\PARTICLE.ILB", [0, 1, 2, 1], -9, -9, f20=1)},          # v5: Shockwave's own particle (pfs 137 slot 0) for the swirl + released arc
+  (build_dual_sphere_fx_v1.py: the (3042, gust_shock(), ...) row is now unused - can stay or go.)
+
+---- TIMING (estimate, ~30 ticks/s) - for the sound ----
+  0.00-0.67 s build-up swirl at the caster; 0.67 s RELEASE (arc leaves the caster, reaches ~120 px in ~1.3 s, trails to
+  ~2.3 s); strikes thrown 0.67-1.93 s, last lands ~2.3 s -> push / hop ~2.3-2.7 s; token ends ~3.0 s (last trails).
+  -> a whoosh / release accent at ~0.67 s and the push whoosh moved from ~1.6 s to ~2.3 s.
+
+---- APPLY ORDER (game + editor closed) ----
+  1. pipeline entry 212 slot 1 as above -> patch_dual_sphere_spells_v1.py --apply
+  2. py -3.10 patch_tc_gust_v1.py --apply      (live dry-run: "v4 build found -> upgrading to v5 ... Dry run OK")
+  3. VEH startup check.
+  Revert: patch_tc_gust_v1.py --revert (also zeroes zone 5; byte-identical to the v4 script's own revert - verified).
+
+---- CHAIN CONSEQUENCES ----  none new (zone 5 is reached only from TCK).  The old rule stays: never apply
+  patch_tc_soulsiphon_fx_v1 while Gust is applied.
+
+---- SCRATCH TESTS (tmp\gust5, copies of the LIVE AoWTCPCK.dll) ----
+  upgrade v4 -> v5 written; re-run 'already applied'; --revert 'reverted', again 'already reverted'; v5 revert of live ==
+  v4 script's revert of live == v5 revert of the upgraded copy (byte-identical); fresh apply after revert == upgrade
+  (byte-identical); TCK -> call 0x445C00 and the zone-5 code read in disassembly (FDIVP encoded DE F9 = st1/st0, correct).
+
+---- IN-GAME TESTS ----
+  1. Cast Gust: small blue-white particles swirl round the caster ~0.7 s, then an ARC of particles is released smoothly
+     outward through the cone only (no full circle, no big orbs).
+  2. Units in the cone shake as the strikes reach them, then hop away; blocked units shake and stay.
+  3. Arc direction matches the target for all 6 directions; tune HALF / RR / RY8 if the arc is too wide / short / flat.
+  4. Shockwave, Winds of Fury, Banshee Gale, Cold Breath and Holy Water unchanged; LAN / replay in sync.

@@ -1,0 +1,240 @@
+SMOKESCREEN (spell 225, Fire tier 2, 2026-10-17, fork) - integration snippets for the SHARED files.  Insert ONLY the
+code blocks (between ---- code ---- / ---- end ----); detect each builder's newline (CRLF vs LF) and convert the snippet
+before inserting; ast.parse each edited builder.
+New files (already in patch scripts\):
+  patch_smokescreen_v1.py              AoWEPACK  zone 0x5587A800..0x5587AA69 (617 B), export sm_sync @0x5587A820, backup .bak_smokescreen
+  patch_tc_smokescreen_v1.py           AoWTCPCK  zone 0x44C000..0x44C46D (1133 B), backup .bak_smokescreen
+  patch_smokescreen_ability_pfs_v1.py  Release\Ability.pfs record 208 (ability 0xC6 'Smoke Screened'), safety copy .bak_smokescreen
+  smokescreen_user_mask.png            the icon mask (traced from your reference)
+Nothing was applied live; no shared file edited.
+
+== 1. patch_dual_sphere_spells_v1.py (CRLF) - SPELLS: insert right AFTER the dict(id=223 ... Flash Flood) entry ==
+---- code ----
+    dict(id=225, name="Smokescreen", sphere=5, tier=2, mana=4, research=50,
+         donor="TOoze", pfs_donor=134, tc_type=0x0A, icon=225,                 # Ooze chassis (19-hex preview), alias 225 -> 0x7C; patch_tc_smokescreen_v1.py: no strikes - the gate lays the smoke field on all 19 hexes; patch_smokescreen_v1.py: 0xC6 + the accuracy penalty
+         pokes=[(0x34, 1, 0), (0x35, 1, 0), (0x36, 2, 0), (0x39, 1, 0x0C), (0x3B, 1, 3)],   # ATK 0 / DMG 0 / no damage type / range 12 (long) / own units + enemies + empty hexes (Sanctify's targeting)
+         desc="A thick bank of smoke billows over the target hex and every hex within two of it for 3 turns. Units without True Seeing that stand in the smoke, or attack into it, fight half blind: melee attack -3, ranged attack -2 at medium and -3 at long range.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [340], -2, -2, f20=0),                       # no strikes: nothing falls
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5650, 5670)), -40, -56, f18=1),   # the smoke BURST on each hex at the cast (kind-0x26, vanilla slot pick = 1; 20 x 2 ticks)
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", [340], -2, -2, f20=0),
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5670, 5730)), -22, -20, f18=1)},  # the lingering smoke loop drawn by the field HS (60 x 2 ticks, hex centre = HXtoHP + 16/16)
+         sfx=["SFX\\ZSP\\DUALFR_SMOKESCREEN.WAV", ["SFX\\ZSP\\DUALFR_SMOKESCREEN.WAV"]]),   # 0 = cast (played by the gate); 1 = the hail chassis' landing list (never reached: no strikes)
+---- end ----
+
+== 2. patch_tc_spell_alias_v1.py - ALIAS dict: add (next to 216: 0x7C) ==
+---- code ----
+         225: 0x7C,          # Smokescreen -> Ooze (2026-10-17; 19-hex preview + hail TE; patch_tc_smokescreen_v1.py zeroes the strikes)
+---- end ----
+
+== 3. build_dual_sphere_icons_v1.py ==
+  ICONS: add   225: "smokescreen"      CLOUDS: add   "smokescreen": 60   (Fire cloud)      GLYPHS: add   "smokescreen": glyph_smokescreen
+  function (next to the other _user_mask_glyph users, e.g. before glyph_mendwalls):
+---- code ----
+def glyph_smokescreen():
+    """Smokescreen (225, Fire L2, 2026-10-17): the user's reference art import export/smokescreen (middle right,
+    shorten left extension to fit).jpg - the MIDDLE-RIGHT cloud of the sheet (big spiral cloud with an arcing band),
+    its long left tail cut at 100 px and tapered to a point over 100..145 px (crop 610,420,1190,770 of the jpg), fitted
+    to 320x280 at 97 %, the interior white bands widened 3 px inside the cloud's silhouette (closing 31) so the
+    spirals survive 40x35 -> smokescreen_user_mask.png (made by tmp/smoke/mk_icon_smokescreen.py)."""
+    return _user_mask_glyph("smokescreen_user_mask.png")
+---- end ----
+  (no "smokescreen.png" exists in art import export\ - the reference is "smokescreen (middle right, ...).jpg", no key match.)
+
+== 4. build_dual_sphere_fx_v1.py - functions before `def build():` + two group rows (e.g. after the (5600, sea_summon(), ...) row) ==
+---- code ----
+# ---- Smokescreen (225) art: functions destined for build_dual_sphere_fx_v1.py (they use its raw_pixels / GAME / ilbcodec)
+SMOKE_ILB = os.path.join(GAME, "Images", "SMOKE.ILB")
+_SMK_SRC = None
+
+
+def _smoke_sources():
+    """The vanilla smoke plume (SMOKE.ILB 61-70 = the raw-16 twins of the Cloud-of-Ashes plume 21-30, 254x126): per
+    frame a DENSITY map (where the plume has pixels) and its LUMA, cropped to the plume - the material for the
+    smokescreen billows (blurred so the dithered source fringe becomes a soft density)."""
+    global _SMK_SRC
+    if _SMK_SRC is None:
+        lib = ilbcodec.read(SMOKE_ILB); _SMK_SRC = []
+        for k in range(10):
+            im, r = raw_pixels(lib, 61 + k)
+            a = np.asarray(im).astype(np.float32)
+            dens = (a[..., 3] > 0).astype(np.float32)
+            luma = (0.3 * a[..., 0] + 0.59 * a[..., 1] + 0.11 * a[..., 2]) / 255.0
+            ys, xs = np.nonzero(dens)
+            y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+            d = Image.fromarray((dens[y0:y1, x0:x1] * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2.2))
+            l = Image.fromarray((luma[y0:y1, x0:x1] * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.5))
+            _SMK_SRC.append((d, l))
+    return _SMK_SRC
+
+
+def _smoke_canvas(W, H, puffs, t, n, grow=1.0, alpha=1.0, rise=0.0):
+    """Composite the billows for time t of an n-frame loop -> RGBA (ash-grey smoke, soft alpha - rec_for dithers it).
+    puff = (cx, cy, size, k, ang0, orbit_r, phase, mirror); each billow plays the plume's own 10-frame billow once per
+    loop (frame (3k + 10t/n) mod 10) while circling a small orbit -> seamless."""
+    acc = np.zeros((H, W), np.float32); lum = np.zeros((H, W), np.float32)
+    src = _smoke_sources()
+    for cx, cy, size, k, ang0, orb, ph, mir in puffs:
+        f = (k * 3 + (t * 10) // n) % 10
+        d, l = src[f]
+        w = max(4, int(size * grow)); h = max(3, int(size * grow * d.height / float(d.width)))
+        dd, ll = d.resize((w, h), Image.LANCZOS), l.resize((w, h), Image.LANCZOS)
+        if mir: dd, ll = dd.transpose(Image.FLIP_LEFT_RIGHT), ll.transpose(Image.FLIP_LEFT_RIGHT)
+        a = 2 * math.pi * (t / float(n)) + ph
+        x = cx + orb * math.cos(a) - w / 2.0; y = cy + 0.45 * orb * math.sin(a) - h / 2.0 - rise
+        xi, yi = int(round(x)), int(round(y))
+        D = np.asarray(dd).astype(np.float32) / 255.0; L = np.asarray(ll).astype(np.float32) / 255.0
+        sx0, sy0 = max(0, -xi), max(0, -yi); sx1, sy1 = min(w, W - xi), min(h, H - yi)
+        if sx1 <= sx0 or sy1 <= sy0: continue
+        dst = (slice(yi + sy0, yi + sy1), slice(xi + sx0, xi + sx1)); s = (slice(sy0, sy1), slice(sx0, sx1))
+        m = D[s] > acc[dst]
+        lum[dst] = np.where(m, L[s], lum[dst]); acc[dst] = np.maximum(acc[dst], D[s])
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    g = 150 + 70 * lum                                                     # ash grey: 150 (shade) .. 220 (lit billow)
+    warm = np.clip((yy - H * 0.55) / (H * 0.45), 0, 1)                     # a faint ember warmth low down (Fire sphere)
+    r = g + 14 * warm; gg = g + 4 * warm; b = g - 12 * warm
+    al = np.clip((acc - 0.12) / 0.38, 0, 1); al = al * al * (3 - 2 * al) * alpha   # SOLID core, dithered only at the fringe
+                                                                       # (translucency comes from drawMode 769, not the dither:
+                                                                       #  a moving dither grid shimmers under DPI scaling)
+    rgba = np.dstack([np.clip(r, 0, 255), np.clip(gg, 0, 255), np.clip(b, 0, 255), np.clip(al * 255, 0, 255)])
+    return Image.fromarray(rgba.astype(np.uint8), "RGBA")
+
+
+SMK_FW, SMK_FH, SMK_FCX, SMK_FCY, SMK_FN = 76, 54, 38, 36, 60
+
+
+def _smoke_field_puffs():
+    rnd = random.Random(2250); out = []
+    for k in range(6):                                                     # a ring of churning billows filling the hex
+        a = 2 * math.pi * k / 6 + rnd.uniform(-0.3, 0.3)
+        out.append((SMK_FCX + 15 * math.cos(a), SMK_FCY + 6 * math.sin(a) - 3, rnd.uniform(32, 38), k, a,
+                    rnd.uniform(2.5, 4.5), rnd.uniform(0, 6.28), k % 2 == 0))
+    out.append((SMK_FCX, SMK_FCY - 6, 42, 7, 0.0, 2.0, 1.1, False))
+    return out
+
+
+def smoke_field():
+    """Smokescreen (225) slot 3 (2026-10-17): the lingering smoke on each screened hex, drawn by
+    patch_tc_smokescreen_v1.py's field HS (frame by tick, per-hex phase).  A SEAMLESS 60-frame loop (2 ticks each =
+    ~3.5 s), 76x54, hex centre (38, 36): billows cut from the vanilla smoke plume (SMOKE.ILB 61-70) churning slowly in
+    place on small orbits while their own billow animation plays; ash grey with a faint ember warmth at the ground,
+    translucent (drawMode 769 = the plume's own blend mode) and dithered at the edges so neighbouring hexes merge into
+    one bank."""
+    puffs = _smoke_field_puffs(); out = []
+    yy, xx = np.mgrid[0:SMK_FH, 0:SMK_FW].astype(np.float32)
+    rn = np.sqrt(((xx - SMK_FCX) / 35.0) ** 2 + ((yy - (SMK_FCY - 5)) / 20.0) ** 2)
+    env = np.clip((1.05 - rn) / 0.3, 0, 1)                               # solid bank, only the outer rim fades (dithered)
+    for t in range(SMK_FN):
+        im = _smoke_canvas(SMK_FW, SMK_FH, puffs, t, SMK_FN, alpha=1.0)
+        a = np.asarray(im).copy(); a[..., 3] = (a[..., 3].astype(np.float32) * env).astype(np.uint8)
+        out.append(Image.fromarray(a, "RGBA"))
+    return out
+
+
+SMK_PW, SMK_PH, SMK_PCX, SMK_PCY, SMK_PN = 80, 72, 40, 56, 20
+
+
+def smoke_burst():
+    """Smokescreen (225) slot 1 (2026-10-17): the cast on each hex (kind-0x26 effect at the hex centre, spawned by
+    patch_tc_smokescreen_v1.py's gate; 20 frames x 2 ticks): a dense puff BURSTS up out of the ground with an ember
+    flicker at its root, swells outward and rolls over, then settles and thins into the field haze."""
+    puffs = _smoke_field_puffs(); out = []
+    for i in range(SMK_PN):
+        u = i / float(SMK_PN - 1)
+        grow = 0.35 + 0.85 * (1 - (1 - u) ** 2.2)                          # quick swell, easing out
+        rise = 10 * math.sin(math.pi * min(1.0, u * 1.4)) * (1 - u)         # lifts as it bursts, settles back
+        al = min(1.0, 0.25 + u * 4.0) * (1.0 if u < 0.85 else 1.0 - (u - 0.85) / 0.15 * 0.6)   # solid; only the last frames thin (the field HS is already under it)
+        pf = [(SMK_PCX + (cx - SMK_FCX) * (0.4 + 0.6 * u), SMK_PCY + (cy - SMK_FCY) * (0.4 + 0.6 * u), s, k, a0, o, ph, m)
+              for cx, cy, s, k, a0, o, ph, m in puffs]
+        im = _smoke_canvas(SMK_PW, SMK_PH, pf, i, SMK_PN, grow=grow, alpha=al, rise=rise)
+        if u < 0.35:                                                        # ember flicker at the root
+            dr = ImageDraw.Draw(im); e = 1 - u / 0.35; rr = 4 + 8 * u
+            for j in range(9):
+                ang = j * 0.7 + i; dx = math.cos(ang) * rr; dy = math.sin(ang) * rr * 0.4
+                dr.ellipse([SMK_PCX + dx - 1.5, SMK_PCY + dy - 1, SMK_PCX + dx + 1.5, SMK_PCY + dy + 1],
+                           fill=(255, int(120 + 80 * e), 40, int(230 * e)))
+        out.append(im)
+    return out
+---- end ----
+---- code ----
+              (5650, smoke_burst(), "FRsmkb%02d.BMP", 769, 55, KEY),             # Smokescreen (225) slot 1: per-hex smoke BURST at the cast (80x72, 20 frames, translucent blend 769 = the vanilla plume's mode)
+              (5670, smoke_field(), "FRsmkf%02d.BMP", 769, 55, KEY),             # Smokescreen (225) slot 3: lingering smoke loop on each hex (76x54, 60 frames, seamless)
+---- end ----
+
+== 5. build_dual_sphere_sfx_v1.py (CRLF) ==
+5a. synth(): insert before `    if kind == "bell":`
+---- code ----
+    if kind == "crackle":
+        # 'crackle:density:seconds' (Smokescreen 2026-10-17) -> embers popping inside smoke: sparse random clicks
+        # (Poisson, `density` per second, slowly thinning) - each a 1.5-4 ms burst of noise through a ~2.4 kHz
+        # resonance with a tiny 300 Hz knock, random level; swells in over 0.15 s and dies away over the last 40 %
+        dens, secs = float(parts[1]), float(parts[2]); n = int(secs * RATE); out = []; rnd = random.Random(2251)
+        y1 = y2 = 0.0; w = 2 * math.pi * 2400 / RATE; q = 0.9; bt = 1.0; lvl = 0.0; dec = 0.003
+        for i in range(n):
+            t = i / RATE; u = i / n
+            if rnd.random() < dens * (1.0 - 0.5 * u) / RATE:
+                bt = 0.0; lvl = rnd.uniform(0.35, 1.0); dec = rnd.uniform(0.0015, 0.004)
+            bt += 1.0 / RATE
+            benv = math.exp(-bt / dec) * lvl
+            x = (rnd.random() * 2 - 1) * benv
+            y = x + 2 * q * math.cos(w) * y1 - q * q * y2; y2 = y1; y1 = y
+            knock = math.sin(2 * math.pi * 300 * bt) * math.exp(-bt / 0.004) * lvl * 0.5
+            env = min(1.0, t / 0.15) * (1.0 if u < 0.6 else (1 - u) / 0.4)
+            out.append(env * (0.3 * y + knock))
+        return out
+---- end ----
+5b. MIXES: add before "DUALEW_OVERGROWTH.WAV":
+---- code ----
+    # Smokescreen (225, Fire L2 2026-10-17): the smoke drawn in (the vapour hiss REVERSED and slowed), a low muffled
+    # whump as it ignites (FireStrt slowed, cut short), then billowing smoke rolling out over the field (slowed vapour
+    # roll + gusting wind + a sub swell) with embers crackling inside it, thinning away.
+    "DUALFR_SMOKESCREEN.WAV": [("Attack/Vapor.wav", 0.55, 0.00, 0.9, 0.15, -0.7, 0.3),
+                               ("Attack/FireStrt.WAV", 0.45, 0.28, 0.7, 0.45, 0.55, 0.02),
+                               ("synth:subswell:30:50:2.2", 0.45, 0.20, None, 0.9),
+                               ("Attack/Vapor.wav", 0.55, 0.32, 1.9, 1.1, 0.72, 0.12),
+                               ("synth:wind:2.4", 1.0, 0.25, None, 1.0),
+                               ("synth:crackle:16:2.2", 0.45, 0.35, None, 0.8)],
+---- end ----
+5c. FADE_OUT dict: add  "DUALFR_SMOKESCREEN.WAV": 0.8,      DRIVE dict: add  "DUALFR_SMOKESCREEN.WAV": 1.4,
+    (scratch render 2.65 s: swells in over 0.3 s, full 0.5-1.5 s, gone by ~2.4 s -> tmp\smoke\DUALFR_SMOKESCREEN_test.wav)
+
+== 6. Ceilings: append 0xC6 to LADDER in patch_aowx_banner_ceilings_v1.py AND patch_tcablist_ceiling_v1.py (bound -> 0xC7) ==
+
+== 7. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply          (SpellIcn 225)
+  py -3.10 build_dual_sphere_fx_v1.py --apply             (DualDF 5650-5729)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply            (Sfx\Zsp\DUALFR_SMOKESCREEN.WAV - NEW file, ship via --add)
+  py -3.10 patch_smokescreen_ability_pfs_v1.py --apply    (Ability.pfs record 208)
+  ceilings: edit LADDER (section 6), then  py -3.10 patch_aowx_banner_ceilings_v1.py --apply ; py -3.10 patch_tcablist_ceiling_v1.py --apply
+  py -3.10 patch_tc_spell_alias_v1.py --apply             (225 -> 0x7C)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply         (Spells.pfs 225 + registration)
+  py -3.10 patch_smokescreen_v1.py      (dry run: reg/pom/m1/m2/rg 'chain'; prev reg 0x5586f830 pom 0x55868230 m1 0x5580f4c0 m2 0x5580f520 rg 0x5580f580)
+  py -3.10 patch_smokescreen_v1.py --apply
+  py -3.10 patch_tc_smokescreen_v1.py   (dry run: gate chain prev 0x448460 = Mend Walls' gate, AoWEPACK export ok)
+  py -3.10 patch_tc_smokescreen_v1.py --apply
+  VEH startup check.
+
+== 8. Chain / LIFO ==
+  * AoWEPACK: Smokescreen becomes the HEAD of the RegisterAbility chain (0x557BCF6E, in front of Steadfast's reg),
+    the TUnitHS.PlaceOnMap tail chain (0x55784391, in front of Sanctify's pom) and the three True-Seeing strike sites
+    (0x557666D8 / 0x55767C89 / 0x5576EB1E, in front of the 2026-07-23 caves 0x5580F4C0 / F520 / F580).  Scripts that own
+    the heads behind us (patch_steadfast_v1.py reg, patch_sanctify_v1.py pom) will see those sites as taken: revert
+    Smokescreen first, re-run them, re-apply Smokescreen (LIFO).  patch_smokescreen_v1.py --revert is exact.
+  * AoWTCPCK: the gate sits IN FRONT of the whole NextStrike gate chain (0x40B6F1 / 0x40CBE7 -> gate 0x44C390 -> Mend
+    Walls 0x448460 -> Suffocate ...).  patch_tc_mendwalls_v2.py (and anything behind it) will see its sites as taken:
+    revert patch_tc_smokescreen_v1.py first, re-run it, re-apply (LIFO).  --revert is exact.
+  * Revert order: patch_tc_smokescreen_v1.py --revert, then patch_smokescreen_v1.py --revert (the field calls the
+    AoWEPACK export), then the pfs record.
+
+== 9. Behaviour notes / open ==
+  * 'Same as Invisibility' = the True-Seeing rule already in the game (trueseeing-vs-invisible-atk-penalty): melee -3,
+    ranged by range tier (<= 1: 0, 2: -2, 3+: -3), clamped to ATK >= 1.  Applied when the ATTACKER lacks True Seeing
+    and the attacker OR the target stands in smoke (holds 0xC6); never doubled with real Invisibility (that cave keeps
+    its own penalty).  The spec reads "debuff ... to units without True Seeing within the AOE" - the attacker-in-smoke
+    half is that literally, the target-in-smoke half is the Invisibility equivalence.  To make it one-sided, drop one
+    of the two GAE(0xC6) tests in smk.
+  * Strike-time modifier, so not shown on the unit's Attack stat (same as the Invisible rule); the unit window lists
+    the 'Smoke Screened' ability while the unit stands in the smoke.
+  * Fast combat: no strikes and no field -> no smoke there (as Sanctify).  AI: an ATK/DMG 0 Ooze -> nothing for the
+    AI's damage scoring, so it should not cast it.
+  * Untested in game: the 769 (translucent) draw of the field / burst on combat terrain, the layering (a ground decal
+    under the units, like Sanctify's), the burst offsets.

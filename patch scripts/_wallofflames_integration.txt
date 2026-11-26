@@ -1,0 +1,141 @@
+WALL OF FLAMES (spell 226, Fire tier 3, 2026-10-17, fork) - integration snippets.  NOTHING applied live.
+Engine: patch scripts\patch_tc_walloflames_v1.py (AoWTCPCK only; zone 0x44C800-0x44CBFD of 0x44C800-0x44D000; clone
+VMT in AoWEPACK BSS slack 0x558FAB00-0x558FAC50; ClassID 0x220114; backup .bak_walloflames).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----); detect the newline of each file first
+(icons + fx builders = LF, sfx builder + pipeline = CRLF as of 10/17) and ast.parse each edited file afterwards.
+Previews / test renders: C:\Users\<user>\.claude\jobs\47241cad\tmp\wof\ (icon_preview.png, ignite_sheet.png,
+DUALFI_WALLFLAMES.WAV, DUALFI_FLAMEHIT.WAV).
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry (single-sphere block, e.g. after the Water ids 220-223) ==
+---- code ----
+    dict(id=226, name="Wall of Flames", sphere=5, tier=3, mana=5, research=70,
+         donor="TGreatHail", pfs_donor=126, tc_type=0x0A, icon=226,              # hail class, 7 strikes (patch_rotaway STRIKES[226]); flames = patch_tc_walloflames_v1.py
+         pokes=[(0x34, 1, 0), (0x35, 1, 0), (0x36, 2, 0), (0x39, 1, 0x0C), (0x3B, 1, 3)],   # ATK 0 / DMG 0 / no type / range 12 (long) / own + enemy + empty hexes (Sanctify's); the burn = ATK 4 / DMG 4 fire (engine)
+         desc="A ring of fire springs up around the target hex and burns for 3 turns: any enemy that moves into the flames or begins its turn standing in them is burned (attack 4, damage 4, fire).",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),                       # nothing visibly falls (Sanctify's blank)
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", [340], -2, -2, f20=0),
+              2: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(5750, 5768)), -51, -40, f20=2, f18=1)},   # per-hex ignition burst (Sanctify's per-hex canvas / anchor)
+         sfx=["SFX\ZSP\DUALFI_WALLFLAMES.WAV", ["SFX\ZSP\DUALFI_FLAMEHIT.WAV"]]),   # 0 = cast; 1 = REQUIRED per landing hex (hail class)
+---- end ----
+
+== 2. patch_tc_spell_alias_v1.py (then re-run it with --apply) ==
+  ALIAS: add                     226: 0x74,          # Wall of Flames -> Great Hail (2026-10-17, hail class, 7 strikes)
+  SITE_KEEP[0x40F0E3]: add       226                 (keeps its own id at NextStrike, as Sanctify 208 / Steadfast 218)
+  SITE_ALIAS[0x42827A]: add      226: 0x82           (the 7-hex preview, as 208 / 218)
+
+== 3. patch_rotaway_v1.py ==
+  STRIKES: add   226: 7      (7 strikes = the 7 hexes once, landing at the hex centre)
+  Its dry-run aborts while Crosswind is chained on rotaway's def site (expected) -> the 218 dance:
+  Crosswind --revert, patch_rotaway_v1.py --apply, Crosswind --apply.
+
+== 4. build_dual_sphere_icons_v1.py ==
+  ICONS: add   226: "walloflames"      CLOUDS: add   "walloflames": 60   (Fire cloud)      GLYPHS: add   "walloflames": glyph_walloflames
+  function (e.g. before glyph_mendwalls; no user reference art; no art import export\walloflames.png override):
+---- code ----
+def glyph_walloflames():
+    """Wall of Flames (226, Fire L3, 2026-10-17; no user reference art): a closed RING of flame tongues seen in
+    perspective around an empty centre (the hex the wall encloses): tall tongues along the back arc, a burning
+    elliptical ground band, and shorter tongues on the near arc drawn over the band (dark-rimmed so each reads)."""
+    from PIL import ImageFilter
+    im = canvas(); dr = ImageDraw.Draw(im)
+    cx, cy, rx, ry = 20.0, 24.5, 16.0, 6.6
+    def tongue(a, h, w, rim):
+        s = math.sin(math.radians(a)); c = math.cos(math.radians(a))
+        x = cx + rx * c; y = cy + ry * s
+        tmp = Image.new("L", im.size, 0); td = ImageDraw.Draw(tmp)
+        pyre_tongue(td, x * S, (y + 0.6) * S, h * S, w * S, lean=0.12 * c, lick=1 if c >= 0 else -1)
+        if rim: im.paste(0, mask=tmp.filter(ImageFilter.MaxFilter(int(1.0 * S) | 1)))
+        im.paste(255, mask=tmp)
+    for a, h in ((180, 11.5), (0, 11.5), (210, 13.5), (330, 13.5), (240, 15.5), (300, 15.5), (270, 16.5)):
+        tongue(a, h, 7.0, rim=a in (210, 330, 240, 300, 270))
+    band = Image.new("L", im.size, 0); bd = ImageDraw.Draw(band)
+    bd.ellipse([(cx - rx) * S, (cy - ry) * S, (cx + rx) * S, (cy + ry) * S], fill=255)
+    bd.ellipse([(cx - rx + 2.8) * S, (cy - ry + 1.8) * S, (cx + rx - 2.8) * S, (cy + ry - 1.8) * S], fill=0)
+    im.paste(0, mask=band.filter(ImageFilter.MaxFilter(int(0.8 * S) | 1)))
+    im.paste(255, mask=band)
+    dr.ellipse([(cx - rx + 3.6) * S, (cy - ry + 2.4) * S, (cx + rx - 3.6) * S, (cy + ry - 2.4) * S], fill=0)
+    for a, h in ((150, 9.0), (30, 9.0), (115, 8.0), (65, 8.0), (90, 7.5)):
+        tongue(a, h, 6.4, rim=True)
+    return im
+---- end ----
+
+== 5. build_dual_sphere_fx_v1.py - function before `def build():` + group row (DualDF 5750-5767 of 5750-5849; live max 5402) ==
+---- code ----
+def walloflames_ignite(n=18):
+    """Wall of Flames (226) slot 2 (2026-10-17): the per-hex landing (96x80, additive, 18 frames x 2 ticks, anchor
+    -51/-40 = Sanctify's per-hex canvas, hex centre (48, 46)): a hot white-orange flash on the ground, a ring of
+    fire licking outward over the hex, a column of flame tongues bursting up and collapsing, and embers rising
+    out of it - the vanilla burning-hex fire (TCombatFire) takes over on the ring hexes as it fades."""
+    W, H = 96, 80; cx, cy = 48.0, 46.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []; rnd = random.Random(2260)
+    hexr = np.sqrt((xx - cx) ** 2 + ((yy - cy) / 0.45) ** 2)
+    tongues = [(rnd.uniform(-13, 13), rnd.uniform(0.6, 1.0), rnd.uniform(0, 6.28), rnd.uniform(2.4, 3.6)) for _ in range(9)]
+    embers = [(rnd.uniform(-14, 14), rnd.uniform(-3, 3), rnd.uniform(0.15, 0.55), rnd.uniform(-6, 6)) for _ in range(16)]
+    for i in range(n):
+        t = i / (n - 1.0)
+        acc = np.zeros((H, W), np.float32); hot = np.zeros((H, W), np.float32)
+        flash = np.exp(-((xx - cx) ** 2 + ((yy - cy) / 0.5) ** 2) / (12 + 140 * t)) * max(0.0, 1 - t / 0.35)
+        hot += 1.3 * flash
+        R = 3 + 22 * min(1.0, t / 0.55)
+        ring = np.exp(-((hexr - R) / (1.6 + 2.2 * t)) ** 2) * (1 - t) ** 1.2 * 0.9
+        acc += ring
+        grow = min(1.0, t / 0.25); fall = max(0.0, (t - 0.45) / 0.55)
+        for dx, hs, ph, wd in tongues:
+            hgt = 34 * hs * grow * (1 - fall ** 1.4)
+            if hgt < 1: continue
+            x0 = cx + dx * (0.6 + 0.4 * t); sway = 2.2 * math.sin(ph + 9 * t)
+            u = np.clip((cy - yy) / hgt, 0, 1); inside = (yy <= cy + 2) & (yy >= cy - hgt)
+            half = wd * (1 - u) ** 0.8 + 0.3
+            g = np.exp(-((xx - x0 - sway * u * u) / half) ** 2) * inside * (1 - u ** 3)
+            acc += 0.75 * g; hot += 0.5 * g * (1 - u) ** 2
+        for ex, ey, d0, drift in embers:
+            u = (t - d0) / 0.45
+            if 0 <= u <= 1:
+                px = cx + ex + drift * u; py = cy + ey - 40 * u
+                acc += np.exp(-((xx - px) ** 2 + (yy - py) ** 2) / 1.2) * math.sin(math.pi * u) * 0.9
+        v = np.clip(acc, 0, 1.4); hv = np.clip(hot, 0, 1.2)
+        r = 255 * np.clip(v * 1.0 + hv, 0, 1); g = 255 * np.clip(v * 0.48 + hv * 0.85, 0, 1); b = 255 * np.clip(v * 0.08 + hv * 0.55, 0, 1)
+        out.append(Image.fromarray(np.dstack([r, g, b]).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+---- end ----
+---- code ----
+              (5750, walloflames_ignite(), "FIwall%02d.BMP", 770, 85, 0x0000),  # Wall of Flames (226) slot 2: per-hex ignition burst (96x80, additive, 18 x 2 ticks)
+---- end ----
+
+== 6. build_dual_sphere_sfx_v1.py - MIXES entries (before "DUALEW_OVERGROWTH.WAV") ==
+---- code ----
+    # Wall of Flames (226, Fire L3 2026-10-17): the air SUCKED in toward the ring (a reversed, slowed flame burst over
+    # a rising sub swell), then the IGNITION - a deep, slowed fire-start whoomp with a low thump - and the wall of fire
+    # ROARING up: the fire loop slowed and darkened under a gusting updraft, crackle on top, settling away over ~2 s.
+    "DUALFI_WALLFLAMES.WAV": [("Attack/FlameA.WAV", 0.55, 0.00, 0.55, 0.05, -0.62, 0.25),
+                             ("synth:subswell:34:58:0.55", 0.55, 0.00, None, 0.0),
+                             ("Attack/FireStrt.WAV", 0.95, 0.50, 1.3, 0.6, 0.72),
+                             ("Attack/Firebs.WAV", 0.55, 0.52, 0.9, 0.5, 0.6),
+                             ("Attack/Fireloop.WAV", 0.75, 0.62, 2.0, 1.0, 0.7, 0.25),
+                             ("synth:wind:2.2", 0.30, 0.55, None, 0.8, 1.0, 0.3),
+                             ("Attack/FlameA.WAV", 0.30, 0.95, 1.2, 0.6, 1.25, 0.1)],
+    # per landing hex (sound 1 - REQUIRED: the hail landing plays it on every strike hex): a short soft FWOOSH of a
+    # hex catching fire (FlameA quick and high, sliced past its attack, + a breath of hiss); quiet because it repeats x7.
+    "DUALFI_FLAMEHIT.WAV":  [("Attack/FlameA.WAV", 0.22, 0.00, 0.45, 0.3, 1.35, 0.03, 0.05),
+                             ("synth:hiss:0.4", 0.06, 0.00, None, 0.2)],
+---- end ----
+  DRIVE dict: add   "DUALFI_WALLFLAMES.WAV": 1.6,      FADE_OUT dict: add   "DUALFI_WALLFLAMES.WAV": 0.7,
+  (no DRIVE for FLAMEHIT - it must stay quiet: peak 0.23).  Test render: cast 2.75 s, ignition at 0.5 s.
+
+== 7. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply        (SpellIcn 226)
+  py -3.10 build_dual_sphere_fx_v1.py --apply           (DualDF 5750-5767)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply          (DUALFI_WALLFLAMES / DUALFI_FLAMEHIT)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply       (Spells.pfs 226 + SpellTypes[226] = 0x0A)
+  py -3.10 patch_tc_spell_alias_v1.py --apply           (ALIAS / SITE_KEEP / SITE_ALIAS edits)
+  Crosswind --revert ; py -3.10 patch_rotaway_v1.py --apply ; Crosswind --apply     (STRIKES[226] = 7)
+  py -3.10 patch_tc_walloflames_v1.py                   (dry run: land chain (prev 0x44a010) | step vanilla | bc vanilla | zone zero)
+  py -3.10 patch_tc_walloflames_v1.py --apply
+  VEH startup check.  Ship the two new WAVs via build_release_zip.py --add.
+
+== 8. Chain / LIFO ==
+  * land 0x40C609: Wall of Flames becomes the HEAD of the land chain (in front of Steadfast clang 0x44A010 -> Steadfast
+    fx -> Sanctify field -> Gravity Well).  Any script that re-decodes that site (patch_tc_steadfast_clang_v1.py,
+    patch_tc_steadfast_fx_v1.py, sanctify / gravity well field) needs patch_tc_walloflames_v1.py --revert first and
+    --apply again after.
+  * step 0x4085F0 (post-step prologue) and bc 0x41BEF2 (turn broadcast) were vanilla - no other owner.
+  * Revert: patch_tc_walloflames_v1.py --revert (exact; refuses unless land / step / bc all still point at it).

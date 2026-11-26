@@ -1,0 +1,150 @@
+CITY SPY (229) v2 - integration snippets (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+Builders: the pipeline + sfx builder are CRLF, fx + icons LF (as of 10/18) - detect the newline per file; ast.parse after.
+Engine: patch scripts\patch_cityspy_v1.py upgraded IN PLACE to v2 (v1 copy: tmp\cityspy2\patch_cityspy_v1.v1.py).
+
+WHAT CHANGES (user 10/18):
+  * no more entering the city: v1's AoWx.exe hooks (map double-click open 0x4501DE, city-screen refresh 0x43B1EB, the 8
+    read-only TCityScreen handler stubs) are restored to vanilla by the upgrade.
+  * the STRUCTURE PANEL (AoWx.exe TIWindow, right side above the event log) shows a spied foreign city exactly like an own
+    city: race, level/upgrades, income, civil status, current production, race-relation icon (ShowOwnCity 0x443318),
+    via PS 0x443FE6 (own-owner test -> also the own path for a foreign TCity carrying the viewer's City Spy).  PF 0x444028
+    wraps ShowOwnCity: for such a city it hides MainBtn ('City' = opens the city screen) and the raze panel, and restores
+    the general's 'current city' [[0x45A420]+0xB0] (ShowOwnCity sets it; a foreign city must never become it).
+  * the eye is drawn for EVERY viewer (OV / MV no longer test the viewer), and animates on REAL TIME: entry = KUSER
+    InterruptTime / 1 000 000 (0.1 s) mod the slot-1 list length; the slot list IS the timeline (117 entries = 11.7 s):
+    fade in 0.6 s / hold 0.4 / look left 1.2 / hold 1.0 / look right 2.4 / hold 1.0 / back 1.2 / hold 0.4 /
+    fade out 0.5 / hidden 3.0 s.  Draw-count independent (no ShowLooped, no map tick).  Eye art is now ADDITIVE (770)
+    so the fade is a plain brightness ramp (no dither, no hard-alpha edge).
+  * sfx: the vanilla Charm whispers (Attack\Charm.WAV sliced from 0.65 s, past its chime) layered in.
+
+== 1. build_dual_sphere_fx_v1.py (LF) - add this block before `def build():` (cityspy_eye stays, unused) ==
+---- code ----
+_CSPY_EYE2 = None
+
+
+def _cityspy_eye2_frames():
+    """City Spy (229) v2 slot 1 art (2026-10-18, user: the eye fades in, slowly looks left, holds, slowly looks right,
+    holds, back to centre, fades out, pauses, repeats; visible for everyone): 15 UNIQUE 40x28 frames, ADDITIVE 770 (black
+    = invisible, so the fade is a plain brightness ramp - no dither, no hard alpha edge):
+      0 blank | 1..6 centre gaze at 1/6..6/6 brightness (6 = the full open eye) | 7..10 gaze LEFT 1..4 | 11..14 gaze
+      RIGHT 1..4 (iris + pupil + glint slide 1.5 px per step, the lids stay put).
+    A glowing violet almond (soft halo, pale lavender white, brighter rim), a magenta iris ring around a dark pupil
+    (dark = the city shows through under additive) and a white glint.  The TIMELINE lives in the pipeline's slot list
+    (patch_cityspy_v1.py v2 picks entry = real-time 0.1 s steps mod the list length)."""
+    global _CSPY_EYE2
+    if _CSPY_EYE2 is not None: return _CSPY_EYE2
+    Wd, Hd = 40, 28; cx, cy = 20.0, 14.0; S = 4
+    yy, xx = np.mgrid[0:Hd * S, 0:Wd * S].astype(np.float32); xx = (xx + 0.5) / S; yy = (yy + 0.5) / S
+
+    def eye(gaze, level):
+        a, b = 12.5, 6.6
+        u = (xx - cx) / a; v = (yy - cy) / b
+        lidf = np.clip(1 - np.clip(np.abs(u), 0, 1) ** 2, 0, 1) ** 1.15
+        inside = (np.abs(v) <= lidf) & (np.abs(u) <= 1)
+        rim = np.exp(-((np.abs(v) - lidf) * b) ** 2 / (2 * 0.55 ** 2)) * (np.abs(u) <= 1.06)
+        gx = cx + 1.6 * gaze
+        r = np.sqrt((xx - gx) ** 2 + (yy - cy) ** 2)
+        iris = np.clip(4.6 - r, 0, 1) * inside
+        pupil = np.clip(2.1 - r, 0, 1) * inside
+        ring = np.exp(-(r - 3.9) ** 2 / (2 * 0.6 ** 2)) * inside
+        glint = np.clip(1.0 - np.sqrt((xx - (gx - 1.5)) ** 2 + (yy - (cy - 1.6)) ** 2), 0, 1) * inside
+        halo = np.exp(-((xx - cx) ** 2 / (2 * 10.0 ** 2) + (yy - cy) ** 2 / (2 * 5.5 ** 2)))
+        R = 45 * halo + 55 * inside + 120 * rim
+        G = 15 * halo + 40 * inside + 40 * rim
+        B = 80 * halo + 95 * inside + 200 * rim
+        # iris: magenta, brighter ring; pupil: dark; glint: white
+        R = R * (1 - iris) + iris * (150 + 80 * ring); G = G * (1 - iris) + iris * (20 + 40 * ring); B = B * (1 - iris) + iris * (170 + 60 * ring)
+        R *= (1 - 0.92 * pupil); G *= (1 - 0.92 * pupil); B *= (1 - 0.92 * pupil)
+        R = R * (1 - glint) + 255 * glint; G = G * (1 - glint) + 255 * glint; B = B * (1 - glint) + 255 * glint
+        k = (level / 6.0) ** 1.4
+        rgb = np.dstack([R, G, B]) * k
+        img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB").resize((Wd, Hd), Image.BOX)
+        return img.convert("RGBA")
+
+    frames = [Image.new("RGBA", (Wd, Hd), (0, 0, 0, 255))]
+    frames += [eye(0, L) for L in range(1, 7)]
+    frames += [eye(-p, 6) for p in range(1, 5)]
+    frames += [eye(p, 6) for p in range(1, 5)]
+    _CSPY_EYE2 = frames
+    return frames
+
+
+def cityspy_eye2_a():
+    """City Spy (229) v2 eye frames 0..11 -> DualDF 6100..6111 (see _cityspy_eye2_frames)."""
+    return _cityspy_eye2_frames()[:12]
+
+
+def cityspy_eye2_b():
+    """City Spy (229) v2 eye frames 12..14 (gaze right 2..4) -> DualDF 6128..6130 (6112..6127 = the cast swirl)."""
+    return _cityspy_eye2_frames()[12:]
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - REPLACE the (6100, cityspy_eye(), ...) row with these two rows ==
+---- code ----
+              (6100, cityspy_eye2_a(), "COspye%02d.BMP", 770, 90, 0x0000),      # City Spy (229) v2 slot 1: eye frames 0-11 (blank / fade 1-6 / gaze left 1-4 / right 1), 40x28, ADDITIVE
+              (6128, cityspy_eye2_b(), "COspyf%02d.BMP", 770, 90, 0x0000),      # City Spy (229) v2 slot 1: eye frames 12-14 (gaze right 2-4)
+---- end ----
+  (DualDF 6100-6111 re-rendered, 6128-6130 new - 6112-6127 = the cast swirl stays; 6131-6149 free)
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_CITYSPY.WAV" entry AND its 2 comment lines above it with ==
+   (DRIVE 1.3 / FADE_OUT 0.7 unchanged.  Test renders: tmp\cityspy2\DUALCO_CITYSPY_old.wav / DUALCO_CITYSPY_v2.wav,
+    2.5 s, peak 0.86; the whispers lift the 0.5-1.75 s RMS by ~15-25 %)
+---- code ----
+    # City Spy (229, Cosmos L2 2026-10-17; v2 10/18 + the Charm whispers): a soft arcane scrying shimmer - a reversed magic
+    # swell drawing in, a glassy winding tone, a shimmer, a slowed enchantment chime as the eye opens, two faint high
+    # bells, under a low drone - and (v2) the hushed WHISPERS of vanilla Charm (Attack/Charm.WAV from 0.65 s = past its
+    # opening chime, a touch slowed) rising under the chime and trailing off with the drone.
+    "DUALCO_CITYSPY.WAV":   [("Attack/Magic07.WAV", 0.5, 0.00, 1.1, 0.5, -0.8, 0.3),
+                             ("synth:glasswind:330:520:1.6", 0.35, 0.05, None, 0.6),
+                             ("synth:shimmer:2.0", 0.40, 0.30, None, 0.8),
+                             ("Attack/EnchP02.WAV", 0.35, 0.95, 1.4, 0.7, 0.72),
+                             ("synth:bell:784:1.4", 0.18, 1.05, None, 0.7),
+                             ("synth:bell:1175:1.2", 0.10, 1.30, None, 0.6),
+                             ("synth:drone:110:2.4", 0.25, 0.00, None, 0.9),
+                             ("Attack/Charm.WAV", 0.55, 0.55, 1.9, 0.7, 0.94, 0.25, 0.65)],
+---- end ----
+
+== 3. patch_dual_sphere_spells_v1.py (CRLF), entry 229 - replace the desc line and the slot-1 line (the slot-1 line keeps
+       the dict's closing `},`) with ==
+---- code ----
+desc="A hidden eye watches over a foreign city: while the enchantment lasts, selecting that city shows its income, size and upgrades, civil status and current production in the info panel just as for your own cities. The watching eye above the city can be seen by everyone.",
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", [6101, 6102, 6103, 6104, 6105, 6106] + [6106] * 4 + [6107] * 3 + [6108] * 3 + [6109] * 3 + [6110] * 13 + [6109] * 3 + [6108] * 3 + [6107] * 3 + [6106] * 3 + [6111] * 3 + [6128] * 3 + [6129] * 3 + [6130] * 13 + [6129] * 3 + [6128] * 3 + [6111] * 3 + [6106] * 7 + [6105, 6104, 6103, 6102, 6101] + [6100] * 30, -20, -14, f20=2, f18=3)},  # v2 10/18: the look-around timeline, 0.1 s per entry (patch_cityspy_v1.py v2 picks entry = real time mod 117): fade in / hold / look left / hold / look right / hold / centre / fade out / 3 s pause; seen by everyone
+---- end ----
+  (trial: a copy of the pipeline with both lines dry-runs OK - "rebuilding 81 owned records (143426 -> 143901 B, 193
+   records) - Dry run OK"; live AoWEPACK.dll / Spells.pfs md5 unchanged by the trial)
+
+== 4. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 6100-6111 + 6128-6130)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (Sfx\Zsp\DUALCO_CITYSPY.WAV)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 229: desc + the timeline list)
+  py -3.10 patch_cityspy_v1.py                         (dry run: "AoWEPACK zone v1 ... AoWx.exe zone v1 ... in-place upgrade v1 -> v2")
+  py -3.10 patch_cityspy_v1.py --apply                 (backups backup\AoWEPACK.dll.bak_cityspy2 / AoWx.exe.bak_cityspy2 = the v1 state)
+  VEH startup check.  Apply the pipeline first so the timeline exists when the new frame picker runs.
+
+== 5. Chain / LIFO (unchanged) ==
+  AoWEPACK: GN in front of patch_forge_arms_v1 hook E, LE / OV / MV in front of patch_city_enchant_ui_v1 hooks A / B / D.
+  AoWx.exe: PS 0x443FE6 + PF 0x444028 (both vanilla before us; nothing else hooks them).
+  --revert (from v1 or v2) restores the pre-City-Spy bytes exactly; refuses if a site no longer points at us.
+
+== 6. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\cityspy2\) ==
+  * script: live copies (v1 state) -> dry run "in-place upgrade v1 -> v2" -> --apply -> re-run "already applied (v2)";
+    v2 --revert == the v1 script's own --revert (AoWEPACK 5c376229..., AoWx.exe 41a986e2...); fresh v2 apply on that ==
+    the upgrade (AoWEPACK ffdaa9ab..., AoWx.exe 600930cb...); the 8 TCityScreen method-table entries back to vanilla;
+    exe diff vs vanilla = only the two v2 sites + the zone.
+  * emu2.py (Unicorn, real upgraded bytes; AoWEPACK at 0x55700000 AND rebased to 0x00C10000): ALL OK (156 checks) -
+    ps: own -> own path; foreign spied by the viewer -> own path; spied by someone else / other enchantment / none /
+    non-city structure -> vanilla foreign path, eax/ecx/edx/ebx/esi/edi/ebp kept, stack balanced (the IsClass stub
+    clobbers ecx/edx like the RTL may);  pf: ShowOwnCity(panel, city) first; foreign spied -> MainBtn + RazePnl
+    SetVisible(False) and CurrentCity restored; own / debug-flag foreign -> untouched (vanilla);  ov: every viewer, all
+    4 city sizes, times 0 / 3.7 s / 1234.5 s / > 2^32 (hi word) -> entry = (t / 1e6) mod 117 -> the right image id at
+    anchor + seq offset, regs + stack kept, then the previous owner; no bit / hidden overlay -> no draw;  mv: bit alone
+    -> overlay added (no viewer test), no bit / vanilla overlay bit / plagued -> nothing; ebx/edi/stack kept.
+  * art: eye2_sheet.png (the 15 unique frames over a map-green tone), eye2_timeline.gif (the 11.7 s loop, 0.1 s/frame).
+
+== 7. Open (not seen in game) ==
+  * The own-city panel for a foreign city: the fields it fills read only city data (checked in ShowOwnCity 0x443318);
+    the owner is not named in that layout (vanilla's own-city panel has no owner line) - the race-relation icon shows.
+  * If a City Spy expires while the panel shows that city, the panel keeps the old data until the city is clicked again
+    (the panel refreshes only on select / structure-changed).
+  * Bit 0x20 is per city: if two players spy the same city and one enchantment ends, the eye may vanish although the
+    other spell remains (vanilla Activate/Deactivate own the bit) - same as v1.

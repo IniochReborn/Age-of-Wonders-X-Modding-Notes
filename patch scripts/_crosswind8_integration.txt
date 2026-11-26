@@ -1,0 +1,53 @@
+CROSSWIND (213) v7 - integration (2026-10-16, fork; nothing applied live)
+=====================================================================
+User: "a bit more clouds; the SECOND HALF should last a bit longer and accelerate to a HIGHER speed (longer sfx to
+suit); smoother fade out."
+
+ENGINE: patch_tc_crosswind_fx_v1.py v7 (AoWTCPCK, upgrades the live v6 in place; header 'XXW7').
+  * 213's kind-0x25 no longer ends at tick 100: the TK cave sends ticks 100..191 to the no-op default 0x42E3A3 and at
+    TEND 192 sets [fx+0x10] = -1 and exits through 0x42DFDD (= the vanilla ending). GT (BSS 0x46C6F0) is published on
+    every tick. The per-enemy swirl / CA debuff path is untouched (swirls spawn at tick 0, grant at ~120 ticks).
+    NOTE: the cast token now lasts until the kind-0x25 ends (~192 ticks, ~6.4 s at ~30 ticks/s) instead of ~120.
+  * Profile (shared by particles and clouds): forward +1 to tick 50, half-cosine ease to a stop at 68, -1 at 86, then
+    ACCELERATING (smoothstep) to -1.7x by tick 110, held after that. Particles 24 px/tick base (peak ~41 backward),
+    clouds 10 (peak 17).
+  * More clouds: N_CW 4 per wave (v6 3), waves every 4 ticks up to tick 100 (v6 52) - through the second half; count
+    ramps 1 -> 4 over the first 20 ticks and back down over the last 40.
+  * Particles: waves every 2 ticks up to tick 132 (v6 96); per-wave count 4 -> 36 by tick 24, full, then down to 4 over
+    the last 50 ticks (v6 30).
+  * DP/DC tables (200 entries each) moved to the new zone 5 TCPCK 0x447000..0x447400 (verified zero, reloc-free,
+    unclaimed). Zone 3 keeps only the particle writer. Tunables at the top of the script: N_CW, CLAST, PLAST, ROUT_P,
+    CIN/COUT, K_REV, C_ACC, TEND.
+
+PIPELINE (patch_dual_sphere_spells_v1.py, entry 213): REPLACE slots 2, 3, 4 with these lines (36-frame cloud sequences:
+same fade-in, a longer 14-frame fade-OUT; each cloud lives 108 ticks). Slots 0, 1, 5 unchanged. No new art.
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", [3300, 3300, 3303, 3303, 3306, 3306, 3309, 3309, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3312, 3309, 3309, 3309, 3306, 3306, 3306, 3303, 3303, 3303, 3300, 3300, 3300, 3300], -100, -53, f18=2, f20=2),   # v7 cloud 0: 36 frames x 3 ticks = 108: fade in 10, hold 12, fade OUT 14 (smoother)
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", [3301, 3301, 3304, 3304, 3307, 3307, 3310, 3310, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3313, 3310, 3310, 3310, 3307, 3307, 3307, 3304, 3304, 3304, 3301, 3301, 3301, 3301], -95, -53, f18=2, f20=2),   # v7 cloud 1
+              4: G.seq_entry("EFFECTS\\DUALDF.ILB", [3302, 3302, 3305, 3305, 3308, 3308, 3311, 3311, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3314, 3311, 3311, 3311, 3308, 3308, 3308, 3305, 3305, 3305, 3302, 3302, 3302, 3302], -97, -56, f18=2, f20=2),   # v7 cloud 2
+
+TIMELINE (for the sfx; ~30 ticks/s - estimates):
+  0.00 s  cast; particles + clouds ramp in (full by ~0.8 s)
+  1.67 s  (tick 50) forward motion starts to slow
+  2.27 s  (tick 68) dead stop / reversal  <- pitch turn
+  2.87 s  (tick 86) back to full speed the other way
+  3.67 s  (tick 110) peak backward speed (1.7x), held
+  ~3.5-4.4 s  particle count ramps down (last wave tick 132 = 4.4 s; each fades along its 36-tick path)
+  ~5.6 s  last particles gone (tick ~168)
+  ~6.4-6.9 s  last clouds faded (spawned to tick 100, 108-tick life); the kind-0x25 ends at tick 192 (6.4 s)
+  -> suggested sfx ~6.5 s: reverse gust building from ~2.3 s to a peak at ~3.7 s, held, then a long smooth fade from
+     ~4.5 s to ~6.5 s.
+
+APPLY ORDER (game + editor closed):
+  1. pipeline: replace 213 slots 2-4 with the lines above -> py -3.10 patch_dual_sphere_spells_v1.py --apply
+  2. py -3.10 patch_tc_crosswind_fx_v1.py --apply   (dry-run: "v6 build found -> upgrading to v7", Dry run OK)
+  3. sfx retime (parent), VEH startup check.
+  Revert: patch_tc_crosswind_fx_v1.py --revert (byte-identical to the v6 script's own revert; zeroes all five zones).
+
+SCRATCH TESTS (tmp/xwind8, copies of the LIVE AoWTCPCK.dll): upgrade written; re-apply "already applied"; revert
+written; 2nd revert "already reverted"; v7 revert == the v6 script's own revert of the live dll (byte-identical);
+fresh apply on the reverted copy == the upgrade (byte-identical); --dis: tick >= 100 -> jmp 0x42E3A3, tick >= 192 ->
+[fx+0x10] = -1, jmp 0x42DFDD; GT stored every tick.
+
+IN-GAME TESTS: the wash builds smoothly; reverses at ~2.3 s and keeps accelerating past its first-half speed; more
+clouds through the second half; a long smooth thin-out; the per-enemy swirls + Crosswind debuff still land (~4 s);
+High Prayer / Heavenly Chorus / Bloodbath unaffected; frame rate on a big field (peak ~430 particles + ~100 clouds).

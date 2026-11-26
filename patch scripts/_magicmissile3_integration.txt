@@ -1,0 +1,59 @@
+MAGIC MISSILE (228) round 3 (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+User: (1) icon - "I liked it better when the bolts were CURVED and had a TRANSPARENT inner area" (v1 trace) but keep the
+separation asked for earlier; (2) "projectiles shoot in too quick succession, space them out a bit more"; (3) sfx
+"getting better but continue improving".
+Builders: build_dual_sphere_sfx_v1.py = CRLF, build_dual_sphere_icons_v1.py = LF - detect the newline per file;
+ast.parse each edited builder afterwards.
+
+== 1. build_dual_sphere_icons_v1.py - glyph_magicmissile: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("magicmissile3_user_mask.png")    # v3 10/18: v1's CURVED hollow comets, drawn clean with gaps (tmp/mm3/mk_icon.py)
+---- end ----
+  New mask (already written): patch scripts\magicmissile3_user_mask.png = three curved comet bolts (quadratic arcs,
+  tail -> rounded head, half-width growing to the head), each an OUTLINE ring (2.3 icon px) with a transparent inner
+  area, middle bolt largest, each knocked out with a 1.2 px clear gap so they read separately at 40x35.
+  Preview v1 | v2 | v3 (full + 40x35 on the Cosmos violet): C:\Users\<user>\.claude\jobs\47241cad\tmp\mm3\icon_v1_v2_v3.png
+
+== 2. Engine: patch scripts\patch_tc_magicmissile_v1.py upgraded IN PLACE to v2 (already edited; NOT applied live) ==
+  RE: every multi-strike combat TE paces its strikes at the TE tick 0x40CBAC: [te+0x30] := TAoWHSMap.Random(3) + 4
+  (4..6 ticks), dec each tick, NextStrike gate call at 0x40CBE7 when it hits 0 (class 6 projectiles included; class 5
+  breath branches off at 0x40CB7B).  v2: SITE2 0x40CBBD (5 B `add eax,4 / jno 0x40CBC7`) -> jmp CAVE2 0x44D040:
+  add eax,4; if [[ebp-4]+0x18] (te spell) == 228: add eax,eax (8..12 ticks ~ 0.23-0.35 s); jmp 0x40CBC7 (edx is
+  reloaded there).  The synced Random call is unchanged -> MP-safe.  Other spells unchanged.
+  Live dry run: "site ours | cave ours | pacing site vanilla | pacing cave zero ... in-place upgrade v1 -> v2".
+
+== 3. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_MMISSILE.WAV" entry AND its comment lines above it with ==
+---- code ----
+    # Magic Missile v3 (2026-10-18, user: "getting better but continue improving"): per bolt (cue 0 at each launch,
+    # patch_tc_magicmissile_v1.py) - a crisp launch crack (tick synth), the Magic Bolt zap (MAGICA04) a touch brighter
+    # with a tighter tail, the bolt tearing off (fast high whoosh), a clear arcane ZING (C7 bell + its fifth G7) and a
+    # wisp of shimmer.  The v2 under-octave double (the low-end mud) is gone; 0.52 s so the spaced bolts don't smear.
+    "DUALCO_MMISSILE.WAV":  [("synth:tick:2600:1300:0.07", 0.55, 0.00, None, 0.03),
+                             ("Attack/MagicA04.WAV", 0.80, 0.00, 0.52, 0.22, 1.18, 0.0, 0.0, 1.6),
+                             ("Attack/Wind.WAV", 0.26, 0.02, 0.26, 0.18, 2.7, 0.015),
+                             ("synth:bell:2093:0.42", 0.16, 0.03, None, 0.30, 1.0, 0.0, 0.0, 1.4),
+                             ("synth:bell:3136:0.30", 0.08, 0.06, None, 0.22, 1.0, 0.0, 0.0, 1.4),
+                             ("synth:shimmer:0.45", 0.10, 0.03, None, 0.25)],
+---- end ----
+  and in the one-line dicts:  DRIVE "DUALCO_MMISSILE.WAV": 1.3 -> 1.2     FADE_OUT "DUALCO_MMISSILE.WAV": 0.2 -> 0.18
+  (DUALCO_MMHIT unchanged.)  Measured vs the live v2 mix: first-30 ms RMS 0.221 vs 0.182 (punchier), low-band RMS 0.155
+  vs 0.201 (less mud), 0.52 s vs 0.70 s; 3 launches 0.29 s apart: onset RMS 0.266 / 0.276 / 0.276 (even), stack peak 1.03.
+  Renders: tmp\mm3\DUALCO_MMISSILE_v3.wav, DUALCO_MMISSILE_old.wav, preview_3bolts_v3.wav.
+
+== 4. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply        (after step 1)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply          (after step 3)
+  py -3.10 patch_tc_magicmissile_v1.py                  (dry run: "in-place upgrade v1 -> v2")
+  py -3.10 patch_tc_magicmissile_v1.py --apply          (backup backup\AoWTCPCK.dll.bak_mmissile2 = the v1 state)
+  VEH startup check.  No pipeline / Spells.pfs change.
+
+== 5. Chain / LIFO ==
+  New site 0x40CBBD + cave 0x44D040..0x44D080 (zone verified zero, reloc-free; 0x44D080..0x44D800 still free).
+  --revert restores BOTH sites, both caves and the castsnd list exactly (== the v1 script's own revert).
+  Revert this before re-running anything that rewrites the bytes at 0x42A027 or 0x40CBBD.
+
+== 6. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\mm3\) ==
+  * copy of the live DLL: v1 -> v2 upgrade "written and verified"; re-run "already applied (v2)"; v2 --revert md5
+    a5ae1c26 == the v1 script's own --revert of live (a5ae1c26); fresh v2 apply on that == the upgrade (df0a9c46).
+  * emu.py (Unicorn, real v2 bytes at the preferred base and rebased +0x920000): Random 0/1/2 -> 228: 8/10/12,
+    0x7A and 216: 4/5/6; lands on 0x40CBC7; esp / ebx / esi / edi preserved.  ALL OK (18 cases).

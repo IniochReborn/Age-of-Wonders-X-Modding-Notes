@@ -1,0 +1,55 @@
+MAGIC MISSILE (228) round 4 - original icon polished / EVEN bolt spacing / ice-shard launch sound (2026-10-18, fork;
+NOTHING applied live, no shared builder edited).  Insert ONLY the code blocks; ast.parse each edited builder afterwards
+(detect the newline per file: build_dual_sphere_sfx_v1.py has been CRLF, the icons builder LF).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_magicmissile: replace its return line with ==
+---- code ----
+    return _user_mask_glyph("magicmissile4_user_mask.png")    # v4 10/18 (user: revert to the ORIGINAL, clean/polish it): v1's traced curved hollow bolts, edges smoothed (blur 1.6 + threshold), jaggies/specks removed, composition + hollows unchanged (tmp\mm4\mk_icon.py)
+---- end ----
+  (new file patch scripts\magicmissile4_user_mask.png already written; v1/v2/v3 masks kept.  Preview v1 | v4 at 40x35:
+   C:\Users\<user>\.claude\jobs\47241cad\tmp\mm4\icon_v1_vs_v4.png)
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALCO_MMISSILE.WAV" and "DUALCO_MMHIT.WAV" entries (and their comment lines) with ==
+---- code ----
+    # Magic Missile v4 (2026-10-18, user: "sounds bad - maybe like ICE SHARDS but less violent and more magical"): per
+    # bolt (cue 0, played at each launch by patch_tc_magicmissile_v1.py) the vanilla ice-shard sound (Attack/Ice.WAV,
+    # Ice Bolt / Flashfreeze) pitched up and softened (12 ms fade-in, no crack transient) + a thinner higher shard flick,
+    # a rising glass whirl, a faint Magic-Bolt (MagicA04) body, an A6/E7 chime pair and a shimmer.  No DRIVE.
+    "DUALCO_MMISSILE.WAV":  [("Attack/Ice.WAV", 0.84, 0.00, 0.34, 0.22, 1.42, 0.012, 0.0, 1.6),
+                             ("Attack/Ice.WAV", 0.40, 0.03, 0.26, 0.18, 2.05, 0.010, 0.04, 1.6),
+                             ("synth:glasswind:1760:2640:0.30", 0.84, 0.00, None, 0.10),
+                             ("Attack/MagicA04.WAV", 0.60, 0.00, 0.40, 0.25, 1.32, 0.02, 0.0, 1.5),
+                             ("synth:bell:1760:0.45", 0.26, 0.04, None, 0.32, 1.0, 0.01, 0.0, 1.4),
+                             ("synth:bell:2637:0.35", 0.14, 0.07, None, 0.26, 1.0, 0.01, 0.0, 1.4),
+                             ("synth:shimmer:0.50", 0.24, 0.02, None, 0.30)],
+    # per landing (cue 1, x3): a gentle crystalline tink - a small high ice crack + a D7 chime (peak ~0.30, no DRIVE)
+    "DUALCO_MMHIT.WAV":     [("Attack/Ice.WAV", 0.36, 0.00, 0.20, 0.14, 1.85, 0.006, 0.02, 1.6),
+                             ("synth:bell:2349:0.35", 0.12, 0.01, None, 0.26, 1.0, 0.004, 0.0, 1.4),
+                             ("synth:shimmer:0.30", 0.08, 0.00, None, 0.20)],
+---- end ----
+  DRIVE dict:    "DUALCO_MMISSILE.WAV": 1.2 -> 1.0  (or delete the key; the new mix must not be soft-clipped)
+  FADE_OUT dict: "DUALCO_MMISSILE.WAV": 0.18 -> 0.16,   "DUALCO_MMHIT.WAV": 0.12 -> 0.10
+  Test renders (tmp\mm4\): DUALCO_MMISSILE_v4.wav (0.52 s, peak 0.85, soft attack: RMS 0-20 ms 0.10 < body 0.23),
+  DUALCO_MMHIT_v4.wav (0.36 s, peak 0.30), preview_3bolts_v4.wav (3 launches 10 ticks / 0.29 s apart + hits),
+  DUALCO_MMISSILE_old.wav (the live v3 launch).
+
+== 3. Engine - patch scripts\patch_tc_magicmissile_v1.py upgraded IN PLACE to v3 (already edited; NOT applied live) ==
+  Strike pacing (0x40CBAC..): [te+0x30] = Random(3)+4 is reloaded after every strike; v2 doubled it for 228 (8/10/12
+  ticks -> uneven gaps).  v3 cave2 (0x44D040, same site 0x40CBBD): 228 -> eax = PACE (10) fixed; every other spell
+  -> vanilla +4.  The synced Random(3) call at 0x40CBB8 still runs, so the RNG sequence / MP sync is unchanged.
+  Flight: all three bolts fly caster -> the same target with the class-6 projectile's fixed speed, so flight time is
+  identical per bolt; the launch gaps are now exactly equal.
+  Recognises the live v2 cave ("ours(v2)") and upgrades in place; backup .bak_mmissile3.  v2 script copy:
+  tmp\mm4\patch_tc_magicmissile_v1.v2.py.
+  Tests (copies of the live AoWTCPCK.dll in tmp\mm4\):
+    - live dry run: "pacing cave ours(v2)" -> upgrade; apply -> "in-place upgrade v2 -> v3", re-run "already applied (v3)"
+    - v3 --revert md5 == the v2 script's own --revert (a5ae1c26...); fresh v3 apply on the reverted copy == upgrade (fe9a03fe...)
+    - emu.py (Unicorn, real patched bytes at 0x400000 and rebased 0xD20000): 12/12 per base - 228 -> 10 for Random 0/1/2,
+      0x7A / 216 / 0 -> Random+4; returns to 0x40CBC7; esp/ebx/esi/edi preserved; site 0x40CBBD -> cave.
+
+== 4. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply
+  py -3.10 build_dual_sphere_sfx_v1.py --apply
+  py -3.10 patch_tc_magicmissile_v1.py            (dry run: "pacing cave ours(v2)")
+  py -3.10 patch_tc_magicmissile_v1.py --apply    (backup .bak_mmissile3)
+  VEH startup check.  No pipeline / Spells.pfs change.

@@ -1,0 +1,15 @@
+---
+name: town-quake-spell
+description: Town Quake retune APPLIED 2026-09-21 (patch_town_quake_v1: wood 80%/stone 50% walls, +10% underground, ATK 9 vs unwalled/wood cities underground) + RE of Town Quake (Earth 4 global, city target): 70% chance walls destroyed + every unit in the city takes one physical damage roll ATK 7 / DMG 5 (10% miss, 10% max, T=10-2(7-DEF)); no ownership or structure effects. Explored 2026-09-21 (no change).
+metadata:
+  type: project
+---
+
+**Town Quake** (CitySpells.TTownQuake, classref 0x557AFF5C; book: Earth Magic lvl 4, cast 50, research 250, Global/city target; Create 0x557B1B54 sets spell id 0x47, [+0x38]=2).
+**ExecuteTE 0x557B1DFC** (eax=spell, edx=TE, ecx=caster player?, stack phase): phase 0 → `TCity.StartTownQuake 0x557A9C64` (city flag [+0x44] |= 4 = shaking image), schedules phase 0x32 (VMT+0xA0 with the city), ValidateObservation. Phase 0x32 → StopTownQuake (flag &= ~4); **map.Random(10) < 7 → `TCity.SetWallType(0)` 0x557AC984 ([city+0x4C]=0, UpdateImages) = 70 % chance the walls are destroyed**; then `TStructure.ListArmies` (TCity VMT+0x1D8, 0x5575F434) → for every army in the city `TriggerArmyDamage 0x557B1BF4` (all owners, caster included); then TSpell.CastingDone.
+**TriggerArmyDamage** (eax=spell, edx=TE, ecx=army): builds a TArmyEventLog (0x5578BB6C; text TownQuakeDamage RStr 0x55707EFC, kind 2) and for each unit of [army+0x1C]: `dmg = TAbstractUnit.ExecuteDamageRole(unit, ATK=7, DMG=5, types=0x80 Physical)` (0x55781AC4; Physical Immunity → 0; diff = 7 − GetDefense; roll 0x55725EAC: R=RandInt(20), R≤1 → 0, R≥18 → 5, T=10−2·diff, R<T → 0, else 1+round(4·(R−T)/(18−T)); AoWx protection tail 0x5580FCC0: Physical Protection → (d+1)/2, Physical Weakness → (3d+1)/2), capped at current HP, SetHitPoints(hp−dmg); log lists (dmg, type 7) per unit; if any unit was hit → ValidateGameOver + DistributeLocationEventLog to the army owner. No to-hit roll, no morale/population/structure/income effect, no level/size dependence.
+Expected per unit (no protection): DEF 3 → 90 % hit, avg 2.9; DEF 5 → 70 %, 2.2; DEF 7 → 50 %, 1.7; DEF 9 → 30 %, 1.0; DEF 11+ → 10 %, 0.5 (the R≥18 full-damage case always remains).
+
+
+## Retune (APPLIED 2026-09-21, awaiting test) — `patch scripts\patch_town_quake_v1.py`, backup `backup\AoWEPACK.dll.bak_townquake`
+User spec: wood walls 80 %, stone 50 %; underground/depths +10 % each (90/60); unit damage +20 % hit chance underground in cities with no walls or wooden walls (stone protects). Implementation: hook A 0x557B1E79 (10 B) → cave 0x55816F00: Random(10), N = 8/5/0 by [city+0x4C] (TWallType 0 none, 1 wood, 2 stone; **3 = editor 'Random': TCity.NewDay 0x557AB941 replaces it with map.Random(3) on the first day, UpdateImages draws it as unwalled, FortifyCost returns -1** — treated as none), +1 if [city+0x12] (THS level) ≠ 0 and N ≠ 0, stores ATK (9 if UG and wall ≠ stone, else 7) in BSS G_ATK 0x558FA2B0, `cmp eax,N` → vanilla `jge`. Hook B 0x557B1CE7 (`mov edx,7`) → cave 0x55816F60: edx = G_ATK (7 if 0). ATK+2 = T−4 = +20 points for DEF 4–11, capped at 90 % by the fumble; DEF ≥ 12 goes 10→20 %. Next free AoWEPACK cave **0x55816F80**.

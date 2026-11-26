@@ -1,0 +1,142 @@
+RITE OF THE SEAS (221, Water L2 global) - integration snippets for the shared builders (2026-10-17, fork; NOTHING applied live).
+Engine: patch scripts\patch_riteseas_v1.py (AoWEPACK.dll, zone 0x55878800-0x55878A76, backup .bak_riteseas).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----) and ast.parse each edited builder afterwards.
+Line endings (checked 10/17): build_dual_sphere_fx_v1.py + build_dual_sphere_icons_v1.py = LF; build_dual_sphere_sfx_v1.py +
+patch_dual_sphere_spells_v1.py = CRLF -> detect the newline per file and convert the snippet before inserting.
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry: append to the single-sphere block (e.g. right after id=219 Tectonic Shift) ==
+   (Water = sphere 6: vanilla Water Mastery = pfs key 55 sphere 6, Fire Mastery key 73 sphere 5.  pfs key 231 is free.)
+---- code ----
+    dict(id=221, name="Rite of the Seas", sphere=6, tier=2, mana=50, research=90, upkeep=10,
+         donor="TEarthMastery", pfs_donor=74, tc_type=None, icon=221,          # patch_riteseas_v1.py: marker 221 chained in front of Depths of Plenty
+         pokes=[(0x34, 4, 0xFFFFFFFF)],                                       # AI priority -1 (as Depths of Plenty / Golden Age)
+         desc="The sea answers your rite: every ship your shipyards begin to build is launched with a Silver medal.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [5300, 5301, 5302, 5303, 5302, 5301], -10, -10, f20=0)},   # map-wide sea crests + silver glint (Earth Mastery particle)
+         sfx=["SFX\\ZSP\\DUALWT_RITESEAS.WAV"]),
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py ==
+  ICONS: add   221: "riteseas"     CLOUDS: add   "riteseas": 100   (Water cloud)     GLYPHS: add   "riteseas": glyph_riteseas
+  function (e.g. before glyph_mendwalls) - REDRAWN from art import export/rite of the seas.jpg: a 1:1 trace loses every spiral at
+  40x35 (tried mask grow 0/3/5 and erode 5/9/13 - unreadable).  Do NOT drop a file named riteseas.png into art import export (override trap).
+---- code ----
+def glyph_riteseas():
+    """Rite of the Seas (221, Water L2, 2026-10-17; reference art import export/rite of the seas.jpg - a tribal sailboat
+    with spiral-cut sails, a spiral sun with rays and wavelets under the hull).  The 1:1 trace loses every spiral at
+    40x35, so it is REDRAWN in the same style with the cut-outs wide enough to survive: a tall curved mainsail and a
+    smaller foresail, each carved with a bold spiral; a pennant streaming from the masthead; a crescent hull with a
+    curl at the bow; the spiral sun with short rays (upper right); two wavelets below."""
+    im = canvas(); dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    def bez(p0, p1, p2, n=16):
+        return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+                 (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]) for t in [k / (n - 1.0) for k in range(n)]]
+    def spiral(cx, cy, r0, turns, w, fill=0, a0=0.0, ry=1.0):
+        pts = []; n = int(40 * turns)
+        for k in range(n + 1):
+            t = k / float(n); a = a0 + t * turns * 2 * math.pi; r = r0 * (1 - 0.85 * t)
+            pts.append((cx + r * math.cos(a), cy + ry * r * math.sin(a)))
+        dr.line(P(pts), fill=fill, width=max(1, int(w * S)), joint="curve")
+    # mainsail: mast foot (19.5, 23) -> masthead (18.5, 2.5), belly bulging left, leech curving down to (26, 22)
+    main = bez((18.6, 2.6), (8.5, 12.0), (12.6, 23.2)) + [(19.6, 23.2), (26.4, 22.4)] + bez((26.4, 22.4), (24.0, 11.0), (18.6, 2.6))[1:]
+    dr.polygon(P(main), fill=255)
+    spiral(18.2, 15.2, 4.6, 1.55, 1.25, a0=0.3)
+    # foresail (left): small curved triangle
+    fore = bez((11.0, 10.0), (4.0, 15.5), (5.0, 22.6)) + [(11.8, 22.6)] + bez((11.8, 22.6), (10.0, 16.0), (11.0, 10.0))[1:]
+    dr.polygon(P(fore), fill=255)
+    spiral(8.6, 18.6, 2.4, 1.2, 0.9, a0=2.4)
+    # pennant streaming right from the masthead
+    dr.line(P(bez((18.8, 3.0), (21.5, 0.6), (24.0, 2.4)) + bez((24.0, 2.4), (25.6, 3.4), (27.6, 1.6))[1:]), fill=255, width=int(1.3 * S), joint="curve")
+    # hull: a crescent, a gap line under the sails, a curl at the bow
+    dr.line(P([(4.5, 23.6), (34.5, 23.6)]), fill=0, width=int(1.0 * S))
+    hull = bez((3.0, 24.6), (8.0, 31.0), (20.0, 30.0)) + bez((20.0, 30.0), (30.0, 29.0), (35.5, 24.2))[1:]         + bez((35.5, 24.2), (27.0, 27.0), (19.0, 26.6))[1:] + bez((19.0, 26.6), (10.0, 26.6), (3.0, 24.6))[1:]
+    dr.polygon(P(hull), fill=255)
+    spiral(7.6, 27.0, 1.6, 1.0, 0.7, a0=3.6)
+    # sun: ring with a spiral inside + short rays (upper right)
+    scx, scy, sr = 31.0, 9.0, 4.6
+    dr.ellipse([(scx - sr) * S, (scy - sr) * S, (scx + sr) * S, (scy + sr) * S], fill=255)
+    spiral(scx, scy, 3.3, 1.35, 0.95, a0=4.0)
+    for k in range(9):
+        a = math.radians(-160 + k * 30)
+        if 60 < (k * 30 - 160) % 360 < 200: continue
+        x0, y0 = scx + (sr + 1.0) * math.cos(a), scy + (sr + 1.0) * math.sin(a)
+        x1, y1 = scx + (sr + 3.0) * math.cos(a), scy + (sr + 3.0) * math.sin(a)
+        dr.line(P([(x0, y0), (x1, y1)]), fill=255, width=max(1, int(0.8 * S)))
+    # wavelets under the hull
+    for y, x0, x1 in ((31.6, 8.0, 31.0), (33.6, 12.0, 27.0)):
+        pts = [(x, y + 0.6 * math.sin((x - x0) / 2.2)) for x in [x0 + (x1 - x0) * k / 30.0 for k in range(31)]]
+        dr.line(P(pts), fill=255, width=max(1, int(1.0 * S)))
+    return im
+---- end ----
+
+== 3. build_dual_sphere_fx_v1.py - function before `def build():` + group row after the (4220, ore_glints(), ...) row ==
+---- code ----
+def sea_rite_motes():
+    """Rite of the Seas (221) slot 0 (2026-10-17): Earth Mastery's map-wide particle (20x20, additive, played
+    [5300, 5301, 5302, 5303, 5302, 5301] like Depths of Plenty's glints): a small curling sea crest - a deep-blue
+    swell arc whose white-cyan foam lip curls over and throws two spray flecks, with a silver four-point glint at the
+    crest (the medal) that brightens as the wave breaks.  Distinct from Nimue's droplet/ripple and Black Tide's black
+    drops."""
+    frames = []; yy, xx = np.mgrid[0:20, 0:20].astype(np.float32)
+    for k, (h, curl, spray, gl) in enumerate(((0.55, 0.0, 0.0, 0.35), (0.8, 0.45, 0.25, 0.6), (1.0, 0.9, 0.7, 1.0), (0.85, 1.0, 1.0, 0.7))):
+        cx, cy, R = 9.5, 15.5, 5.2 + 1.2 * h
+        ang = np.arctan2(yy - cy, xx - cx); d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        arc = np.exp(-((d - R) / 1.15) ** 2) * ((ang < -0.15) & (ang > -np.pi + 0.25 - 0.9 * curl))   # the swell's back + crest
+        body = np.exp(-((d - R + 1.6) / 1.4) ** 2) * ((ang < -0.4) & (ang > -np.pi + 0.5)) * 0.45
+        lx, ly = cx + R * np.cos(-0.35 - 0.6 * curl), cy + R * np.sin(-0.35 - 0.6 * curl) + 1.6 * curl  # the foam lip
+        lip = np.exp(-((xx - lx) ** 2 + (yy - ly) ** 2) / (1.1 + 0.6 * curl))
+        fl = sum(np.exp(-((xx - (lx + dx * spray)) ** 2 + (yy - (ly - dy * spray)) ** 2) / 0.45) * spray
+                 for dx, dy in ((3.2, 3.0), (1.0, 4.6)))
+        gx, gy = cx - 0.5, cy - R - 0.2
+        glint = (np.exp(-((yy - gy) ** 2) / 0.25) * np.clip(1 - np.abs(xx - gx) / 3.4, 0, 1)
+                 + np.exp(-((xx - gx) ** 2) / 0.25) * np.clip(1 - np.abs(yy - gy) / 3.4, 0, 1)) * 0.7 * gl \
+            + np.exp(-((xx - gx) ** 2 + (yy - gy) ** 2) / 0.6) * gl
+        blue = np.clip(arc + body, 0, 1) * (0.55 + 0.45 * h); white = np.clip(lip * (0.6 + 0.4 * curl) + fl, 0, 1)
+        sil = np.clip(glint, 0, 1)
+        r = 20 * blue + 200 * white + 225 * sil; g = 95 * blue + 235 * white + 230 * sil; b = 225 * blue + 255 * white + 240 * sil
+        a = np.clip(blue + white + sil, 0, 1)
+        frames.append(Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(g, 0, 255), np.clip(b, 0, 255), 255 * (a > 0.05)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+---- code ----
+              (5300, sea_rite_motes(), "WTrite%d.BMP", 770, 55, 0x0000),              # Rite of the Seas (221) slot 0: Earth Mastery map-wide particle = curling sea crest + silver glint (20x20, 4 frames)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py - MIXES entry (add before "DUALEW_OVERGROWTH.WAV") + FADE_OUT dict: "DUALWT_RITESEAS.WAV": 0.9 (no DRIVE) ==
+   (uses the choir synth's optional ':minor' arg - present in the live builder.  Scratch render 3.45 s, peak 0.62 before normalise,
+    RMS ~0.16-0.21 from 0.25 s to 2.5 s: C:\Users\<user>\.claude\jobs\47241cad\tmp\rite\DUALWT_RITESEAS_v1.WAV)
+---- code ----
+    # Rite of the Seas (221, Water L2 2026-10-17): a sea rite - the swell drawn in (the big-water wash REVERSED and slowed)
+    # breaking into a slow deep wash, a low sung chant (choir D minor, then a fifth above), two soft ritual drum strokes,
+    # a ship's bell struck twice and a faint sea wind over a sub-bass swell.
+    "DUALWT_RITESEAS.WAV":  [("Moves/waterlg.WAV", 0.55, 0.00, 1.25, 0.15, -0.72, 0.35),
+                             ("Moves/waterlg.WAV", 0.6, 1.05, 2.3, 1.0, 0.62, 0.25, 0.35),
+                             ("synth:subswell:30:55:3.0", 0.45, 0.00, None, 0.9),
+                             ("synth:choir:147:2.6:minor", 0.42, 0.30, None, 0.9, 1.0, 0.4),
+                             ("synth:choir:220:1.8:minor", 0.22, 1.05, None, 0.8, 1.0, 0.4),
+                             ("synth:drum:62:1.0", 0.42, 0.28, None, 0.5),
+                             ("synth:drum:62:1.0", 0.34, 1.02, None, 0.5),
+                             ("synth:bell:415:1.8", 0.20, 1.55, None, 0.8),
+                             ("synth:bell:415:1.6", 0.15, 1.85, None, 0.8),
+                             ("synth:wind:3.0", 0.12, 0.10, None, 0.9, 1.0, 0.6)],
+---- end ----
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 221)
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF 5300-5303)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (Sfx\Zsp\DUALWT_RITESEAS.WAV - NEW file: release zip --add)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (Spells.pfs record 231 + registration of 221)
+  py -3.10 patch_riteseas_v1.py                       (dry-run: CE/MM/EV/PS/ID + emAct/emDeact/emChk = chain->Depths of Plenty caves 0x5586f1xx/2xx, prod = vanilla)
+  py -3.10 patch_riteseas_v1.py --apply
+  VEH startup check.
+
+== 6. Chain / LIFO ==
+  * Chained IN FRONT of Depths of Plenty's Earth Mastery caves: while applied, patch_depthsofplenty_v1.py (and through it
+    patch_goldenage_v1.py) aborts -> to re-run Depths / Golden Age: riteseas --revert, run them, riteseas --apply.
+  * --revert is exact (the zone header holds the pre-apply site bytes / slot values); it refuses if something chained in front since.
+  * The prod slot 0x557BD56C (TProductionPlaceControl VMT+0x9C) was vanilla - nothing else hooks it.
+
+== 7. Tests (scratch, tmp\rite\) ==
+  dry-run on a copy of the live DLL; apply -> 'already applied' -> Depths dry-run ABORTs (expected, LIFO) -> revert = md5 of the
+  live DLL (00d252a7...); re-apply byte-identical.  emu.py (Unicorn on the patched DLL, prev/list/arena-xp stubbed): 10/10 -
+  shipyard + active 221 of the owner -> XP 10 + Changed; other player's / inactive 221, Builders' Guild, unowned place, unit
+  already >= 10 XP, nil unit, nil place, no enchantments -> untouched; owner index 0 works; callee-saved regs + stack balanced.

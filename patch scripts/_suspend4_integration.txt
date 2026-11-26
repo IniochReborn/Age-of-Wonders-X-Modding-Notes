@@ -1,0 +1,29 @@
+SUSPEND (214) - "show ATK 7" (2026-10-16, fork; nothing applied live)
+=====================================================================
+
+WHERE A SPELL'S ATK IS "DISPLAYED" (RE result):
+  There is NO numeric attack/damage readout for spells anywhere in the UI.
+  * AoWx.exe never calls a spell's GetCombatInfo (VMT+0x7C) with a display buffer; its only AttackRStr users
+    (0x437C5D / 0x4388B0) are the Accept/Attack/Cancel buttons of the strategic attack-structure dialog.
+  * AoWEPACK's "Attack: " / "Damage: " literals (0x5574EE84 / 0x5574EE98) belong to the ability DEBUG dump
+    0x5574E9D0 (TStrings builder, no static callers) - not spells.
+  * TCPCK's GetCombatInfo calls are mechanics only: range/side for the cursor (0x41F85E, SetSpell 0x4232BC),
+    click path 0x41DD1F, shot count 0x40B5EF, AI 0x4187F4..0x41968F, animation tokens 0x410xxx / 0x432Cxx.
+  So a combat spell's ATK only ever reaches the player through its DESCRIPTION text - which is exactly how every
+  dual-sphere/Air spell already shows it ("attack 8, damage 3, physical" - Gust, Holy Water, Rot Away, Soul Siphon,
+  Flashfreeze ...).  Suspend's description was the one that omitted it.
+
+CHANGE (pipeline only; no engine change, mechanics untouched):
+  patch_dual_sphere_spells_v1.py, entry dict(id=214 ...): replace the desc with
+         desc="Howling winds lift the target unit into the air: for 3 turns it counts as flying but cannot move. Against an enemy it strikes with attack 7 (resisted by the target's resistance); on a friendly unit it never fails.",
+  then  py -3.10 patch_dual_sphere_spells_v1.py --apply   (rewrites Spells.pfs record 224 only).
+
+WHY NOT the combat-info ATK byte:  TUnitSpell.GetCombatInfo (0x5577945C) zeroes info byte 0 (ATK) for every
+  TRemedy clone; setting it to 7 for 214 in the GCI cave would display nowhere (see above) and would feed the
+  TCPCK AI / cursor paths that read that record - a mechanics risk with no visible gain.  The roll itself stays in
+  patch_suspend_fix_v1.py's RL cave: HitRole(ATK=7 - target RES) only when the target's combat side differs from
+  the caster's; friendly targets fall straight through to the grant (never miss) - unchanged.
+
+APPLY: game + editor closed -> pipeline --apply -> no VEH needed (data only), but harmless to run.
+TEST:  spell book / combat book hover on Suspend shows the new text; casting on enemies still sometimes fails,
+       on own units always succeeds.

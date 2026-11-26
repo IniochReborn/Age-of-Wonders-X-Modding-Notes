@@ -1,0 +1,80 @@
+ROYAL AMBITION (230) v2 - 2026-10-18 (fork; NOTHING applied live, no shared builder edited).
+User: "doesn't seem to work, or at least doesn't display properly, possibly both. City actions (migrate, upgrade, loot,
+raze, etc) should have double bonus/malus. And diplomatic actions (peace, war, alliance, etc) should also double
+bonus/malus.  ...the sfx is interesting but try to improve it, it sounds a bit off."
+
+ROOT CAUSE: v1 only doubled a change when the changed race was the caster's OWN race.  Every city action changes the
+CITY's race (loot -30 / migrate -15 / raze / production + upgrade effects in TCityProductionControl), and every
+diplomatic action changes EVERY race by its own modifier - so almost nothing was ever doubled.  And no preview was:
+the diplomacy window previews through TDiplomaticAction.GetRelationModifier (AoWx.exe imports it), and the city screen
+shows HARD-CODED constants in AoWx.exe (-40, +20, +10, +5, -60, -60).
+All 18 relation changes in the game go through TRace.SetPlayerRelationValue (6 diplomacy, 9 city production/upgrade/
+loot/migrate/cancel, 2 crop trampling, 1 raze) - nothing writes the list directly except the daily drift / resets.
+
+v2 (patch_royalambition_v1.py upgraded IN PLACE, header RYA2; v1 RYA1 is read and upgraded; exact revert):
+  * any race: while P has an active Royal Ambition, every relation change made for P is doubled (bonus and malus),
+    clamped so it never ends further outside 0..100 than vanilla would;
+  * GRM hook (GetRelationModifier, 7 B) doubles diplomatic modifiers -> the effect AND the diplomacy-window preview;
+    the Set hook skips its own doubling for the 6 diplomacy call sites (no x4), only clamps;
+  * AoWx.exe .xedt 0x62FB00..0x62FD00 (RYX2): the 6 city-screen preview constants show 2x when the shown city's owner
+    has Royal Ambition (XCHK at AoWEPACK 0x5587E860 via the IAT slot 0x45DF24 delta - rebase-safe).
+
+== 1. patch_dual_sphere_spells_v1.py, entry 230 - replace the desc line with ==
+---- code ----
+         desc="Your royal ambition magnifies every deed: while this spell lasts, every gain and every loss in any race's regard for you - from diplomacy (war, peace, alliances, tribute) and from city actions (upgrading, producing, migrating, looting, razing) - is doubled.",
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py (CRLF) - REPLACE the "DUALCO_ROYAL.WAV" entry AND its 3 comment lines above it with ==
+   Why the old one sounded off: a sub-bass GLIDING 40 -> 60 Hz under a fixed C chord, a 70 Hz timpani (between C and
+   C#), the winding-horn envelope SWELLING to the end of every fanfare note and then cut (reads like a reversed note),
+   and a hard tanh drive (1.4) adding intermodulation.  v2: everything in C major and on pitch (C2 65.41 timpani, C3 /
+   C4 string chords, horns C4-E4-G4 then a held C5/G4/E4 triad), every horn note given a real decay (layer fade),
+   lighter drive.  Test render: C:\Users\<user>\.claude\jobs\47241cad\tmp\royal2\DUALCO_ROYAL_v2.wav (old: _old.wav).
+---- code ----
+    # Royal Ambition v2 (2026-10-18, user: "interesting but sounds a bit off"): a clean C-major fanfare - a low C string
+    # bed, brass C4-E4-G4 rising into a held C5/G4/E4 triad (each note decaying, no swelling cut-offs), a C-major string +
+    # choir chord, a timpani on the tonic (C2), a bright C6 bell and a faint shimmer; everything on pitch, light drive.
+    "DUALCO_ROYAL.WAV":     [("synth:strings:130.81:2.7", 0.34, 0.00, None, 1.0),
+                             ("synth:horn:261.63:261.63:0.30", 0.50, 0.05, None, 0.22),
+                             ("synth:horn:329.63:329.63:0.30", 0.50, 0.33, None, 0.22),
+                             ("synth:horn:392.00:392.00:0.30", 0.50, 0.61, None, 0.22),
+                             ("synth:horn:523.25:523.25:1.70", 0.52, 0.90, None, 1.25),
+                             ("synth:horn:392.00:392.00:1.70", 0.30, 0.90, None, 1.25),
+                             ("synth:horn:329.63:329.63:1.70", 0.26, 0.90, None, 1.25),
+                             ("synth:strings:261.63:2.2", 0.28, 0.90, None, 1.0),
+                             ("synth:choir:261.63:2.0", 0.22, 0.95, None, 0.9),
+                             ("synth:drum:65.41:1.0", 0.50, 0.90, None, 0.5),
+                             ("synth:bell:1046.5:1.6", 0.12, 0.92, None, 0.8),
+                             ("synth:shimmer:1.8", 0.14, 1.00, None, 0.8)],
+---- end ----
+   and in the one-line DRIVE dict change  "DUALCO_ROYAL.WAV": 1.4  ->  1.2   (FADE_OUT 0.9 unchanged).
+
+== 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_sfx_v1.py --apply            (DUALCO_ROYAL.WAV v2)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply         (description)
+  py -3.10 patch_royalambition_v1.py                      (dry run: "in-place upgrade v1 -> v2", AoWx.exe vanilla)
+  py -3.10 patch_royalambition_v1.py --apply              (backups AoWEPACK.dll.bak_royal2 = v1 state, AoWx.exe.bak_royal2)
+  VEH startup check.
+
+== 4. Chain / LIFO ==
+  Unchanged: royal -> rite -> depths -> goldenage on the Earth Mastery sites (revert royal first).  New: RS + GRM are
+  entry hooks this script owns (must be vanilla underneath); AoWx.exe zone 0x62FB00..0x62FD00 sits between City Spy
+  (0x62F800..0x62FB00) and the Tectonic shake (0x62FD00); the 6 exe sites were vanilla.
+  --revert from v2 (or directly from v1) restores the exact pre-v1 bytes of both files.
+
+== 5. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\royal2\) ==
+  * script: live-copy upgrade v1 -> v2 -> "already applied (v2)"; v2 --revert == v1 script's own revert (md5 9eaaef69),
+    exe back to the live md5 7643f0ce; fresh v2 apply on that == the upgrade (dll 5e8da6f6 / exe 642be78f); a direct
+    --revert of the live v1 state == v1's revert.  Live dry run clean (live files untouched).
+  * emu.py (Unicorn, real patched dll at 0x55700000 AND relocated to 0x00A00000 + real exe caves): 88/88 OK -
+    Set doubling (any race, clamps both ends), inactive / other player / other marker / 2nd list entry / none, the 6
+    diplomacy returns not re-doubled but clamped, dl = 0 vanilla path, regs + stack; GRM x2 / pass-through; XCHK
+    owner active / inactive / none / nil city; all 6 exe sites (owner active -> 2x, else vanilla; nil city -> vanilla;
+    every register + flags kept).
+
+== 6. Behaviour notes ==
+  * "for the caster's race" is now read as: every race's regard for the CASTER (the user's examples are city actions,
+    which hit the city's race).  Other players are unaffected.
+  * Not doubled (vanilla never routes them through SetPlayerRelationValue): the daily drift back toward the default
+    and scenario/reset values.
+  * The race-relations screen reads the stored values, so it shows the doubled results directly.

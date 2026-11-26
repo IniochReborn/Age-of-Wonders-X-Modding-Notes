@@ -1,0 +1,70 @@
+# Age of Wonders X - Claude Session Memory
+
+AoWx = binary-patched community mod of Age of Wonders (1999, Delphi, no source). Project folder = game dir; scripts in `patch scripts\`; python `py -3.10`.
+- [Project core facts](project-core-facts.md) — READ FIRST: live binaries (.dll vs .dpl), VA math per module, install history, next free caves
+- [Older index entries](memory-index-archive.md) — full pre-shortening index (everything before Nov 2026: spells, AI, editor, shelved work, tooling)
+- Always: scan .reloc before overwriting code; PIC delta-trick for in-image addresses; check the game is not running before patching; never launch the game / grab the screen unasked.
+
+## Index (active November work + standing references)
+- [aowx-project-overview](aowx-project-overview.md) — (laptop 9/18 version) house conventions; backups now in `<game>\backup\` via bakpath.py; patch the .dll never the .dpl; r+b in-place writes.
+- [aowint-toolkit-internals](aowint-toolkit-internals.md) — aowInt widget toolkit RE: offsets, VMTs, input dispatch.
+- [aowepack-ability-system](aowepack-ability-system.md) — (laptop 9/15 version) ability owners/data/level chain, item granting, once-per-day heal, Holy/Unholy Champion I-III + ranged; runtime-unit-copies…
+- [aowdevx-binary-notes](aowdevx-binary-notes.md) — editor title/icon sites, CODE-tail cave (full), .dlgd slack, Item Properties HP/MV rows (.xitm), Developer prune menu (.xprn; section table FULL); 🛑…
+- [aowx-release-process](aowx-release-process.md) — changelog JSON, build_release_zip.py, upload/ layout; full recipe + history inside; 1.37.437 CUT 11/22 (zip + installer in upload/, GitHub v1.37.437 published; user still to sign + deploy, then verify).
+- ⭐ [410 pending tests](aowx-410-pending-tests.md) — READ FIRST: what is applied in the 410 binaries and still untested (banner ceilings, storm roll/sources, tactical-AI melee/ranged, healing AI…
+- ⭐ [Dual-sphere spells project](aowx-dual-sphere-spells.md) — READ FIRST for this work: SpellTypes relocated (0x43C000/512 entries), sphere pairs 9..22 live + editor drop-down, clone pipeline; Death/Fire 350…
+- 🔨 [MP OoS restore + connection lost](mp-host-migration-oos-handler.md) — rig v2.51 USER-CONFIRMED 11/19: OoS restore, drop/rejoin in place + from the session list (no lobby), turn status kept, host takeover; 11/20 test triggers (resync.save/drop.save) STRIPPED for the 434 cut (stripped build not run in game); ship dpwsockx.dll
+- 🔨 [Battle freezes: token stall](combat-token-stall.md) — 11/21 MP stall (queued AI event stranded when the battle turns AI seats remote; likely the old silent lock-up) fix APPLIED untested (patch_combat_remote_tc_purge_v1, ship AoWTCPCK.dll); SP hero-move freeze not pinned, Ctrl+F report now dumps the stuck unit (AoWxLog.dll) — awaiting a repro
+- 🔨 [Migrate to own race](migrate-own-race.md) — 11/19 own-race migration allowed if any unrazed city of that race exists on the map (cave 0x558BA000) USER-CONFIRMED 11/19
+- 🔨 [Start maximised](start-maximized.md) — 11/19 windowed mode always starts maximised (exe stub .xedt 0x62FF80; .xedt zone map inside) USER-CONFIRMED
+- 🔨 [Surrender drops items](surrender-drop-items.md) — 11/19 combat + world-map surrender drop hero/leader items on the map (cave 0x558BA100; next free 0x558BA200) USER-CONFIRMED
+- 📖 [PBEM restart check](pbem-restart-check.md) — 11/19 RE only: EmailIn\egames.pfs ledger + registry CRC + per-turn security ID in the save; replayed turn → 'game restarted' notice
+- 🔍 [Leader fogged in Depths (MP report)](leader-fog-depths-report.md) — 11/14 not reproducible; suspect LOS turn-start fog rebuild; need a save
+- 🔥 [Recall/Animate RDTSC roll](recall-animate-rdtsc.md) — 11/14 MP desync source fixed (→ @RandInt) APPLIED untested; full scan: no other rdtsc / time-based rolls exist
+- 🔨 [Error Log + OoS recorder](error-log-oos.md) — AoWxLog.dll (VEH errors + OoS ring dump); 11/19 v2: log in X\Bug Report, REF per error + 'Error - ver - type - REF.asg' save (built, save step untested in game); 11/21 FREEZE REPORT added (auto after 15 s locked in MP + Ctrl+F with status text + chat sound; Ctrl+F path user-confirmed in game, auto trigger never seen on a real freeze, not shipped; 11/21 host Ctrl+R manual restore with prompt + 'Host initiated a manual restore' on all machines BUILT+APPLIED (AoWxLog + patch_resync_net_v1), user-confirmed in a healthy game, not yet on a real freeze); ship AoWxLog.dll
+- 🔨 [Independent hero spells](indep-hero-spells.md) — ✅ 11/14 USER-CONFIRMED (auto + tactical): owner 0 = Independents player grant + owner -1 stand-in + TCAI gates/loops + CheckUnit old-table read fixed…
+- 🔨 [Title logo outline](title-logo-halo.md) — 11/14 soft black halo (title.ilb image 3 composite) APPLIED, not seen in game; ⚠ never launch the game / grab the screen unasked
+- 🔨 [Underground palette tabs](ug-palette-tabs.md) — 11/14 UG Grass/Steppe/Desert/Snow/Wasteland tabs (hss EditID moves + DFM grid clones) APPLIED, live-verified by me; ship AoWDevX.exe + Release.hss…
+- 🔨 [Sky field class guard](sky-field-class-guard.md) — 11/14 unit on a Sky hex crashed editor (sky code read any field object as hexagon) → patch_sky_field_class_guard_v1 USER-CONFIRMED (no crash) 11/14
+- 🔨 [City battle map / touching cities](city-tcmap-adjacent-cities.md) — 11/13 combat-start AV (TCMaps file missing for touching cities) → patch_city_tcmap_same_city_v1 USER-CONFIRMED 11/14; VEH logger --pid attach
+- ⚠ [Verify changelog values vs shipped data](feedback-verify-changelog-vs-data.md) — before every cut, read each "A → B" changelog value from the pfs in the zip; 434 shipped Hurl Skull 25 (changelog 20); fixed in the 1.37.435 cut 11/21 (zip verified cost 20; not yet published)
+- ⚠ [Raise flagged issues immediately](feedback-raise-flagged-issues.md) — never park a known leftover that contradicts the user's instruction (UG Ziggurat defender list incident 11/07)
+- 🔨 [Combat autosaves + updater UX](combat-autosave-updater-ux.md) — 11/04 alternating 'autosave - combat(2)' APPLIED untested (MP!); updater facts/minimize/editor-open notice built; ship Unitres.pfs (Hydra SFX)
+- 🔨 [Underground dirt roads](ug-dirt-roads.md) — 11/04 Zig road record (terrain 0x0C) appended to Release.hss APPLIED untested; combat road for 0x0C already exists; construct-ability UG roads patch…
+- 🔨 [Teleporter ice/lava/floating variants](teleport-terrain-variants.md) — 11/07 v4 (180f smooth spin, recoloured-ground portraits) APPLIED untested; STR_TELX.ILB --add
+- 🔨 [Water/ice twin fade](water-twin-fade.md) — 11/13 v3+v3b (shore gate 0xA0→0x80) verified live in editor by me, user unconfirmed; brushes place ANIMATED class; also minimap sky textures…
+- 🔨 [Sky shows level below](sky-below-levels.md) — 11/13 v1 USER-CONFIRMED; v2 adds screenshot entries (cave 0x558E1900 'SKB2'); revert before overlay rebuilds; also 11/13: UG cloud variants…
+- 🔨 [Sky/Chasm transitions](sky-chasm-transitions.md) — 11/07 v2.9b APPLIED untested: per-edge water fog wedges (cave 0x558E15C0, Waterhex 0x100-0x21F), ice thickness, one-sided fades under cliffs, skyfog…
+- 🔨 [Editor map screenshot](devx-screenshot.md) — 11/07 camera button → AoWxShot.dll (pure asm PE): minimap/map PNG, all levels, frame; APPLIED untested; ship DLL
+- 🔨 [Missing resources button](devx-missing-resources.md) — 11/07 red X after Validate → AoWxShot list of objects dropped at map load (Enginep reader hooks in memory), right-click centres; APPLIED untested
+- 🎨 [Cyclops unit gfx](cyclops-unit-gfx.md) — 11/07 v5 from-scratch render: CYCLOPS.ILB + corpses DeadUnit 325/326 + portrait Add_UNITS 48 INSTALLED; unit record (slot/stats) next
+- 🔨 [Editor U-sort + map-only wheel](devx-user-sort-wheel.md) — 11/07 Heroes/Items 'U' sort (AoWEPACK mode 2, cave 0x558E1700-0x558E1880) + WH_MOUSE wheel filter in AoWxShot; APPLIED untested
+- 🔨 [Ziggurat map compat](zig-map-compat.md) — 11/07 Highpass: UG Ziggurat RID alias v2 + enchantment nil guard (real grey-view cause, VEH-logged); APPLIED, 0 exceptions on open
+- 🔨 [Summon dispel resistance](summon-dispel-resistance.md) — 11/07 v2 level×2 + medals (cave 0x558E1400), APPLIED untested
+- 🔨 [Teleporter level names / Groll dest](teleport-padless-fix.md) — 11/04 Groll dest Z wrong level (not a bug); editor level drop-down + status name v1.1 APPLIED awaiting test; status panel 80 px
+- 🔥 [comb_res lost records](comb-res-lost-records.md) — 11/02 water battles grass+flashing = engine re-save dropped water hex/node structure/Sky hex (cell-sharing clones); repaired again 11/04 + clones…
+- 🔨 [Sanctuary razeable](sanctuary-raze.md) — in-game raze works; 11/01 editor Razed-checkbox crash (ESI not loaded in OK branch) fixed as edit v2.1 USER-CONFIRMED, shipped in 1.37.429
+- 🔨 [29 map levels + Sky/Chasm plan](map-levels-29-plan.md) — 11/01 city-entry AV fixed (patch_sky_fld_guard_v1, untested); 10/31 levels, overlay, Ziggurat/altars, fly ALL USER-CONFIRMED; sky polish v7 APPLIED…
+- 🔨 [Earth/Water spells](earthwater-spells.md) — 11/16 Slowed = ×2 move cost via CreateMovePointTable (APPLIED untested); 10/15 380 Slow (0xB9) / 381 Crocodile (unit 283) / 382 Swampwalk (0xBA) /…
+- ⚠️ [full-file-backup-revert-gotcha](full-file-backup-revert-gotcha.md) — NEVER `--revert` an older patch on a multiply-patched binary (whole-file backup wipes later patches; bit the 410 cut); un-hook in place + audit…
+- ⚠️ [rebase-crash-runtime-error-216](rebase-crash-runtime-error-216.md) — READ FIRST on startup/intermittent crashes. AoWEPACK rebases; PIC playbook. Also: ability-reg caves must pass ecx=0 to the ctor (10/15 Slow, see…
+- [patching-over-relocs-gotcha](patching-over-relocs-gotcha.md) — scan .reloc; neutralize 3→0 on apply, restore on revert; July-era violations were the "crashes on his machine" mechanism.
+- [active-patches](active-patches.md) — applied-patch table + reverts (⚠ predates 2026-08 work).
+- [aowx-re-reference](aowx-re-reference.md) — core RE: Delphi conventions, ability IDs, StrikeEnhancement, HasAbility.
+- [ability-id-map](ability-id-map.md) — ability name→id map + derivation methods. Hero Slaying = 0x38; 0x81 Animated / 0x83 Decay (8/31).
+- [bxl-reference](bxl-reference.md) — BXL July drop: catalog, his cave VAs overlap ours — never run as-is, MP RNG rules.
+- [baked-absolute-paths-gotcha](baked-absolute-paths-gotcha.md) — derive paths at runtime; home tooling: `py -3.10`, AOW_GAME_DIR.
+- [aowepack-dll-is-live](aowepack-dll-is-live.md) — exe imports the .dll; never patch AoWEPACK.dpl.
+- [lan-desync-investigation](lan-desync-investigation.md) — LAN OOS solved (FIX #8 movedraw); ⭐ two-RNG model (synced [map+0x230] vs bare RandSeed; combat rolls must match in COUNT); Mind Decay audit…
+- [mapgen-no-regen-after-changes](mapgen-no-regen-after-changes.md) — new seeds after generator changes, never regen old names.
+- [Check game running first](feedback-check-game-running.md) — gate apply+VEH chains on tasklist=0; taskkill killed a live session 10/17.
+- [Bound pipeline entry edits](feedback-pipeline-entry-bounds.md) — search only inside the target SPELLS dict entry; a fixed line window hit the next entry 10/18.
+- 📋 [TCPCK data-slack map](tcpck-data-slack-map.md) — owner map of AoWTCPCK scratch memory; 10/18 two collisions fixed (Miracle/Sandstorm, heal-log/Oil VMT).
+- 🔨 [BXL ranged abilities 0xCC/0xCD](bxl-ranged-abilities.md) — Hurl Skull AOE + art/sfx (10/19); 10/24 multi-hit fix; 11/16 outer ring half damage APPLIED untested.
+- ✅ [AoWx auto-updater](aowx-autoupdater-plan.md) — 10/21 LIVE with 1.37.420 (signed aowx.org notice + GitHub installer); release recipe + one-click signer inside.
+- 🔨 [Ban List](ban-list.md) — 11/20 per-map spell/ability bans: storage in map (tag 0x10063, BAN_GET 0x558BA200) + rules + editor tab (AoWxShot) APPLIED, untested; next free AoWEPACK cave 0x558BAC00
+- 🌋 [Cataclysm map](cataclysm-map.md) — user map (volcano through 5 levels); level-to-level terrain rule; work only on the Handover copy; 11/21 lower-half v1 (cataclysm_finish_volcano_v1.py) APPLIED, user verdict pending
+- 🔥 [Units vanish after reload (a tester, Shattered Peaks)](save-skipped-units-abilitydata-guard.md) — 11/22 save skips units with a duplicate ability-data record (slot holes in the file); suspect GetAbilityData guard address window (unverified); fix patch_abilitydata_guard_v4 APPLIED untested (ship AoWEPACK.dll; next free AoWEPACK cave 0x558BAE00); .asg unit parser recipe
+- 🔨 [Map Level Vision](map-level-vision.md) — 11/22 per-level "Night Vision required?" (map dword +0x480, tag 0x10064, NVREQ 0x558BAE04) + editor tab in AoWxShot APPLIED, emulator-tested only; ⚠ revert before banstore / engine_v1; ship AoWEPACK.dll + AoWxShot.dll
+- 🔨 [Editor fog = selected player](devx-fog-selected-player.md) — 11/22 Fog of War follows the Players-menu pick ([map+0x190] -> seated [map+0xA5]; AoWxShot in-memory hooks 0x42BB94 / 0x428964) APPLIED, emulator-tested only
+- 🔨 [Editor city names](devx-city-names.md) — 11/22 random city-name generator: Dict\xCityNamesV.mld (1658 vanilla names by race) + Map Settings "City Names" tab + new-city / race-change naming + Update Nameless (AoWxShot; settings dword map +0x484 tag 0x10065) APPLIED, emulator-tested only; ship the mld + AoWxShot.dll + AoWEPACK.dll

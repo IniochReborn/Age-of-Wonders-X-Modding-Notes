@@ -1,0 +1,46 @@
+FLASH FLOOD (223) v4 - sound loop fix, Swampwalk half distance, no landing on intact walls (2026-10-17, fork; NOTHING applied live)
+Engine: patch scripts\patch_tc_flashflood_v1.py upgraded IN PLACE to v4 (zone AoWTCPCK 0x44B000.., header now 0x30, code at +0x30;
+new third site SND 0x40B642).  Previous script copy: C:\Users\<user>\.claude\jobs\47241cad\tmp\flood4\patch_tc_flashflood_v1.v3.py.
+Builders may be CRLF (patch_dual_sphere_spells_v1.py = CRLF) - detect the newline per file.
+
+LOOP ROOT CAUSE: class 29's TE Execute (TCAbRangedTE.Execute, class-0x1D branch at 0x40B642 of the dispatch 0x40B636) plays
+sound 0 with SoundP TSFXLibrary.PlayEx(..., loop flag = 1, repeat count = 0 = forever), keeps the sample in [te+0x2c] and only
+frees (= stops) it when the TE ends (0x40CC55, when the map effect list is empty).  Vanilla Tremors (0x70) is excluded from the
+caster's cast-animation sound (0x421D7A), so it has exactly that one looped rumble.  223 is NOT excluded there (castsnd cave
+0x43C900), so it got the one-shot cue 0 at the cast animation AND the TE's endlessly-looping copy of the 4.5 s flood WAV, which
+kept repeating for as long as the TE lived.
+FIX: SND hook 0x40B642 (the 10-byte push block 6a01 6a00 6a01 6a00 6a00 -> jmp + 5 nop): spell 223 skips the PlayEx entirely
+(continues at 0x40B679, [te+0x2c] stays 0 so the TE-end free is skipped too); every other spell runs the original pushes and
+continues at 0x40B64C.  223's sound is now only the cast animation's one-shot Play (no loop, freed by SoundP itself) - it starts
+at the same moment (the cast animation starts with the TE's single strike).  No sfx / WAV change needed.
+
+OTHER v4 RULES:
+  * Swampwalk (0xBA) joins Swimming / Water Walking / Liquid Form in the half-distance group (rings 1..2, RandInt(18)); half damage unchanged.
+  * destination check (before ValidLocation): a candidate hex holding a TCityWall (FindOwnedChild 0x220504) or TCityWallDoor
+    (0x220506) with HP [+0x20] > 0 is rejected; destroyed sections (HP <= 0) remain valid.  RNG order unchanged (one synced
+    RandInt per moved unit, candidate order (r + k) % n + 1).
+
+== 1. patch_dual_sphere_spells_v1.py, entry 223: replace the desc line with ==
+---- code ----
+         desc="A raging flash flood sweeps across the battlefield from the caster's side: every unit that is not flying, floating or wind walking is swept up to 4 hexes away in a random direction, hit or not, and struck (attack 4, damage 7, physical). Swimmers, water walkers, swamp walkers and liquid-form units are swept only up to 2 hexes and take half damage, and ships are swept up to 2 hexes but take no damage. Nobody is swept onto a standing wall or gate.",
+---- end ----
+
+== 2. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (desc only)
+  py -3.10 patch_tc_flashflood_v1.py                  (dry run: "zone ours (v3) ... sites {TEK: ours, NF: ours, SND: vanilla}", 2782 bytes change)
+  py -3.10 patch_tc_flashflood_v1.py --apply          (backup backup\AoWTCPCK.dll.bak_flashflood4 = the v3 state)
+  VEH startup check.
+  Revert: patch_tc_flashflood_v1.py --revert (exact: all three sites back to vanilla, zone zeroed; reverting a v3 zone also works).
+
+== 3. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\flood4\) ==
+  * script on copies of the live DLL: dry run, in-place v3 -> v4 apply, re-run "already applied (v4)", v4 --revert md5 == the v3
+    script's own --revert (13f1d9c3...), fresh v4 apply on the reverted copy == the upgrade (315dd604...).
+  * Unicorn (test_flood3.py on the real v4 caves, HSEPack's real CenterHNtoHX): ALL PASS - every v1-v3 scenario (mixed roster,
+    beached ship, 12 random 40-unit fields, routing, miss still displaced, side latch, sweep both directions) + v4: 10 seeds of a
+    30-unit melee around a wall line with a gate and destroyed sections (never lands on an intact wall/gate, does land on ruins),
+    Swampwalk RandInt(18) + half damage, SND: 223 -> 0x40B679 with no pushes and [te+0x2c] untouched, 0x70 / 0x7A -> 0x40B64C with
+    the original pushes (1,0,1,0,0), callee-saved regs intact.  extra.py: a unit boxed in by intact walls stays; by ruins it moves.
+
+== 4. Chain notes ==
+  SND 0x40B642 was vanilla and reloc-free; nothing else hooks it.  A later patch that chains in front of TEK / NF / SND must be
+  reverted before this one (LIFO); the script refuses to revert when a site no longer jumps into its zone.

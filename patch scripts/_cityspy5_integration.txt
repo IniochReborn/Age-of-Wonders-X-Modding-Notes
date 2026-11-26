@@ -1,0 +1,165 @@
+CITY SPY (229) v5 - eyelids open/close + the caster gets the spied city's VISION (2026-10-18, fork; NOTHING applied live,
+no shared builder edited).  Insert ONLY the code blocks; detect the newline per file and ast.parse each edited builder.
+
+User: "the eye is really good. improve it by making the fade in/out the eye OPENING/CLOSING" and "I want to be granted a
+city's vision if it has City Spy on it".
+
+ART: the v4 opacity fades are replaced by eyelids.  The closed eye = a thin curved lid line (the lids meet a little below
+centre); it appears faintly (the closed frame at blend 13/26/39, 2 entries each = 0.21 s), the lids part over 16 eased
+aperture frames (0.77 s: upper lid rises, lower lid drops, the iris shows through the slit; halo + star glints grow with the
+aperture), then the v4 look-around (unchanged gaze frames 6344-6376 at blend 52, 3D oval iris), then the lids close the same
+way and the lid line fades out; 2 s hidden.  221 entries x 35 ms = 7.74 s (v4: 217 = 7.6 s).  The fully open aperture frame
+is pixel-identical to the v4 centre-gaze frame (asserted in cityspy_eye5_open), so open -> look-around is seamless.
+New DualDF ids 6400-6418 (live max 6396; 6419-6499 stay free).  v4 rows 6377-6396 (the fade rows) become unused.
+
+ENGINE (patch_cityspy_v1.py upgraded IN PLACE to v4; three new AoWEPACK hooks, see its docstring):
+  UV  0x55761263 in TPlayerStructure.UpdateUnfog (TCity VMT+0x204): vanilla gives the viewing player a structure's sight
+      only if it owns it or is allied; a TCity carrying a City Spy cast by the viewer now takes the 'own' path too -> its
+      sight radius (VMT+0x200) unfogs + explores for the viewer through the LOS-filtered fills; the radius is cached at
+      +0x38 exactly as for own cities, so the fog refcounts stay symmetric.
+  ACT 0x557A99B5 (TCity.ActivateEnchantment) / DEA 0x557A99E8 (TCity.DeactivateEnchantment): a type-5 (City Spy)
+      enchantment joining / leaving the city -> the city's UpdateUnfog runs at once (vision on cast; removed at the end or on
+      dispel).  Every later visibility rebuild (new turn, seat change / load, the LOS patch broadcasts) re-evaluates it.
+  Vision = the local viewer's fog / explored bits only -> nothing synced changes, MP-safe.  Explored hexes stay explored after
+  the spy ends (vanilla: explored is monotone).
+
+==> 1. build_dual_sphere_fx_v1.py - add this block before `def build():` (the v4 functions stay; v5 reuses _cspy4_frames / _ease4) ==
+---- code ----
+# ---- City Spy v5 eye (2026-10-18; user: "make the fade in/out the eye OPENING / CLOSING").  The v4 eye (sphere iris,
+# alpha 258 @ blend 52) unchanged while open; the fades are replaced by EYELIDS: the closed eye is a thin curved lid
+# line (lids meet a little below centre), it fades in faintly (3 blend rows of the closed frame), the lids part over
+# CSPY5_NOPEN aperture frames (eased; upper lid rises, lower lid drops, the iris is revealed through the slit, the halo
+# and the star glints grow with the aperture), then the v4 look-around; at the end the lids close the same way and the
+# lid line fades out.  The fully open aperture frame is pixel-identical to the v4 centre-gaze frame (asserted).
+CSPY5_NOPEN = 16                  # aperture frames o = k / 15, k = 0..15 (k = 15 == the v4 centre eye)
+CSPY5_LINE = (13, 26, 39)         # faint lid-line rows (blendValue %) before the lids part / after they close
+
+
+def _cspy5_eye(o):
+    Wd, Hd, S = 40, 28, 4; cx, cy = 20.0, 14.0
+    yy, xx = np.mgrid[0:Hd, 0:Wd].astype(np.float32)
+    a, b = 12.0, 6.8
+    u = (xx - cx) / a; v = (yy - cy) / b
+    lid = (1 - np.clip(np.abs(u), 0, 1) ** 2) ** 1.2
+    if o >= 1.0:
+        inside = (np.abs(v) <= lid) & (np.abs(u) <= 1)
+        outline = (np.abs(np.abs(v) - lid) < 0.22) & (np.abs(u) <= 1.04)
+    else:
+        mid = 0.2 * lid * (1 - o)                                    # where the lids meet (a touch below centre)
+        vu, vl = -lid * o + mid, lid * o + mid                         # upper / lower lid edge
+        inside = (v >= vu) & (v <= vl) & (np.abs(u) <= 1)
+        tol = 0.11 + 0.11 * o                                          # thin lid line when (nearly) closed
+        outline = ((np.abs(v - vu) < tol) | (np.abs(v - vl) < tol)) & (np.abs(u) <= 1.04) & (lid > 0.02)
+    glow = np.exp(-((xx - cx) ** 2 / (2 * 9.0 ** 2) + (yy - cy) ** 2 / (2 * 5.0 ** 2))) * 0.55
+    halo = (glow > 0.22 + 0.33 * (1 - o)) & ~inside & ~outline if o > 0.15 else np.zeros_like(inside)
+    stars = [(5.0, 6.0), (35.0, 8.0), (31.0, 24.0)]
+    st = np.zeros_like(inside)
+    if o >= 0.6:
+        for sx, sy in stars:
+            st |= ((np.abs(xx - sx) <= 0.6) & (np.abs(yy - sy) <= 1.4)) | ((np.abs(yy - sy) <= 0.6) & (np.abs(xx - sx) <= 1.4))
+    Y, X = np.mgrid[0:Hd * S, 0:Wd * S].astype(np.float32); X = (X + 0.5) / S; Y = (Y + 0.5) / S
+    gx = cx; c = 1.0; th = 0.0
+    ri, rp = 4.2, 1.7
+    re = np.sqrt(((X - gx) / c) ** 2 + (Y - cy) ** 2)
+    iris = np.clip(ri - re + 0.5, 0, 1); pupil = np.clip(rp - re + 0.5, 0, 1)
+    hx = gx - 1.6 * c + 0.6 * math.sin(th); hy = cy - 1.8
+    gl = np.clip(1.6 - np.sqrt(((X - hx) / max(c, 0.55)) ** 2 + (Y - hy) ** 2) * 1.5, 0, 1)
+    rim = np.clip(1.0 - np.abs(re - ri) * 1.6, 0, 1) * 0.35
+    R = 225 * (1 - iris) + 200 * iris; G = 210 * (1 - iris) + 60 * iris; B = 245 * (1 - iris) + 220 * iris
+    R = R * (1 - rim) + 110 * rim; G = G * (1 - rim) + 30 * rim; B = B * (1 - rim) + 150 * rim
+    R = R * (1 - pupil) + 30 * pupil; G = G * (1 - pupil) + 8 * pupil; B = B * (1 - pupil) + 50 * pupil
+    R = R * (1 - gl) + 255 * gl; G = G * (1 - gl) + 255 * gl; B = B * (1 - gl) + 255 * gl
+    rgb = Image.fromarray(np.dstack([R, G, B]).clip(0, 255).astype(np.uint8), "RGB").resize((Wd, Hd), Image.BOX)
+    arr = np.asarray(rgb).astype(np.float32)
+    out = np.zeros((Hd, Wd, 4), np.float32)
+    out[..., :3][halo] = (70, 34, 120); out[..., 3][halo] = 255
+    out[..., :3][inside] = arr[inside]; out[..., 3][inside] = 255
+    out[..., :3][outline] = (110, 50, 175); out[..., 3][outline] = 255
+    out[..., :3][st] = (215, 190, 245); out[..., 3][st] = 255
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
+
+
+def cityspy_eye5_open():
+    """City Spy (229) v5: 16 aperture frames, closed lid line (k = 0) .. fully open centre eye (k = 15 == v4 gaze 16)."""
+    fr = [_cspy5_eye(k / (CSPY5_NOPEN - 1.0)) for k in range(CSPY5_NOPEN)]
+    assert np.array_equal(np.asarray(fr[-1]), np.asarray(_cspy4_frames()[16])), "open frame != v4 centre eye"
+    return fr
+
+
+def cityspy_eye5_line():
+    """City Spy (229) v5: the closed lid line alone (one faint row per CSPY5_LINE blend level)."""
+    return [_cspy5_eye(0.0)]
+
+
+def cityspy_eye5_timeline(base, v4base):
+    """City Spy (229) v5 slot-1 list for patch_cityspy_v1.py (35 ms per entry, real time mod len):
+    lid line fades in 0.21 s (3 faint rows x 2) / lids open 0.77 s (22 entries over 16 eased apertures) / hold 0.39 /
+    look left 0.6 / hold 0.6 / sweep right 0.8 / hold 0.6 / back 0.5 / hold 0.32 / lids close 0.77 / lid line fades out
+    0.21 / hidden 2.0 s.  base = v5 first id: +0..+15 apertures, +16..+18 faint lid-line rows; v4base = the v4 ids
+    (+0 blank, +1..+33 gaze)."""
+    BL, G0 = v4base, v4base + 1
+    def gz(px): return G0 + int(round((px + 4.0) / 0.25))
+    def ap(t): return base + max(0, min(CSPY5_NOPEN - 1, int(round(_ease4(t) * (CSPY5_NOPEN - 1)))))
+    NO = 22
+    seq = []
+    seq += [base + 16] * 2 + [base + 17] * 2 + [base + 18] * 2                 # faint lid line appears
+    seq += [ap(i / (NO - 1)) for i in range(NO)]                              # lids part (k 0 .. 15)
+    seq += [gz(0)] * 11
+    seq += [gz(-4.0 * _ease4((i + 1) / 17)) for i in range(17)]
+    seq += [gz(-4.0)] * 17
+    seq += [gz(-4.0 + 8.0 * _ease4((i + 1) / 23)) for i in range(23)]
+    seq += [gz(4.0)] * 17
+    seq += [gz(4.0 - 4.0 * _ease4((i + 1) / 14)) for i in range(14)]
+    seq += [gz(0)] * 9
+    seq += [ap(1 - i / (NO - 1)) for i in range(NO)]                          # lids close (k 15 .. 0)
+    seq += [base + 18] * 2 + [base + 17] * 2 + [base + 16] * 2                 # lid line fades away
+    seq += [BL] * 57                                                          # 2 s hidden
+    return seq
+---- end ----
+
+==> 1b. build_dual_sphere_fx_v1.py - group rows: add right AFTER the (6396, cityspy_eye4_centre(), ...) row ==
+---- code ----
+              (6400, cityspy_eye5_open(), "COspy5o%02d.BMP", 258, 52, KEY),        # City Spy (229) v5: eyelids, closed lid line (k 0) .. fully open (k 15 == v4 centre eye 6360)
+              (6416, cityspy_eye5_line(), "COspy5l0_%d.BMP", 258, 13, KEY),       # City Spy (229) v5: faint closed lid line, blend 13
+              (6417, cityspy_eye5_line(), "COspy5l1_%d.BMP", 258, 26, KEY),       # City Spy (229) v5: faint closed lid line, blend 26
+              (6418, cityspy_eye5_line(), "COspy5l2_%d.BMP", 258, 39, KEY),       # City Spy (229) v5: faint closed lid line, blend 39
+---- end ----
+
+==> 2. patch_dual_sphere_spells_v1.py, entry 229 - replace the slot-1 line (it keeps the dict's closing `},`) with ==
+---- code ----
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [6416] * 2 + [6417] * 2 + [6418] * 2 + [6400] * 3 + [6401] * 2 + [6402] + [6403] + [6404] + [6405] + [6406] + [6407] + [6408] + [6409] + [6410] + [6411] + [6412] + [6413] + [6414] * 2 + [6415] * 3 + [6360] * 12 + [6359] * 2 + [6358] + [6357] + [6355] + [6354] + [6353] + [6351] + [6350] + [6349] + [6347] + [6346] + [6345] * 2 + [6344] * 20 + [6345] * 2 + [6347] + [6348] + [6349] + [6351] + [6353] + [6355] + [6357] + [6359] + [6361] + [6363] + [6365] + [6367] + [6369] + [6371] + [6372] + [6373] + [6375] * 2 + [6376] * 20 + [6375] + [6374] + [6373] + [6371] + [6370] + [6368] + [6366] + [6365] + [6363] + [6362] + [6361] + [6360] * 11 + [6415] * 3 + [6414] * 2 + [6413] + [6412] + [6411] + [6410] + [6409] + [6408] + [6407] + [6406] + [6405] + [6404] + [6403] + [6402] + [6401] * 2 + [6400] * 3 + [6418] * 2 + [6417] * 2 + [6416] * 2 + [6343] * 57, -20, -14, f20=2, f18=3)},   # v5 10/18: 35 ms per entry (patch_cityspy_v1.py v4: real time mod 221 = 7.74 s): faint lid line / lids open 0.77 s / hold / look left / hold / sweep right / hold / centre / lids close 0.77 s / lid line fades / 2 s pause; open eye = v4 gaze frames 6344-6376 (blend 52)
+---- end ----
+
+==> 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply            (DualDF += 6400-6418)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply        (Spells.pfs 229 slot 1 = the 221-entry v5 timeline)
+  py -3.10 patch_cityspy_v1.py                           (dry run: "AoWEPACK zone v3 | ... 'uv': 'free', 'act': 'free',
+                                                          'dea': 'free'" ... "in-place upgrade v3 -> v4")
+  py -3.10 patch_cityspy_v1.py --apply                   (backups AoWEPACK.dll.bak_cityspy4 / AoWx.exe.bak_cityspy4 = v3 state)
+  VEH startup check.
+  Art and engine are independent (the engine reads real time mod the list length) - either order works.
+
+==> 4. Chain / LIFO ==
+  Old sites unchanged (City Spy is in front of Arms Race's GetName hook E and city_enchant_ui hooks A/B/D; exe zone unchanged).
+  New: City Spy now OWNS AoWEPACK 0x55761263 / 0x557A99B5 / 0x557A99E8 (all vanilla before) - a later script hooking
+  UpdateUnfog's owner test or the city enchantment activate/deactivate must chain in front and be reverted first.
+  The LOS patch hooks UpdateUnfog's ENTRY (0x55761228), not 0x55761263 - independent, any order.
+  --revert from v4 restores the exact pre-City-Spy bytes (byte-identical to the v3 script's own revert, tested).
+
+==> 5. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\cityspy5\) ==
+  Script on copies of the live files (dll f3e79a71, exe 377443a8): dry run = in-place v3 -> v4 (uv/act/dea free); apply ->
+  re-run "already applied (v4)"; v4 --revert == the v3 script's own --revert (dll 86eeff7e, exe d7767cc6); a fresh v4 apply
+  on that == the in-place upgrade (dll 21d8a1cf; exe 377443a8 = live, unchanged).
+  emu5.py (Unicorn, the real v4 dll at 0x55700000 AND relocated to 0x56C10000, IsClass import stubbed): 36/36 -
+    UV: own city -> own path; city spied by the viewer -> own path (also among other enchantments / owner byte 0xFE);
+        spied by another player / other enchantment type / empty or missing list / a non-city structure -> the vanilla path
+        with edx = movsx owner (0x83 -> 0xFFFFFF83); ebx/esi/edi/ebp/esp preserved.
+    ACT / DEA: type 5 -> exactly one VMT+0x204 call with eax = the city, then the vanilla exits; types 2 / 1 -> the vanilla
+        branches; other types -> the exits; AoWHSMap nil -> no call; esi/ebx/edi/ebp/esp preserved.
+  Art: eye5.gif (the whole 7.74 s loop at 35 ms, opacity simulated over a city-coloured backdrop), lids_strip.png (16 apertures).
+  Builder trial (in memory): fx + pipeline parse with the snippets; new ids unique.
+
+==> 6. Open (not seen in game) ==
+  * If the City Spy is cast by someone other than the seated viewer (AI / another MP player), nothing changes on this screen
+    - correct; the caster's own client grants it.
+  * The lid line weight is tunable (CSPY5_LINE blend rows / the `tol` term in _cspy5_eye).

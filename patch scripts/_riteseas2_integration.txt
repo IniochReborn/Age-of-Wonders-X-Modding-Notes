@@ -1,0 +1,34 @@
+RITE OF THE SEAS (221) v2 - shipyards yield 1 less gold while active (2026-10-17, fork; NOTHING applied live).
+Engine: patch_riteseas_v1.py upgraded IN PLACE to v2 (zone magic RTS2; --apply on the live v1 = in-place upgrade, backup
+backup\AoWEPACK.dll.bak_riteseas2 = the v1 state; --revert works from v1 or v2 and is exact).
+patch_dual_sphere_spells_v1.py is CRLF -> detect the newline before editing; insert ONLY the code block.
+
+RE: TProductionPlace per-turn gold = VMT+0x1F4 (0x557BE500; Steam Power's x2 cave 0x5585C160 sits in the shipyard/guild
+slot) which starts from the BASE income VMT+0x22C = 0x557BE4E0 (5 gold; 0 when razed/inactive), x1.5 in one case.
+v2 re-points the TShipyard +0x22C slot 0x557C7388 (reloc'd; Builders' Guild slot 0x557CA308 untouched) -> cave `si`:
+prev, then -1 if > 0 and the owner [place+0x30] has an ACTIVE 221 (never below 0).  Steam Power then doubles the
+reduced base (5 -> 4 -> 8).  Activate/Deactivate (marker 221) re-run TPlayer.UpdateIncome 0x55751F88 for the caster
+after the base routine (Depths of Plenty v2 mechanism) -> the income line updates on cast and when the spell ends.
+
+== 1. patch_dual_sphere_spells_v1.py, entry 221 - replace the desc line with ==
+---- code ----
+         desc="The sea answers your rite: every ship your shipyards begin to build is launched with a Silver medal, but while the rite lasts each of your shipyards yields 1 less gold.",
+---- end ----
+
+== 2. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (Spells.pfs 221 description)
+  py -3.10 patch_riteseas_v1.py                       (dry run: "v1 applied -> in-place upgrade to v2", zone 774 B)
+  py -3.10 patch_riteseas_v1.py --apply
+  VEH startup check.  In game: shipyard income 5 -> 4 (8 with Steam Power) while active; income line changes on cast/end.
+
+== 3. Chain / LIFO (unchanged) ==
+  Still chained in front of Depths of Plenty (-> Golden Age): revert Rite first to re-run those.  The new TShipyard
+  +0x22C slot is not used by any other patch (checked: still vanilla 0x557BE4E0 before v2).
+
+== 4. Tests (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\rite2\) ==
+  live copy: dry run -> upgrade --apply -> "already applied (v2)"; v2 --revert md5 == v1 script's own revert md5
+  (cf5b08ca...); fresh v2 apply on that == the in-place upgrade (7bfec5f2...).
+  emu2.py (Unicorn, real v2 DLL): si 9/9 (active owner -> 4, slot-0 owner, other player / inactive / other marker /
+  no owner / base 0 / base 1 -> 0 / no enchantments; prev called once, callee-saved regs + stack); ac/de 6/6 (marker 221
+  -> base routine + UpdateIncome on the caster's TPlayer, return value kept; other markers -> previous target only).
+  emu_pr.py: the v1 production-medal tests 10/10 on the v2 DLL.

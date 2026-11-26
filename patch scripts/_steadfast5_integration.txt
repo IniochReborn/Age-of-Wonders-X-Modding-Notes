@@ -1,0 +1,60 @@
+STEADFAST (218) v5 - smooth helmet dome + the shield clang once per shielded unit (2026-10-17, fork; NOTHING applied live).
+User: "steadfast icon, smooth out top of head, it looks lumpy. also for the sfx, repeat the shield clang for each
+shield/unit. don't change anything else, it's really good."
+Builders may be CRLF: detect the newline per file (b"\r\n" in data) before splitting / joining.
+New files (already written in patch scripts\): steadfast5_user_mask.png, patch_tc_steadfast_clang_v1.py.
+Previews / renders (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\stead5\): icon_preview.png (v4 | v5, mask + 40x35),
+heads2.png (head close-ups), DUALER_STEADCLANG_v5.wav, DUALER_STEADHIT_v5.wav, stack7_preview.wav (7 shielded units
+landing 4-6 ticks apart, cue 1 + cue 2), cast.wav (the unchanged cast).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_steadfast: replace the return line with ==
+---- code ----
+    return _user_mask_glyph("steadfast5_user_mask.png")    # v5 10/17: v4 with the helmet top as ONE clean ellipse arc (brow -> back; tmp\stead5\mk_mask5.py 177 73 42 37 73) - v4's separate dome read as lumps
+---- end ----
+
+== 2. build_dual_sphere_sfx_v1.py ==
+2a. REPLACE the "DUALER_STEADHIT.WAV" entry AND its 2 comment lines above it ("# per landing hex (sound 1, x7): ...") with
+---- code ----
+    # per landing hex (sound 1, x7 - the hail landing plays cue 1 on EVERY strike hex, so it must exist): v5 only the
+    # faint air rush of v3 - the shield clang moved to cue 2 (DUALER_STEADCLANG), played per SHIELDED unit by
+    # patch_tc_steadfast_clang_v1.py.
+    "DUALER_STEADHIT.WAV":  [("Attack/Wind.WAV", 0.05, 0.00, 0.7, 0.4, 1.3, 0.4)],
+    # Steadfast v5 cue 2 (2026-10-17, user: "repeat the shield clang for each shield/unit"): the cast's clang layers
+    # (stone footfall + low crunch + deep 73 Hz bronze ring + slowed parry clank), 0.74 s lead = the shield's
+    # touch-down after the landing; ring 1.6 s (cast 2.2) and ~-8 dB RMS under the driven cast clang so 5-7 stacked
+    # units don't clip (7-unit stack peak 1.03).
+    "DUALER_STEADCLANG.WAV": [("Moves/SFStep1.WAV", 0.65, 0.74, None, 0.3, 0.5),
+                             ("Attack/A_Force1.WAV", 0.39, 0.74, None, 0.3, 0.55),
+                             ("synth:bronzering:73:1.6", 0.4875, 0.75, None, 0.8, 1.0, 0.0, 0.0, 1.6),
+                             ("Attack/Parry.WAV", 0.325, 0.75, 0.7, 0.5, 0.5)],
+---- end ----
+2b. FADE_OUT dict: add   "DUALER_STEADCLANG.WAV": 0.5,     (no DRIVE entry; DRIVE "DUALER_STEADHIT.WAV": 1.0 stays;
+    the cast "DUALER_STEADFAST.WAV" entry / DRIVE 2.4 / FADE_OUT 0.9 are NOT touched)
+
+== 3. patch_dual_sphere_spells_v1.py - entry 218: replace the sfx line with ==
+---- code ----
+         sfx=["SFX\\ZSP\\DUALER_STEADFAST.WAV", ["SFX\\ZSP\\DUALER_STEADHIT.WAV"], ["SFX\\ZSP\\DUALER_STEADCLANG.WAV"]]),   # 0 = cast; 1 = REQUIRED per landing hex (air rush); 2 = the clang, played per SHIELDED unit by patch_tc_steadfast_clang_v1.py (a LIST so spellgfx gives it ID 2)
+---- end ----
+(spellgfx.snd_build checked: 160 B, snd_parse round-trips, entry IDs 0/1/2.)
+
+== 4. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply        (SpellIcn 218 v5)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (DUALER_STEADHIT v5 + NEW DUALER_STEADCLANG.WAV)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 218: 3rd sound entry, ID 2)  <- BEFORE step 5
+  py -3.10 patch_tc_steadfast_clang_v1.py              (dry run: "land site chain(0x448c10) | prev 0x448c10 | zone zero (183 B) | relocs none")
+  py -3.10 patch_tc_steadfast_clang_v1.py --apply      (backup backup\AoWTCPCK.dll.bak_steadclang)
+  VEH startup check.
+  ⚠ Ship: Sfx\Zsp\DUALER_STEADCLANG.WAV is a NEW file -> build_release_zip.py --add.
+
+== 5. Engine notes ==
+  * patch_tc_steadfast_clang_v1.py (AoWTCPCK zone 0x44A000-0x44A0B7, verified zero + reloc-free): chains the land
+    site 0x40C609 IN FRONT of Steadfast's land cave (0x448C10); same filter as that cave (218, kind 0x34, target alive,
+    caster's side, not a machine) -> [map+0x129] sound flag -> TSFXLibrary.Play(GetSpell(218)[+0x28], 2) -> jmp prev.
+    Empty / enemy / machine hexes: only cue 1's faint air rush (unchanged from v3).
+  * Scratch-tested on a copy of the live AoWTCPCK.dll: dry run, apply, re-run "already applied", revert
+    byte-identical to the pre-apply copy; disassembly checked (pushad/popad, PIC call/pop delta, jmp 0x448C10).
+  * LIFO: while applied, patch_tc_steadfast_fx_v1.py / the Sanctify-field / Gravity Well field scripts see the land
+    site as taken -> revert this first, re-run them, re-apply this.  (patch_tc_steadfast_fx_v1.py already refuses to
+    run today because Mend Walls v3/v4 chained its nf/show sites.)
+  * Not verified in game: the clang timing vs the shield touch-down (0.74 s lead, from the driver's T_LAND) and the
+    level when several shields land together.

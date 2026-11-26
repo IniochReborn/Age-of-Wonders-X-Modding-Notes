@@ -1,0 +1,70 @@
+PYROCLASM (227) v2 - lava under units, wasteland revert, snow melt, underground lava, eruption bursts, lava rivers
+(2026-10-17, fork; NOTHING applied live, no shared builder edited).
+Engine: patch scripts\patch_pyroclasm_v1.py upgraded IN PLACE to v2 (same zone 0x5587B800..0x5587D800, 5849 of 8192 B;
+same sites; table magic PYROCLv1 accepted).  Full design in the script's V2 docstring section.  Scratch work, the v1 script
+copy, the generator and the emulator: C:\Users\<user>\.claude\jobs\47241cad\tmp\pyro2\ (patch_pyroclasm_v1.v1.py, gen_v2.py,
+new_blocks.asm, emu2.py, seeds.txt).
+patch_dual_sphere_spells_v1.py is CRLF -> detect the newline before inserting.
+
+== 1. patch_dual_sphere_spells_v1.py, entry 227 - replace the desc line and the comment of the donor line ==
+---- code ----
+         donor="TAirMastery", pfs_donor=70, tc_type=None, icon=227,          # patch_pyroclasm_v1.py v2: marker 227 chained in front of Tectonic's Air Mastery caves; NewTurn: volcanoes / lava / UG lava; revert when nobody has it
+---- end ----
+---- code ----
+         desc="The earth's fire wakes: each turn medium and large mountains slowly become volcanoes, each spilling lava as it wakes and every turn after, and every volcano already on the map erupts when the spell is first cast. Lava creeps on in winding rivers, burns through forests, melts the snow beside it into steppe and engulfs any army that cannot stand in fire. Below ground, the lava of the caverns and depths spreads through the dirt passages. When the spell ends the fire slowly dies: lava cools into wasteland, the volcanoes fall dormant as barren mountains and the lava below ground cools back into open dirt passages.",
+---- end ----
+
+== 2. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 patch_dual_sphere_spells_v1.py --apply       (description only)
+  py -3.10 patch_pyroclasm_v1.py                        (dry run: "zone ours(old) ... (in-place upgrade v1 -> v2)", ~5225 bytes change)
+  py -3.10 patch_pyroclasm_v1.py --apply                (backup <game>\backup\AoWEPACK.dll.bak_pyroclasm2 = the v1 state)
+  VEH startup check.
+  No builder / art / sfx change.  Revert: patch_pyroclasm_v1.py --revert (from v1 or v2: the pre-Pyroclasm bytes).
+
+== 3. Chain / LIFO (unchanged from v1) ==
+  Pyroclasm sits in FRONT of Tectonic on the six Air Mastery sites (CE/MM/NT/AC/DE/CHK) and on the TFrozenWaterHS.Show
+  glow site.  While it is applied, patch_tectonic_v1.py / patch_overgrowth_v1.py / patch_drought_glow_v1.py see those
+  sites as OTHER and abort -> revert Pyroclasm first, re-run them, re-apply Pyroclasm.  The shake script is independent.
+
+== 4. Rules / rates (constants at the top of patch_pyroclasm_v1.py) ==
+  Lava under units: allowed.  Every terrain change of ours passes an unplaced TFrozenWaterHS as ChangeTerrain's
+    SOURCE -> TArmyHS.CanChangeTerrain no longer vetoes it (ClassID 0x2016C exemption) and TArmyHS.TerrainChanged ->
+    TArmy.ValidateTerrain(Ex) kills every unit that cannot stand on lava with the vanilla event (the same path as a
+    Fire-Halo unit losing the halo on lava / an army drowning when frozen water melts).  Fire-immune units survive.
+  Snow melt: surface SNOW (bare / vegetation) next to OUR lava -> steppe, at creation and every caster turn.  PERMANENT
+    (not reverted).  Snow forest, hills, roads, structures and other spells' hexes are not melted.
+  Bursts: first cast -> every map volcano 1..CAST_MAX (3) lava once (marker 0xE on its anchor; re-armed if the spell
+    ends and is cast again); a fresh conversion -> 1..CONV_MAX (2).  Bursts are outside the per-turn budget.
+  Spread: never-spawned lava 1 in 2, spawned lava 1 in SPAWNED_DIV (10) per turn (marker +0xC bit 1).  Volcano
+    eruptions stay 1 in 2.  Budgets: surface area/300 + 2 new lava per turn (44x34 -> 6, 96x96 -> 32), each
+    underground level area/400 + 1 (44x34 -> 4, 96x96 -> 24).
+  Underground / depths: every lava hex (map or ours) 1 in 2 (10% once it spawned; map lava gets a code-9 marker the
+    first time) -> one random direction onto DIRT only (earth / rock / cave water / cave ice never); armies allowed.
+  Revert (no player has an active Pyroclasm; each player's own markers on his turn): countdown 2..5 turns per hex,
+    then surface lava -> WASTELAND, underground lava -> its original terrain (dirt), our volcano -> the wasteland
+    MOUNTAIN of the same size (same footprint, same anchor).  Map-volcano (0xE) and map-lava (9) markers are just
+    dropped.  A re-cast during the revert clears all countdowns (spreading resumes).
+
+== 5. Tests (scratch copies, tmp\pyro2\) ==
+  Script: live copy -> dry run "(in-place upgrade v1 -> v2)" -> --apply -> rerun "already applied (v2)";
+    v2 --revert == the v1 script's own --revert (md5 30ddb0f2...); a fresh v2 apply on that == the upgrade (27a97822...);
+    v2 --revert straight from the live v1 state == the same reverted file.
+  Emulator emu2.py (unicorn on the real patched DLL, the real Release.hss catalogue, 3 levels, map volcanoes, armies,
+    roads/bridges/structures, foreign markers, a use-after-free detector for markers): 30-40 caster turns, the
+    other-player-active gate, 2 revert turns, a RE-CAST (2 shift turns: countdowns cleared), then the full revert to
+    ZERO markers; per-turn checks: lava only on valid terrain next to lava / a volcano, new lava carries a NEW marker,
+    armies on new lava die (and only there), melts only next to our lava, budgets (+bursts), conversion cap, no open
+    region ever split on any level, marker invariants, revert targets (wasteland / dirt / wasteland mountain of the
+    same size at the same anchor), map volcanoes never converted.  Seeds 1-8: ALL OK (seed 4 after an emulator-setup
+    fix: a seeded map volcano had covered a foreign marker); per seed 8-16 armies burnt, 26-37 conversions, ~400 lava
+    hexes reverted.
+  Also fixed (latent since v1): the post-conversion check used t_volcof(anchor), which also finds a NEIGHBOUR volcano
+    whose art overlaps the hex -> v2 checks the mountain ANCHORED there (t_anch); the revert picks its volcano that way.
+
+== 6. Open (not seen in game) ==
+  * ValidateTerrainEx executes its kill TE inside TMapField.TerrainChanged's child loop (the army may be destroyed while
+    the field iterates its children) - the same situation as vanilla Freeze Water melting under an army; MP sync of the
+    kill is assumed identical because the whole engine runs inside the synced new-turn broadcast.
+  * Wasteland mountains replacing volcanoes stand on whatever ground was under the volcano (CanPlace ignores terrain).
+  * Revert cost: every player's new turn walks all fields of all levels while no Pyroclasm is active (as Tectonic v3).
+  * A map volcano's 0xE marker glows (it uses our glow); harmless.

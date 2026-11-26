@@ -1,0 +1,116 @@
+WALL OF FLAMES (226) v2 - cast 10/2 fire on the ring, empty centre, lingering 10/1 fire on ANY unit, strategic
+FIRESM flames, icon polish (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----).  Line endings: the pipeline + sfx builders are
+CRLF, fx + icons LF - detect per file; ast.parse each edited builder afterwards.
+
+ROOT CAUSE of "the lingering flames don't do anything" (from the code; not observed live):
+  * The burn's only damage path is the unit HS breath-hit case (msg 0x31013 @0x421177), which FIRST calls
+    TAoWHSMap.Random([[0x46E8D4]], 0xFFFFFF) (@0x42118C).  Random RAISES unless TAoWHSMap.GetSynchronised holds
+    ([map+0x234] != 0 / [[map+0x23C]+4]+0x48 / [map+0x3C] & 2 - the Rot Away v2 trap) -> outside a running TE the
+    hit threw before any damage existed.  v1 also burned ENEMIES only, did nothing at the cast (strikes ATK 0) and
+    burned with ATK 4 (mostly misses).
+  * v2 brackets every burn with SynchroniseBegin/End inline (inc / dec [[0x46E8D4]+0x234], the body of the exported
+    TAoWHSMap.SynchroniseBegin 0x557755F8) -> the synced map seed, never the throwing path; MP-identical.
+  * To confirm live: diagnostic counters in AoWEPACK .idata page slack DIAG_EP 0x5590B400..0x5590B414 (zero at
+    load; Smokescreen's clone ends 0x5590B350) - run  py -3.10 wof_probe.py  while testing.
+
+== 1. patch_dual_sphere_spells_v1.py, entry 226 - replace the pokes line, the desc line, and the gfx dict's slot-2
+       line with these lines (slot 3 is added; the dict's closing `},` moves to the slot-3 line) ==
+---- code ----
+         pokes=[(0x34, 1, 10), (0x35, 1, 2), (0x36, 2, 0x01), (0x39, 1, 0x0C), (0x3B, 1, 3)],   # v2 10/17: the 6 ring strikes = ATK 10 / DMG 2 / Fire (centre gets none: STRIKES 6 + the hn ring remap); range 12; own + enemy + empty hexes; lingering burn = ATK 10 / DMG 1 fire (engine)
+---- end ----
+---- code ----
+         desc="A ring of fire erupts around the target hex: every unit on the six surrounding hexes is burned (attack 10, damage 2, fire), and the flames linger for 3 turns, burning any unit that moves into them or begins its turn standing in them (attack 10, damage 1, fire).  The centre hex is left untouched.",
+---- end ----
+---- code ----
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5750, 5768)), -51, -40, f20=2, f18=1),   # per-hex ignition burst (Sanctify's per-hex canvas / anchor)
+              3: G.seq_entry("EFFECTS\\FIRESM.ILB", list(range(12)), -56, -67, f18=2)},   # v2: the LINGERING flame = the strategic 1-hex fire object (vanilla EFFECTS\FIRESM.ILB 0-11, 112x78, flame base (56,71) on the hex centre + 4; 3 ticks/frame, looped by the clone's Show)
+---- end ----
+
+== 2. patch_rotaway_v1.py - STRIKES: change   226: 7   to   226: 6   (6 strikes = the ring once; the hn remap in
+       patch_tc_walloflames_v1.py v2 sends them to HN 1..6, never HN 0 = the target hex) ==
+---- code ----
+STRIKES = {333: 7, 335: 7, 366: 7, 365: 1, 309: 7, 208: 7, 218: 7, 226: 6}
+---- end ----
+  (keep the line's trailing comment)
+
+== 3. build_dual_sphere_icons_v1.py - add these two functions right after glyph_walloflames (which stays), and in
+       GLYPHS change   "walloflames": glyph_walloflames   to   "walloflames": glyph_walloflames2 ==
+---- code ----
+def _smooth_tongue(dr, cx, base_y, h, w, lean=0.0):
+    """Wall of Flames v2 flame tongue: a round belly and ONE clean taper to a pointed, slightly swaying tip (no wavy
+    edges, no side licks); the trailing side a touch fuller."""
+    def half(sign):
+        pts = []
+        for i in range(25):
+            t = i / 24.0
+            prof = math.sin(math.pi * min(1.0, 0.30 + t * 0.70)) ** 0.7 * (1 - t) ** 0.9
+            ww = w * 0.55 * prof * (1.10 if sign * lean < 0 else 0.92)
+            sway = 0.10 * h * math.sin(math.pi * t) * (1 if lean >= 0 else -1) * -0.6
+            pts.append((cx + sign * ww + lean * h * t ** 2.2 + sway, base_y - h * t))
+        return pts
+    l, r = half(-1), half(+1)
+    dr.polygon(l + r[::-1], fill=255)
+
+
+def glyph_walloflames2():
+    """Wall of Flames v2 (user 10/17: 'pretty good, just polish up the fire a bit'): the same ring composition (tall
+    tongues at the back, the burning ground band, short tongues in front, all dark-rimmed) with every tongue redrawn
+    as a clean single-taper flame leaning outward from the centre with a slight sway."""
+    from PIL import ImageFilter
+    im = canvas()
+    cx, cy, rx, ry = 20.0, 24.5, 16.0, 6.6
+    def tongue(a, h, w, rim=True):
+        c = math.cos(math.radians(a)); s = math.sin(math.radians(a))
+        x = cx + rx * c; y = cy + ry * s
+        tmp = Image.new("L", im.size, 0); td = ImageDraw.Draw(tmp)
+        _smooth_tongue(td, x * S, (y + 0.6) * S, h * S, w * S, lean=0.16 * c)
+        if rim: im.paste(0, mask=tmp.filter(ImageFilter.MaxFilter(int(1.0 * S) | 1)))
+        im.paste(255, mask=tmp)
+    for a, h in ((180, 11.0), (0, 11.0), (210, 13.5), (330, 13.5), (240, 15.5), (300, 15.5), (270, 17.0)):
+        tongue(a, h, 6.6, rim=a != 180 and a != 0)
+    band = Image.new("L", im.size, 0); bd = ImageDraw.Draw(band)
+    bd.ellipse([(cx - rx) * S, (cy - ry) * S, (cx + rx) * S, (cy + ry) * S], fill=255)
+    bd.ellipse([(cx - rx + 2.8) * S, (cy - ry + 1.8) * S, (cx + rx - 2.8) * S, (cy + ry - 1.8) * S], fill=0)
+    im.paste(0, mask=band.filter(ImageFilter.MaxFilter(int(0.8 * S) | 1))); im.paste(255, mask=band)
+    ImageDraw.Draw(im).ellipse([(cx - rx + 3.6) * S, (cy - ry + 2.4) * S, (cx + rx - 3.6) * S, (cy + ry - 2.4) * S], fill=0)
+    for a, h in ((150, 9.0), (30, 9.0), (115, 8.2), (65, 8.2), (90, 7.6)):
+        tongue(a, h, 6.0)
+    return im
+---- end ----
+  Preview: C:\Users\<user>\.claude\jobs\47241cad\tmp\wof2\icon_old_vs_new.png (left = live v1, right = v2; 4x, 2x, 1x).
+
+== 4. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply          (SpellIcn 226 v2)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply         (Spells.pfs 226: pokes 10/2/Fire, desc, gfx slot 3 = FIRESM)
+  py -3.10 patch_crosswind_v1.py --revert ; py -3.10 patch_rotaway_v1.py --apply ; py -3.10 patch_crosswind_v1.py --apply
+                                                          (STRIKES[226] = 6; rotaway's own dry run aborts while Crosswind is on)
+  py -3.10 patch_tc_walloflames_v1.py                     (dry run: "land ours (prev 0x44a010) | hn chain (prev 0x43e9e0) | step ours |
+                                                           bc ours | zone ours(old) [WoF1]" -> in-place upgrade to v2)
+  py -3.10 patch_tc_walloflames_v1.py --apply             (backup backup\AoWTCPCK.dll.bak_walloflames2 = the v1 state)
+  VEH startup check.  Test: cast on a ring with units on it (cast hits 10/2), end turn with a unit on a flame, walk a
+  unit through a flame; run  py -3.10 wof_probe.py  meanwhile (counters must climb; "burns completed" must equal
+  turn-start + move-in burns).
+  ROTAWAY MUST GO BEFORE WALL OF FLAMES v2: v2 chains in front of rotaway's hn0 call (0x40E29B), after which rotaway's
+  own dry run sees that site as foreign.
+
+== 5. Chain / LIFO ==
+  * land 0x40C609: unchanged (Wall of Flames is the head, in front of Steadfast clang 0x44A010).
+  * hn 0x40E29B (NEW in v2): Wall of Flames -> rotaway hn0 0x43E9E0.  To re-run patch_rotaway_v1.py later (new STRIKES
+    entries): patch_tc_walloflames_v1.py --revert, (Crosswind --revert), rotaway --apply, (Crosswind --apply),
+    walloflames --apply.
+  * --revert (from v2 or v1) restores land -> 0x44A010, hn -> rotaway's call (v2 only), step / bc vanilla, zone zeroed;
+    byte-identical to the v1 script's own revert (tested).
+
+== 6. Behaviour notes ==
+  * Cast: 6 strikes on HN 1..6 (each ring hex once), vanilla hail damage ATK 10 / DMG 2 / Fire to whoever stands there
+    (side mask 3 = own units too, like v1's strikes); flames spawn on each ring hex (not on intact walls/gates).  The
+    target hex gets no strike, no burst, no landing sound, no damage, no flame.
+  * Lingering: ATK 10 / DMG 1 fire, ANY unit (both sides): at the start of its own side's turn while standing on a
+    flame, or when it moves onto a flame (once per flame per turn; Gust / Flash Flood pushes do not trigger it).
+    Lifetime unchanged: 3 of the caster's turn starts.
+  * Look: lingering flames draw the strategic EFFECTS\FIRESM.ILB loop (each flame out of phase); the ignition burst
+    at the cast is unchanged.  AI path danger = vanilla TCombatFire's (AI avoids the flames).  Fast combat: the
+    strikes deal their damage (hail class), no flames.
+  * Unverified in game: FIRESM's on-hex anchor (-56,-67 from the hex centre; its flame base is at canvas (56,71)) and
+    loop speed (f18 = 2 -> 3 ticks/frame); both are single numbers in the slot-3 line.

@@ -1,0 +1,90 @@
+CROSSWIND v2 VISUALS (spell 213) - integration snippets (2026-10-16, fork; nothing applied live)
+==========================================================================================
+Engine: patch_tc_crosswind_fx_v1.py (AoWTCPCK only; zone 0x443C00-0x444000, 511 B; BSS latch 0x46C6E0).
+  (1) High Prayer's per-unit visuals (kind-0x25 effect: rising slot-0 sparkles ticks 0..95 + the slot-1 'aura' at tick
+      100) are walked over objects whose side byte EQUALS the caster's - for 213 both side tests (0x42DD41 sparkles,
+      0x42DED8 aura) are INVERTED -> they play on every ENEMY unit.  High Prayer 0x66 / Heavenly Chorus 308 / Bloodbath /
+      Frenzied Charge untouched (their tests run vanilla).
+  (2) Map-wide WASH at tick 0 (once per cast, latch): for every grid point of combat level 0 (rows y = 1,4,7..; columns
+      x = 1,5,9.. shifted +2 on alternate grid rows; spacing 4 hexes x 3 rows ~ 128 x 96 px) two kind-0x26 drivers at the
+      hex centre: a drifting Air-Mastery cloud (marker 2 = slot 2 / marker 4 = slot 4, alternating) + a stream of white
+      glowing motes (marker 3 = slot 3).  Slot pick caves chained in front of the oil-gush/Ashes caves at NewFrame
+      0x42A5E9 (prev 0x43B700) and Show 0x430059 (prev 0x43B740): 213 + marker 2..4 -> slot = marker.  Visual only.
+Ids: DualDF 3300-3389 (next free 3390).
+
+---- 1. build_dual_sphere_fx_v1.py: functions (before def build(); they use ilbcodec / MAGIC / raw_pixels / np / math /
+        random / Image, all already in the builder) ----
+def xwind_cloud(src=160, n=30):
+    """Crosswind (213) map-wide wash, slots 2 / 4 (2026-10-16, user: like the level-4 globals - Air Mastery's clouds
+    washing across the map): ONE of Air Mastery's own cloud images (Magic.ILB 160 / 162, 201x118 streaky clouds,
+    colour-keyed) drifting left -> right across a 300x160 canvas (hex centre at (150, 80), entry -150/-80), fading
+    in over the first quarter and out over the last third.  Additive 770 (= GFXE Intensity, like Air Mastery's own
+    770/30), stored on black.  One driver per grid point of the battlefield (patch_tc_crosswind_fx_v1.py), so the whole
+    field fills with clouds drifting the same way = a wash."""
+    lib = ilbcodec.read(MAGIC); im, r = raw_pixels(lib, src)
+    cl = np.asarray(im).astype(np.float32); a = (cl[..., 3:4] > 0).astype(np.float32); rgb = cl[..., :3] * a
+    H_, W_ = rgb.shape[:2]; W, H = 300, 160; out = []
+    for i in range(n):
+        t = i / (n - 1.0)
+        lvl = min(1.0, t / 0.25) * min(1.0, (1 - t) / 0.33)
+        x0 = int(round(5 + 90 * t)); y0 = int(round((H - H_) / 2 + 6 * math.sin(t * math.pi)))
+        acc = np.zeros((H, W, 3), np.float32)
+        xs0, ys0 = max(0, x0), max(0, y0); xs1, ys1 = min(W, x0 + W_), min(H, y0 + H_)
+        acc[ys0:ys1, xs0:xs1] = rgb[ys0 - y0:ys1 - y0, xs0 - x0:xs1 - x0] * lvl
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+
+def xwind_motes(n=30):
+    """Crosswind (213) map-wide wash, slot 3 (2026-10-16, user: white glowing particles like Winds of Fury washing across
+    the map): 18 white glowing motes (a bright core in a soft pale-blue halo, each with a short fading trail of 4 ghost
+    dots) blown left -> right across a 300x160 canvas (entry -150/-80) with a gentle wave, each fading in and out on
+    its own phase.  Additive 770 on black.  Deterministic (seeded)."""
+    W, H = 300, 160; rnd = random.Random(2130); yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    motes = [(rnd.uniform(-60, 120), rnd.uniform(15, H - 15), rnd.uniform(150, 230), rnd.uniform(0, 6.28),
+              rnd.uniform(0.0, 0.35), rnd.uniform(0.75, 1.25)) for _ in range(18)]
+    for i in range(n):
+        t = i / (n - 1.0); acc = np.zeros((H, W), np.float32)
+        for x0, y0, dist, ph, t0, sz in motes:
+            u = (t - t0) / 0.65
+            if not 0 <= u <= 1: continue
+            lvl = math.sin(math.pi * u) ** 0.7
+            for k in range(12):                                     # the mote + an 11-step fading streak
+                uk = max(0.0, u - k * 0.012)
+                x = x0 + dist * uk; y = y0 + 7 * math.sin(ph + uk * 5.0)
+                rr = (xx - x) ** 2 + (yy - y) ** 2
+                g = lvl * (1.0 - k / 12.0) ** 1.8
+                acc += g * (0.8 * np.exp(-rr / (2.0 * sz)) + 0.25 * np.exp(-rr / (14.0 * sz)))
+        acc = np.clip(acc, 0, 1.4)
+        rgb = np.dstack([acc * 225, acc * 235, acc * 255])
+        out.append(Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+  group-table rows (e.g. after Crosswind's 3103 row):
+              (3300, xwind_cloud(160), "AIxwcla%02d.BMP", 770, 50, 0x0000),   # Crosswind (213) slot 2: Air Mastery cloud A drifting (300x160, map-wide wash)
+              (3330, xwind_motes(), "AIxwmot%02d.BMP", 770, 100, 0x0000),     # Crosswind (213) slot 3: white glowing motes streaming (300x160)
+              (3360, xwind_cloud(162), "AIxwclb%02d.BMP", 770, 50, 0x0000),   # Crosswind (213) slot 4: Air Mastery cloud B drifting (300x160)
+
+---- 2. patch_dual_sphere_spells_v1.py: 213's gfx dict - ADD slots 2, 3, 4 (keep 0 and 1) ----
+              2: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(3300, 3330)), -150, -80, f20=3, f18=1),   # wash: cloud A (driver marker 2)
+              3: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(3330, 3360)), -150, -80, f20=2, f18=1),   # wash: white motes (marker 3)
+              4: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(3360, 3390)), -150, -80, f20=3, f18=1)},  # wash: cloud B (marker 4)
+
+---- APPLY ORDER (game + editor closed) ----
+  a. fx builder --apply (DualDF 3300-3389), pipeline --apply (213 slots 2-4 in Spells.pfs)
+  b. patch_tc_crosswind_fx_v1.py --apply   (backup .bak_xwindfx)
+  c. VEH startup check
+  REVERT: patch_tc_crosswind_fx_v1.py --revert (byte-identical, scratch-verified).
+
+---- CHAIN CONSEQUENCES ----
+  * NF 0x42A5E9 / Show 0x430059 now point at this zone first (-> oil gush 0x43B700/0x43B740 -> Ashes ...).  The oil
+    gush script (patch_tc_oilgush_v1.py) and Ashes will see their nf/show sites as foreign while this is applied ->
+    revert this patch first before touching them.
+  * S1/S2 were vanilla; no other script owns them.
+
+---- IN-GAME TESTS ----
+  1. Cast Crosswind: clouds + white streaming motes wash over the whole battlefield left -> right (~4 s), fading out.
+  2. The rising sparkles and the gust-dome aura now play on the ENEMY units, not on yours.
+  3. High Prayer / Heavenly Chorus / Frenzied Charge still play on the caster's own units.
+  4. Oil Spring's gush, Ashes, Call of the Dead spiral still look right.
+  5. Large battlefields: frame rate during the wash (2 drivers per grid point; reduce by raising XSTEP/YSTEP).

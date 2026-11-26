@@ -1,0 +1,176 @@
+TECTONIC SHIFT (219) PRESENTATION v3 - shake only on the REAL cast, hover -> fissure-split particles, gritty earthquake sfx
+(2026-10-17, fork; NOTHING applied live, no shared builder edited).  Insert ONLY the code below; ast.parse each edited builder.
+
+WHY IT SHOOK EARLY: TAirMastery's VMT slot +0xA0 (CreateEnchantment, v1's trigger) is called by
+TUnitSpellCaster.SetSelection (0x5577A43C) = when the spell is SELECTED / queued.  The real cast is TAirMastery.ExecuteTE
+-> TGlobalEnchantmentSpell.ExecuteTE -> TGlobalEnchantment.Cast (VMT+0x70: Activate + "has been cast") and only then the
+map-wide TAnimation + cast sound.  patch_tectonic_shake_v1.py v2 drops the v1 CE-slot/NT hooks (restored exactly) and
+requests the shake from 219's own draw callback at the moment the fissure splits - that callback only exists after a
+real cast (multi-turn casts: on the turn they complete).
+
+ALSO FOUND: TAirMastery.ExecuteTE plays GetSpell(0x3C) = AIR MASTERY's sound for every Air clone (0x557F06B4
+`mov edx,0x3C`; Water Mastery plays its own [spell+0x28]) -> DUALER_TECTONIC.WAV never played; v2 redirects 219 only.
+(Overgrowth 383 / World Healer 327 / Ice Age 399 have the same bug - their DUAL*.WAVs never play; not touched here.)
+
+---- 1. build_dual_sphere_fx_v1.py: functions before `def build():` ----
+def tectonic_motes(n=3):
+    """Tectonic Shift (219) v3 slots 0-2 (bright) + 11-13 (dim twins) (2026-10-17, user: particles hover map-wide, then split
+    diagonally and drift apart like a fissure opening): six 96x64 additive clusters of 5-7 hovering green earth-magic
+    motes (white-green core, green halo, a fleck of grit), drawn by 219's own map-wide callback (patch_tectonic_shake_v1.py
+    v2), which bobs them, twinkles them (bright <-> dim twin) and pushes each half away from the opening fissure."""
+    W, H = 96, 64; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); bright = []
+    for v in range(n):
+        rnd = random.Random(21930 + v); acc = np.zeros((H, W, 3), np.float32)
+        for k in range(rnd.randint(5, 7)):
+            x, y = rnd.uniform(10, W - 10), rnd.uniform(9, H - 9); r = rnd.choice((1.2, 1.5, 1.9, 2.4))
+            d2 = (xx - x) ** 2 + (yy - y) ** 2
+            core = np.exp(-d2 / (2 * (0.55 * r) ** 2)); halo = np.exp(-d2 / (2 * (2.3 * r) ** 2)) * 0.42
+            for c, (cv, hv) in enumerate(((215, 40), (255, 210), (200, 70))): acc[..., c] += core * cv + halo * hv
+        for k in range(rnd.randint(2, 4)):                                       # specks of grit lifted with them
+            x, y = rnd.uniform(6, W - 6), rnd.uniform(6, H - 6)
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 0.5) * 0.7
+            for c, cv in enumerate((120, 200, 110)): acc[..., c] += g * cv
+        bright.append(np.clip(acc, 0, 255))
+    out = [Image.fromarray(a.astype(np.uint8), "RGB").convert("RGBA") for a in bright]
+    out += [Image.fromarray((a * 0.42).astype(np.uint8), "RGB").convert("RGBA") for a in bright]   # dim twins (twinkle / fade)
+    return out
+
+
+def _crack_pts(v, W, H, jit):
+    """A jagged crack SEGMENT whose ends sit exactly at the canvas centre -+(18, -9) - the callback lays segments
+    every (36, -18) px along the diagonal, so neighbours join end to end."""
+    rnd = random.Random(21940 + v); cx, cy = W / 2.0, H / 2.0
+    p0, p1 = (cx - 18, cy + 9), (cx + 18, cy - 9); nx, ny = 9 / 20.12, 18 / 20.12   # unit normal of (36, -18)
+    pts = [p0]
+    for f in (0.22, 0.45, 0.63, 0.82):
+        j = rnd.uniform(-jit, jit); pts.append((p0[0] + 36 * f + nx * j, p0[1] - 18 * f + ny * j))
+    pts.append(p1)
+    return pts, rnd
+
+
+def tectonic_crack(n=3):
+    """219 v3 slots 4-6: the thin fissure line (64x48, additive): a bright 1-px green-white jagged core with a tight green
+    glow; laid along the screen diagonal it grows out from the centre, then (after the split) its two copies are the
+    fissure's EDGES moving apart with the two halves."""
+    W, H = 64, 48; out = []
+    for v in range(n):
+        pts, rnd = _crack_pts(v, W, H, 2.6)
+        m = Image.new("L", (W * 4, H * 4), 0); ImageDraw.Draw(m).line([(x * 4, y * 4) for x, y in pts], fill=255, width=6)
+        m = m.resize((W, H), Image.LANCZOS)
+        a = np.asarray(m, np.float32) / 255.0
+        g1 = np.asarray(m.filter(ImageFilter.GaussianBlur(1.6)), np.float32) / 255.0
+        g2 = np.asarray(m.filter(ImageFilter.GaussianBlur(4.0)), np.float32) / 255.0
+        acc = np.zeros((H, W, 3), np.float32)
+        for c, (cv, v1, v2) in enumerate(((150, 40, 20), (255, 230, 150), (150, 70, 40))):
+            acc[..., c] = a * cv + g1 * v1 * 1.1 + g2 * v2 * 0.9
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"); dr = ImageDraw.Draw(im)
+        for k in range(2):                                                       # a spark of grit on the line
+            q = pts[rnd.randrange(1, len(pts) - 1)]; dr.point((q[0] + rnd.uniform(-2, 2), q[1] - rnd.uniform(1, 4)), fill=(170, 255, 170, 255))
+        out.append(im)
+    return out + [_tect_dim(im) for im in out]                                         # + dim twins (slots 14-16: fading out)
+
+
+def _tect_dim(im, k=0.45):
+    return Image.fromarray((np.asarray(im.convert("RGB"), np.float32) * k).astype(np.uint8), "RGB").convert("RGBA")
+
+
+def tectonic_gap(n=3):
+    """219 v3 slots 7-9: the OPEN fissure (80x56, additive): a broad green glow welling up along the crack line with a
+    brighter seam and a few motes rising out of it - drawn on the line between the parting edges."""
+    W, H = 80, 56; out = []
+    for v in range(n):
+        pts, rnd = _crack_pts(v + 7, W, H, 3.2)
+        m = Image.new("L", (W * 4, H * 4), 0); ImageDraw.Draw(m).line([(x * 4, y * 4) for x, y in pts], fill=255, width=34)
+        m = m.resize((W, H), Image.LANCZOS)
+        g1 = np.asarray(m.filter(ImageFilter.GaussianBlur(3.0)), np.float32) / 255.0
+        g2 = np.asarray(m.filter(ImageFilter.GaussianBlur(8.5)), np.float32) / 255.0
+        s = Image.new("L", (W * 4, H * 4), 0); ImageDraw.Draw(s).line([(x * 4, y * 4) for x, y in pts], fill=255, width=6)
+        s = np.asarray(s.resize((W, H), Image.LANCZOS).filter(ImageFilter.GaussianBlur(0.6)), np.float32) / 255.0
+        acc = np.zeros((H, W, 3), np.float32)
+        for c, (sv, v1, v2) in enumerate(((190, 40, 18), (255, 200, 120), (190, 70, 40))):
+            acc[..., c] = s * sv + g1 * v1 + g2 * v2
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        for k in range(4):                                                       # motes welling up out of the gap
+            q = pts[rnd.randrange(1, len(pts) - 1)]; x, y = q[0] + rnd.uniform(-3, 3), q[1] - rnd.uniform(4, 11)
+            gg = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 1.6)
+            for c, cv in enumerate((190, 255, 190)): acc[..., c] += gg * cv * 0.8
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out + [_tect_dim(im) for im in out]                                         # + dim twins (slots 17-19: fading out)
+
+---- 1b. group rows (after the (4300, tectonic_dust(), ...) row; that row + function can stay, now unused) ----
+              (4600, tectonic_motes(), "ERtmot%02d.BMP", 770, 70, 0x0000),       # Tectonic Shift (219) v3 slots 0-2 + 11-13: hovering mote clusters (96x64; 3 bright + 3 dim twins)
+              (4606, tectonic_crack(), "ERtcrk%02d.BMP", 770, 90, 0x0000),       # 219 v3 slots 4-6 + 14-16: fissure line segments (64x48; 3 + 3 dim)
+              (4612, tectonic_gap(), "ERtgap%02d.BMP", 770, 85, 0x0000),         # 219 v3 slots 7-9 + 17-19: the open, glowing gap (80x56; 3 + 3 dim)
+
+---- 2. patch_dual_sphere_spells_v1.py, entry 219: replace the whole gfx dict (3 lines, slots 0-2 -> 4300-4302) with ----
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [4600], -48, -32, f20=0),                   # motes A
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [4601], -48, -32, f20=0),                   # motes B
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", [4602], -48, -32, f20=0),                   # motes C
+              4: G.seq_entry("EFFECTS\\DUALDF.ILB", [4606], -32, -24, f20=0),                   # fissure line A
+              5: G.seq_entry("EFFECTS\\DUALDF.ILB", [4607], -32, -24, f20=0),                   # fissure line B
+              6: G.seq_entry("EFFECTS\\DUALDF.ILB", [4608], -32, -24, f20=0),                   # fissure line C
+              7: G.seq_entry("EFFECTS\\DUALDF.ILB", [4612], -40, -28, f20=0),                   # open gap A
+              8: G.seq_entry("EFFECTS\\DUALDF.ILB", [4613], -40, -28, f20=0),                   # open gap B
+              9: G.seq_entry("EFFECTS\\DUALDF.ILB", [4614], -40, -28, f20=0),                   # open gap C
+              11: G.seq_entry("EFFECTS\\DUALDF.ILB", [4603], -48, -32, f20=0),                  # motes A dim
+              12: G.seq_entry("EFFECTS\\DUALDF.ILB", [4604], -48, -32, f20=0),                  # motes B dim
+              13: G.seq_entry("EFFECTS\\DUALDF.ILB", [4605], -48, -32, f20=0),                  # motes C dim
+              14: G.seq_entry("EFFECTS\\DUALDF.ILB", [4609], -32, -24, f20=0),                  # fissure line A dim
+              15: G.seq_entry("EFFECTS\\DUALDF.ILB", [4610], -32, -24, f20=0),                  # fissure line B dim
+              16: G.seq_entry("EFFECTS\\DUALDF.ILB", [4611], -32, -24, f20=0),                  # fissure line C dim
+              17: G.seq_entry("EFFECTS\\DUALDF.ILB", [4615], -40, -28, f20=0),                  # open gap A dim
+              18: G.seq_entry("EFFECTS\\DUALDF.ILB", [4616], -40, -28, f20=0),                  # open gap B dim
+              19: G.seq_entry("EFFECTS\\DUALDF.ILB", [4617], -40, -28, f20=0)},                 # open gap C dim
+
+  (slot 3 deliberately left free for the terrain fork's hex glow; 10 = icon, 20-22 = borders untouched.  Round-trip
+  checked through spellgfx seq_parse/seq_build on the live record 229: 23 slots.)
+
+---- 3. build_dual_sphere_sfx_v1.py: replace the "DUALER_TECTONIC.WAV" entry (and its v2 comment) with ----
+    # Tectonic Shift (219) v3 (2026-10-17, user: "more gritty, sound like an earthquake - similar to Tremors plus subtle
+    # magic"), timed to the v3 map animation (cue 0 now really plays at the cast - patch_tectonic_shake_v1.py v2 SND): the
+    # ground growls under the hovering motes (0-1.6 s); at the SPLIT (tick 56 = 1.62 s, when the screen shake starts)
+    # Tremors itself at natural pitch + a slowed double, a deep crack, a shockwave whump and tumbling stones as the
+    # fissure opens, an aftershock rumble; the magic stays subtle (a faint shimmer, one low ring).
+    "DUALER_TECTONIC.WAV":  [("Attack/Earth.WAV", 0.34, 0.00, 1.75, 0.5, 0.80, 0.9),                 # low growl building under the hover
+                             ("synth:subswell:28:44:1.7", 0.40, 0.00, None, 0.15),                    # tension rising to the split
+                             ("synth:shimmer:1.9", 0.12, 0.10, None, 0.6, 1.0, 0.5),                  # subtle magic over the hovering motes
+                             ("Attack/A_Force2.WAV", 0.85, 1.58, None, 0.4, 0.68),                    # the CRACK as the fissure opens
+                             ("Attack/Earth.WAV", 1.00, 1.60, 2.30, 0.9, 1.00),                       # Tremors itself (gritty, natural pitch)
+                             ("Attack/Earth.WAV", 0.55, 1.64, 2.30, 1.0, 0.78),                       #   a slowed double for weight
+                             ("Attack/Shockw.wav", 0.45, 1.60, 1.20, 0.6, 0.72),                      # shockwave whump
+                             ("xSFX/stones.wav", 0.65, 1.78, 2.00, 0.8, 0.95),                        # rocks and grit tumbling
+                             ("xSFX/stones.wav", 0.40, 2.35, 1.60, 0.8, 0.78),                        #   more, deeper
+                             ("synth:bell:98:2.2", 0.10, 1.62, None, 1.0),                            # one low magic ring under the split
+                             ("Attack/Earth.WAV", 0.40, 2.70, 1.40, 0.9, 0.70)],                       # aftershock rumble
+
+  and in the one-line dicts:  DRIVE  "DUALER_TECTONIC.WAV": 1.15 -> 1.6     FADE_OUT  "DUALER_TECTONIC.WAV": 0.6 -> 0.8
+  (scratch render 4.10 s: rms ~0.04-0.16 over the hover, 0.31-0.35 from the split at 1.6 s, fading out by 3.75 s =
+  the 140-tick animation; tmp	fx3\DUALER_TECTONIC_v3.WAV)
+
+---- 4. apply order (game + editor closed) ----
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF += 4600-4617)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply         (DUALER_TECTONIC.WAV v3)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 229: slots 0-2, 4-9, 11-19)
+  py -3.10 patch_tectonic_shake_v1.py                  (dry run: "zone v1 ... draw-callback entry free | cast sound free |
+                                                         v1 hooks live ... removed by the v2 upgrade"; 796 bytes change)
+  py -3.10 patch_tectonic_shake_v1.py --apply          (in-place upgrade; backup backup\AoWEPACK.dll.bak_tshake2 = the v1.1 state)
+  VEH startup check.  Revert: patch_tectonic_shake_v1.py --revert (exact, from v1 or v2; AoWx.exe part unchanged).
+  The pipeline must be applied with/before the shake v2: the v2 callback draws slots 4-9 / 11-19, which are EMPTY in
+  the current record (Show() just skips an empty slot - no crash, only the motes would be missing).
+
+---- 5. chain notes ----
+  * New sites: 0x557F050C (Air Mastery draw-callback prologue, 6 B) and 0x557F06B4 (cast sound, 5 B), both vanilla
+    before; no other script touches them.  patch_tectonic_v1.py (terrain) is independent (its sites are the CE body,
+    MM 0x557F061C, NT 0x5577D293, AC/DE/CHK slots) - checked: with v2 applied it still reports all sites "ours".
+  * The callback for every other spell (Air Mastery, Overgrowth, World Healer, Ice Age, Drought's drift) runs the
+    replayed vanilla prologue - emulated.
+
+TESTS (scratch copies in tmp	fx3\; live files untouched):
+  * script: dry run / v1.1 -> v2 upgrade / re-apply "already applied (v2)" / v2 revert byte-identical to the v1.1
+    script's own revert / fresh apply == upgrade / v1.1 revert through the v2 script exact.
+  * Unicorn (emu.py) on the REAL patched AoWEPACK: 4 screen sizes x 3 detail levels x ticks 0..141 (568 runs): every
+    Show(slot, x, y, time 0, target) call, the shake request (tick 56 only) and the Free (tick >= 140) equal the Python
+    mirror (sim.py) that rendered the previews; callee-saved regs + `ret 8` stack balance verified; hidden map
+    ([map+0x88] != 0) draws nothing.  Pass-through prologue for ids 0x3C / 383 / 391 and the sound redirect
+    (219 -> 219, others -> 0x3C) emulated.
+  * previews: tmp	fx3	ect_v3_sheet.png / cmp4.png / tect_v3.gif (whole 140-tick sequence over a mock map).

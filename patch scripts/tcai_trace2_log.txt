@@ -1,0 +1,67 @@
+attached pid 34700, 9 breakpoints, up to 8.3 min
+[18:58:43] S2 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x40 [-0x53]=0x40
+[18:58:43] S2 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x40 [-0x53]=0x40
+[18:58:43] S2 ADDED (usable flag 2)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:43] S2 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:43] S2 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:43] S2 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:43] S2 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:43] S2 ADDED (usable flag 2)     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:43] S3 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:43] S3 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:43] S3 ADDED (usable flag 1)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:43] S3 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:43] S3 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:43] S3 ADDED (usable flag 1)     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:43] S3 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:43] S3 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:46] S2 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x0
+[18:58:46] S2 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x0
+[18:58:46] S2 ADDED (usable flag 2)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:46] S2 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:46] S2 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:46] S2 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:46] S2 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:46] S2 ADDED (usable flag 2)     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:46] S3 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:46] S3 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:46] S3 ADDED (usable flag 1)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:46] S3 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:46] S3 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:46] S3 ADDED (usable flag 1)     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:46] S3 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:46] S3 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:49] S2 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x3e [-0x53]=0xee
+[18:58:49] S2 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x3e [-0x53]=0xee
+[18:58:49] S2 ADDED (usable flag 2)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:49] S2 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:49] S2 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:49] S2 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:49] S2 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:49] S2 ADDED (usable flag 2)     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:49] S3 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:49] S3 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:49] S3 ADDED (usable flag 1)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:49] S3 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:49] S3 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:49] S3 ADDED (usable flag 1)     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:49] S3 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:49] S3 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:51] S2 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x0
+[18:58:51] S2 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x0
+[18:58:51] S2 ADDED (usable flag 2)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:51] S2 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:51] S2 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:51] S2 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:51] S2 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:51] S2 ADDED (usable flag 2)     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:51] S3 known                     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:51] S3 cancast                   spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x2
+[18:58:51] S3 ADDED (usable flag 1)     spell   8 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:51] S3 known                     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:51] S3 cancast                   spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x3
+[18:58:51] S3 ADDED (usable flag 1)     spell  16 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:51] S3 known                     spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+[18:58:51] S3 cancast                   spell 228 ability 0x34 caster 'Tanaris' owner 0 cp 20  flags[-0x57]=0x0 [-0x53]=0x1
+hit counts: {'S2 known': 12, 'S2 cancast': 12, 'S2 ADDED (usable flag 2)': 8, 'S3 known': 12, 'S3 cancast': 12, 'S3 ADDED (usable flag 1)': 8, 'S4 known': 0, 'S4 cancast': 0, 'S4 ADDED (usable flag 1)': 0}
+trace done

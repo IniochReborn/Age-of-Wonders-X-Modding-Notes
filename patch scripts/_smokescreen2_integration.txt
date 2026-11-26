@@ -1,0 +1,156 @@
+SMOKESCREEN (225) v2 - Cloud-of-Ashes bank, displayed ATK debuff, fire in the sound (2026-10-17, fork; NOTHING applied live).
+Builders: build_dual_sphere_fx_v1.py = LF; build_dual_sphere_sfx_v1.py + patch_dual_sphere_spells_v1.py = CRLF -> detect the
+newline per file; insert ONLY the code blocks; ast.parse each edited builder.
+Engine scripts already upgraded IN PLACE (v1 copies: tmp\smoke2\patch_smokescreen_v1.v1.py / patch_tc_smokescreen_v1.v1.py).
+
+== 1. build_dual_sphere_fx_v1.py - add this block before `def build():` (the v1 smoke functions stay, unused) ==
+---- code ----
+# ---- Smokescreen (225) v2 art (2026-10-17, user: "gfx looks meh - I wanted a variant of the CLOUD OF ASHES smoke"):
+# built from the vanilla Cloud of Ashes image itself (Misc_Obj.ILB 40 'CloudofAshes.BMP', 195x155, drawMode 1026 =
+# MULTIPLY on white) and drawn the vanilla way (1026: white = no change, grey = darken).  Like vanilla, ONE cloud
+# covers the whole area: patch_tc_smokescreen_v1.py v2 draws slot 3 only from the CENTRE hex's smoke HS.
+ASH_ILB = os.path.join(GAME, "Images", "Misc_Obj.ILB")
+_ASH = None
+SMK2_BW, SMK2_BH, SMK2_BCX, SMK2_BCY, SMK2_BN = 272, 208, 136, 104, 48     # bank canvas / hex-centre point / frames
+SMK2_PW, SMK2_PH, SMK2_PCX, SMK2_PCY, SMK2_PN = 72, 72, 36, 52, 20         # burst canvas / hex-centre point / frames
+
+
+def _ash():
+    """(grain, envelope) from the vanilla Cloud of Ashes: grain = its darkness WITH the key-colour dither holes (the
+    vanilla ash speckle), mirrored 2x2 into a seamless tile normalised to mean 1; envelope = its darkness with the
+    holes filled (blur), 0..1 - the billowy outline."""
+    global _ASH
+    if _ASH is None:
+        lib = ilbcodec.read(open(ASH_ILB, "rb").read())
+        im, r = raw_pixels(lib, 40)
+        a = np.asarray(im).astype(np.float32)
+        dark = 1.0 - a[..., :3].mean(2) / 255.0
+        cov = (a[..., 3] > 0).astype(np.float32)
+        core = (dark * cov)[30:125, 35:160]
+        core = core / core.mean()
+        grain = np.vstack([np.hstack([core, core[:, ::-1]]), np.hstack([core[::-1, :], core[::-1, ::-1]])])
+        bl = lambda x, s: np.asarray(Image.fromarray(np.clip(x * 255, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(s))).astype(np.float32) / 255.0
+        env = bl(dark * cov, 3.0) / np.maximum(bl(cov, 3.0), 0.08) * bl(cov, 2.0)
+        _ASH = (grain, np.clip(env / env.max(), 0, 1))
+    return _ASH
+
+
+def _sample(tex, x, y):
+    """Bilinear, wrapping sample of tex at float coordinate arrays."""
+    H, W = tex.shape
+    x0 = np.floor(x).astype(int); y0 = np.floor(y).astype(int); fx = x - x0; fy = y - y0
+    x0 %= W; y0 %= H; x1 = (x0 + 1) % W; y1 = (y0 + 1) % H
+    return (tex[y0, x0] * (1 - fx) * (1 - fy) + tex[y0, x1] * fx * (1 - fy) + tex[y1, x0] * (1 - fx) * fy + tex[y1, x1] * fx * fy)
+
+
+def _smk2_rgb(dens):
+    """MULTIPLY image from a darkness density: m = exp(-dens), soot-grey tint (blue darkened a touch more than red)."""
+    m = np.exp(-np.maximum(dens, 0))
+    rgb = np.dstack([m ** 0.96, m, m ** 1.07]) * 255.0
+    return Image.fromarray(np.dstack([rgb, np.full(m.shape, 255.0)]).clip(0, 255).astype(np.uint8), "RGBA")
+
+
+def smoke_bank(n=SMK2_BN):
+    """Smokescreen (225) slot 3 v2: the smoke bank over all 19 hexes - the Cloud of Ashes, scaled from its 7-hex size to
+    the 2-ring area (x1.35), lighter than the vanilla ash (core multiply ~0.3, a smoke grey): its billowy outline
+    breathes on a slow closed loop (a gentle low-frequency warp) while the ash speckle drifts across it in WHOLE-pixel
+    steps (the grain moves as one sheet - no shimmering dither).  48 frames x 3 ticks (seamless, ~4.2 s); 1026
+    multiply, 272x208, the centre hex at (136, 104)."""
+    grain, env = _ash(); W, H, CX, CY = SMK2_BW, SMK2_BH, SMK2_BCX, SMK2_BCY
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    eh, ew = env.shape; sc = 1.35
+    out = []
+    for t in range(n):
+        a = 2 * math.pi * t / n
+        wx = 3.0 * np.sin(yy / 23.0 + a) + 2.0 * np.sin(xx / 31.0 - a)        # the outline breathes (closed loop)
+        wy = 2.5 * np.sin(xx / 27.0 + a + 1.1) + 1.5 * np.sin(yy / 19.0 - a)
+        ex = (xx - CX + wx) / sc + ew / 2.0; ey = (yy - CY + wy) / sc + eh / 2.0 + 4
+        inside = (ex >= 0) & (ex < ew - 1) & (ey >= 0) & (ey < eh - 1)
+        E = np.where(inside, _sample(env, np.clip(ex, 0, ew - 1.001), np.clip(ey, 0, eh - 1.001)), 0.0)
+        ox, oy = int(round(10 * math.cos(a))), int(round(7 * math.sin(a)))  # whole-pixel grain drift
+        G = _sample(grain, xx + 37 + ox, yy + 21 + oy)
+        out.append(_smk2_rgb(1.25 * E ** 1.2 * (0.35 + 0.65 * G)))
+    return out
+
+
+def smoke_burst2(n=SMK2_PN):
+    """Smokescreen (225) slot 1 v2: the cast on each hex (kind-0x26 effect at the hex centre, 20 frames x 2 ticks):
+    a dark puff of the same ash speckle belches up out of the ground, swells and rises a little, then thins into the
+    bank already lying over it.  1026 multiply, 72x72, hex centre (36, 52)."""
+    grain, env = _ash(); W, H, CX, CY = SMK2_PW, SMK2_PH, SMK2_PCX, SMK2_PCY
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    for i in range(n):
+        u = i / float(n - 1)
+        sig = 4 + 11 * (1 - (1 - u) ** 2.0)
+        lift = 18 * (1 - (1 - u) ** 1.6)
+        amp = min(1.0, u * 4.0) * (1.0 - max(0.0, (u - 0.35) / 0.65)) ** 1.3
+        g = np.exp(-((xx - CX) ** 2 + ((yy - (CY - lift)) / 0.8) ** 2) / (2 * sig ** 2))
+        G = _sample(grain, xx + 60, yy + 40 - i)                               # the speckle rising with the puff
+        out.append(_smk2_rgb(1.6 * amp * g * (0.35 + 0.65 * G)))
+    return out
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - REPLACE the two v1 rows (5650, smoke_burst(), ...) and (5670, smoke_field(), ...) with ==
+---- code ----
+              (5650, smoke_burst2(), "FRsmkb%02d.BMP", 1026, 100, KEY),           # Smokescreen (225) v2 slot 1: per-hex ash puff at the cast (72x72, 20 x 2 ticks, MULTIPLY like Cloud of Ashes)
+              (5670, smoke_bank(), "FRsmkk%02d.BMP", 1026, 100, KEY),             # Smokescreen (225) v2 slot 3: the whole-area Cloud-of-Ashes bank (272x208, 48 x 3 ticks, drawn by the centre hex only)
+---- end ----
+  (DualDF 5650-5669 burst, 5670-5717 bank; 5718-5749 now free)
+
+== 2. build_dual_sphere_sfx_v1.py - REPLACE the "DUALFR_SMOKESCREEN.WAV" entry AND its 3 comment lines above it with (DRIVE 1.4 / FADE_OUT 0.8 unchanged) ==
+---- code ----
+    # Smokescreen (225, Fire L2 2026-10-17) v2 (user: "not bad, but add fire and/or crackling/burning sound"): v1 kept -
+    # the smoke drawn in (vapour hiss REVERSED, slowed), a muffled slowed FireStrt whump as it ignites, billowing smoke
+    # (slowed vapour roll + gusting wind + sub swell) with embers crackling - plus a slowed burning ROAR under the bank
+    # (Fireloop, sliced past its attack), a low flame whoosh at the ignition and a second, denser crackle bed.
+    "DUALFR_SMOKESCREEN.WAV": [("Attack/Vapor.wav", 0.55, 0.00, 0.9, 0.15, -0.7, 0.3),
+                               ("Attack/FireStrt.WAV", 0.45, 0.28, 0.7, 0.45, 0.55, 0.02),
+                               ("synth:subswell:30:50:2.2", 0.45, 0.20, None, 0.9),
+                               ("Attack/Vapor.wav", 0.55, 0.32, 1.9, 1.1, 0.72, 0.12),
+                               ("synth:wind:2.4", 1.0, 0.25, None, 1.0),
+                               ("synth:crackle:16:2.2", 0.45, 0.35, None, 0.8),
+                               ("Attack/Fireloop.WAV", 1.0, 0.30, 2.3, 1.0, 0.78, 0.35, 0.4),
+                               ("Attack/FlameA.WAV", 0.6, 0.22, 0.6, 0.3, 0.7, 0.05),
+                               ("synth:crackle:30:2.4", 0.7, 0.45, None, 0.9)],
+---- end ----
+  (test renders tmp\smoke2\DUALFR_SMOKESCREEN_old.wav / _v2.wav / _fireonly.wav; 2.85 s)
+
+== 3. patch_dual_sphere_spells_v1.py, entry 225 - replace the desc line, the slot-1 line and the slot-3 line with ==
+---- code ----
+         desc="A thick bank of ash-grey smoke billows over the target hex and every hex within two of it for 3 turns. Units without True Seeing standing in the smoke fight half blind: melee and ranged attack -3 (never below 1).",
+---- end ----
+---- code ----
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5650, 5670)), -36, -52, f18=1),   # v2: per-hex ash puff at the cast (kind-0x26 at the hex centre = canvas (36, 52); 20 x 2 ticks)
+---- end ----
+---- code ----
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5670, 5718)), -120, -88, f18=2)},  # v2: the whole-area bank, drawn by the CENTRE hex smoke HS only (hex centre HXtoHP+16 = canvas (136, 104); 48 x 3 ticks)
+---- end ----
+
+== 4. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF 5650-5717 re-rendered; ~5.9 MB)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply          (DUALFR_SMOKESCREEN.WAV v2)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 225: desc + slots 1/3)
+  py -3.10 patch_smokescreen_v1.py                     (dry run: 'older build ... rewriting in place'; ra1/ra2 'chain' -> 0x5586b8b0, ga/ha 'free')
+  py -3.10 patch_smokescreen_v1.py --apply             (backup backup\AoWEPACK.dll.bak_smokescreen2 = the v1 state)
+  py -3.10 patch_tc_smokescreen_v1.py                  (dry run: 'older build of this patch detected')
+  py -3.10 patch_tc_smokescreen_v1.py --apply          (backup backup\AoWTCPCK.dll.bak_smokescreen2 = the v1 state)
+  VEH startup check.
+
+== 5. Chain / LIFO ==
+  * NEW: ra1/ra2 now sit IN FRONT of Crosswind's GetAttackRA caves (0x5586B8B0) -> while applied, patch_crosswind_v1.py
+    sees its ra sites as OTHER: revert Smokescreen (TC first, then AoWEPACK), re-run Crosswind, re-apply both.
+  * NEW: ga/ha = entry hooks on TUnit.GetAttack 0x557829EC / THero.GetAttack 0x55788360 (were vanilla).
+  * Revert order: patch_tc_smokescreen_v1.py --revert, then patch_smokescreen_v1.py --revert (both exact, = v1's revert).
+
+== 6. Behaviour notes / open ==
+  * Penalty: a FLAT -3 to melee AND ranged ATK (floor 1) for a unit that HOLDS 0xC6 (stands in smoke) and lacks True
+    Seeing; shown in the unit panel (TUnit/THero.GetAttack) and the ranged preview (GetAttackRA), and the strikes use
+    exactly those values.  v1's 'attacking INTO the smoke' penalty and its -2/-3 range tiers are gone (the panel
+    cannot show a target- or range-dependent value).  Stacks with Crosswind (-2 ranged): 7 -> 2.
+  * Visual: ONE bank per cast, drawn by the centre hex (vanilla Cloud of Ashes style).  Culled with its centre hex;
+    a re-cast overlapping an old bank adds its own bank; the centre flag is not streamed, so smoke restored from a
+    combat save keeps its gameplay but shows no bank.
+  * Tests (scratch, tmp\smoke2\): emu.py 36/36 (getters TUnit/THero: no smoke / smoke / True Seeing / floor 1,
+    callee-saved regs + stack; both GetAttackRA epilogues incl. Crosswind stacking, unplaced unit, null unit; m1/m2/rg
+    pass-throughs) at the preferred base AND rebased to 0xCB0000; both scripts: in-place upgrade, 'already applied',
+    revert == the v1 script's revert (md5), fresh apply == upgrade (md5).  Previews: bank_v2.png, vs_vanilla.png.

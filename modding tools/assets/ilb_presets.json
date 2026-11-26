@@ -1,0 +1,512 @@
+{
+  "_comment": "AoW1 ILB parameter presets, mined empirically from the retail game data. type/info/loadMode/drawMode/blendValue/clip_x are written verbatim into the ILB image record. drawMode low byte = showMode (0 opaque,1 transparent,2 blended); high byte = blendMode (0 bmUser,1 bmAlpha,2 bmBrighten,3 bmIntensity,4 bmShadow,5 bmLinearAlpha). null = field absent for this record type.",
+  "_source": "689 ILBs / 33k images in the AoWx install",
+  "presets": {
+    "unit_sprite": {
+      "label": "Unit sprite (animation frames)",
+      "confidence_pct": 81.0,
+      "sample_images": 21263,
+      "canvas": {
+        "w": 64,
+        "h": 64,
+        "seen": 20425
+      },
+      "depth": "8-bit indexed (shared palette)",
+      "record": {
+        "type": 2,
+        "info_subtype": 2,
+        "loadMode": 1,
+        "drawMode": null,
+        "blendValue": null,
+        "clip_x": 0,
+        "clip_x_hex": "0x0"
+      },
+      "alternatives": [
+        {
+          "share_pct": 7.3,
+          "record": {
+            "type": 2,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": null,
+            "blendValue": null,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 3.3,
+          "record": {
+            "type": 17,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 2.4,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "ui_element": {
+      "label": "UI element",
+      "confidence_pct": 40.6,
+      "sample_images": 3435,
+      "canvas": {
+        "w": 6,
+        "h": 12,
+        "seen": 202
+      },
+      "depth": "8-bit indexed (shared palette)",
+      "record": {
+        "type": 2,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": null,
+        "blendValue": null,
+        "clip_x": 0,
+        "clip_x_hex": "0x0"
+      },
+      "alternatives": [
+        {
+          "share_pct": 14.8,
+          "record": {
+            "type": 16,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 11.3,
+          "record": {
+            "type": 17,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x466214"
+          }
+        },
+        {
+          "share_pct": 9.1,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 1026,
+            "blendValue": 100,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "structure_map": {
+      "label": "Structure / map object",
+      "confidence_pct": 37.2,
+      "sample_images": 2733,
+      "canvas": {
+        "w": 56,
+        "h": 63,
+        "seen": 312
+      },
+      "depth": "16-bit RGB565",
+      "record": {
+        "type": 17,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": 256,
+        "blendValue": 0,
+        "clip_x": 4612628,
+        "clip_x_hex": "0x466214"
+      },
+      "alternatives": [
+        {
+          "share_pct": 12.9,
+          "record": {
+            "type": 17,
+            "info_subtype": 2,
+            "loadMode": 1,
+            "drawMode": null,
+            "blendValue": null,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 6.2,
+          "record": {
+            "type": 16,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 6.0,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 770,
+            "blendValue": 30,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "tactical_combat": {
+      "label": "Tactical-combat object",
+      "confidence_pct": 38.6,
+      "sample_images": 2576,
+      "canvas": {
+        "w": 64,
+        "h": 64,
+        "seen": 857
+      },
+      "depth": "16-bit RGB565",
+      "record": {
+        "type": 17,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": 256,
+        "blendValue": 0,
+        "clip_x": 4611820,
+        "clip_x_hex": "0x465eec"
+      },
+      "alternatives": [
+        {
+          "share_pct": 19.0,
+          "record": {
+            "type": 17,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x466214"
+          }
+        },
+        {
+          "share_pct": 7.2,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 258,
+            "blendValue": 70,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 6.6,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "spell_effect": {
+      "label": "Spell / magic effect",
+      "confidence_pct": 20.2,
+      "sample_images": 924,
+      "canvas": {
+        "w": 64,
+        "h": 64,
+        "seen": 409
+      },
+      "depth": "16-bit RGB565",
+      "record": {
+        "type": 22,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": 770,
+        "blendValue": 80,
+        "clip_x": 0,
+        "clip_x_hex": "0x0"
+      },
+      "alternatives": [
+        {
+          "share_pct": 11.7,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 770,
+            "blendValue": 50,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 8.1,
+          "record": {
+            "type": 18,
+            "info_subtype": 1,
+            "loadMode": 1,
+            "drawMode": null,
+            "blendValue": null,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 6.7,
+          "record": {
+            "type": 16,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 1026,
+            "blendValue": 100,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "race_set": {
+      "label": "Race set (flags, banners, city)",
+      "confidence_pct": 41.1,
+      "sample_images": 701,
+      "canvas": {
+        "w": 64,
+        "h": 64,
+        "seen": 288
+      },
+      "depth": "8-bit indexed (shared palette)",
+      "record": {
+        "type": 2,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": null,
+        "blendValue": null,
+        "clip_x": 0,
+        "clip_x_hex": "0x0"
+      },
+      "alternatives": [
+        {
+          "share_pct": 29.2,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 19.4,
+          "record": {
+            "type": 17,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x466214"
+          }
+        },
+        {
+          "share_pct": 10.3,
+          "record": {
+            "type": 16,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "portrait_face": {
+      "label": "Portrait / face",
+      "confidence_pct": 67.1,
+      "sample_images": 602,
+      "canvas": {
+        "w": 103,
+        "h": 128,
+        "seen": 597
+      },
+      "depth": "16-bit RGB565",
+      "record": {
+        "type": 16,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": 0,
+        "blendValue": 0,
+        "clip_x": 0,
+        "clip_x_hex": "0x0"
+      },
+      "alternatives": [
+        {
+          "share_pct": 32.9,
+          "record": {
+            "type": 16,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "item_icon": {
+      "label": "Item icon",
+      "confidence_pct": 62.0,
+      "sample_images": 532,
+      "canvas": {
+        "w": 41,
+        "h": 42,
+        "seen": 525
+      },
+      "depth": "16-bit RGB565",
+      "record": {
+        "type": 17,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": 256,
+        "blendValue": 0,
+        "clip_x": 0,
+        "clip_x_hex": "0x0"
+      },
+      "alternatives": [
+        {
+          "share_pct": 32.0,
+          "record": {
+            "type": 17,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x466214"
+          }
+        },
+        {
+          "share_pct": 4.3,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 0.9,
+          "record": {
+            "type": 17,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 50,
+            "clip_x_hex": "0x466214"
+          }
+        }
+      ]
+    },
+    "scene_backdrop": {
+      "label": "Scene backdrop",
+      "confidence_pct": 43.1,
+      "sample_images": 524,
+      "canvas": {
+        "w": 272,
+        "h": 372,
+        "seen": 124
+      },
+      "depth": "16-bit RGB565",
+      "record": {
+        "type": 16,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": 256,
+        "blendValue": 0,
+        "clip_x": 0,
+        "clip_x_hex": "0x0"
+      },
+      "alternatives": [
+        {
+          "share_pct": 16.8,
+          "record": {
+            "type": 17,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x466214"
+          }
+        },
+        {
+          "share_pct": 16.6,
+          "record": {
+            "type": 22,
+            "info_subtype": 3,
+            "loadMode": 1,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        },
+        {
+          "share_pct": 6.3,
+          "record": {
+            "type": 16,
+            "info_subtype": 3,
+            "loadMode": 0,
+            "drawMode": 256,
+            "blendValue": 0,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    },
+    "mountain": {
+      "label": "Mountain",
+      "confidence_pct": 60.0,
+      "sample_images": 50,
+      "canvas": {
+        "w": 60,
+        "h": 50,
+        "seen": 10
+      },
+      "depth": "16-bit RGB565",
+      "record": {
+        "type": 17,
+        "info_subtype": 3,
+        "loadMode": 1,
+        "drawMode": 256,
+        "blendValue": 0,
+        "clip_x": 4612628,
+        "clip_x_hex": "0x466214"
+      },
+      "alternatives": [
+        {
+          "share_pct": 40.0,
+          "record": {
+            "type": 17,
+            "info_subtype": 2,
+            "loadMode": 1,
+            "drawMode": null,
+            "blendValue": null,
+            "clip_x_hex": "0x0"
+          }
+        }
+      ]
+    }
+  }
+}

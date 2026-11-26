@@ -1,0 +1,58 @@
+ESSENCE SHIFT (231) v7 - ALTARS (2026-10-18, fork; NOTHING applied live, no shared builder edited)
+User: "I want Essence Shift to also be able to target ALTARS and change their element similarly."
+
+ALTARS IN THE ENGINE (AoWEPACK, all TAltar subclasses; ClassID = VMT+0x24, resource ClassID = +1; owner byte +0x30,
+SetPlayer VMT+0x1F0 0x557CF234, GetRazed VMT+0x150 0x557CF274 = [obj+0x40]==1, RemoveFromMap +0xB0 / shadow +0x194 shared
+with nodes).  Each altar raises a storm (VMT+0x224 creates TFireStorm / TIceStorm / TLightningStorm / TDivineStorm /
+TDeathStorm / TPestilenceStorm); its element = the sphere of that storm spell in vanilla Spells.pfs:
+    Altar of Life       0x20233 (VMT 0x557D1BCC)  Divine Storm   -> sphere 1 Life
+    Altar of Death      0x20235 (VMT 0x557D2094)  Death Storm    -> sphere 2 Death
+    Altar of Pestilence 0x2030C (VMT 0x557D255C)  Pestilence     -> sphere 2 Death
+    Altar of Lightning  0x2023D (VMT 0x557D16F4)  Lightning Storm-> sphere 4 Air
+    Altar of Fire       0x2023A (VMT 0x557CF5F8)  Fire Storm     -> sphere 5 Fire
+    Altar of Ice        0x2024B (VMT 0x557CFAF0)  Blizzard       -> sphere 6 Water
+  There is NO Earth altar.  Release.hss has ONE resource per altar (cid 210-215, no group-23 cave variant), so an altar
+  placed underground uses the same art as vanilla altars underground (pcls pass 2 picks it).
+
+v7 RULES (same pipeline as nodes: anchor hex only, owned by the caster, not razed; retire -> place -> re-own; guards kept;
+try/except + recovery; synced tie-break):
+  * f_sph returns 0x100 | sphere for an altar; the candidate set (the caster's highest sphere-pick count, own sphere
+    excluded) is AND-ed with the spheres that HAVE an altar (Life/Death/Air/Fire/Water, mask 0x76).
+  * Target altar per sphere: Life -> Altar of Life, Death -> Altar of DEATH (never Pestilence), Air -> Lightning,
+    Fire -> Fire, Water -> Ice.  Pestilence counts as Death (a Death caster cannot shift it; any other caster turns it into
+    their element's altar).
+  * Caster whose best sphere is ONLY Earth -> altars are invalid targets (wand crossed out, no-op).  Earth tied with
+    another sphere -> that other sphere (no tie roll if only one candidate is left).
+  * Nodes are unchanged (an Earth caster still turns nodes into Earth nodes).
+
+== 1. Engine: patch scripts\patch_essenceshift_v1.py upgraded IN PLACE to v7 (header 'ESSHIFT7', v1..v6 accepted;
+       upgrade backup .bak_essence7).  New: ALTARS / ALT_CID / ALT_MASK tables, f_acid, pred + xform mask/target changes,
+       local [ebp-0x50] = altar flag.  No new sites.
+
+== 2. patch_dual_sphere_spells_v1.py, entry 231 - replace the desc line with ==
+---- code ----
+         desc="Reshape the essence of a magic node or altar you own: the target (a mana node, an elemental node or an altar that is not razed, on the surface, underground or in the depths) takes on the element you are most devoted to (a tie is decided at random). Altars become the Altar of Life, Death, Lightning, Fire or Ice - there is no Earth altar. Its guards remain.",
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (description only)
+  py -3.10 patch_essenceshift_v1.py                    (dry run: in-place upgrade, ~2273 bytes)
+  py -3.10 patch_essenceshift_v1.py --apply            (backup .bak_essence7 = the v6 state)
+  VEH startup check.  Optional after a test cast: py -3.10 essence_probe.py (diag +0x18 = targeted class, e.g. 0x2023A).
+LIFO unchanged: revert Essence Shift before re-running patch_terrain_spells_v1.py / patch_terrain_armyhooks_v1.py.
+
+== 4. Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\essence7\) ==
+  * Script round trip on a copy of the live DLL (md5 e3742ba3): dry run OK; --apply upgrades v6 -> v7 (57794ed2); re-run
+    "already applied"; v7 --revert == the v6 script's own revert (d8cea328); fresh v7 apply on that == the upgrade (57794ed2).
+  * emu7.py (Unicorn, real v7 DLL at 0x55700000 and rebased to 0x56C10000): ALL OK - every v1..v6 case plus:
+    pred: each of the 6 altars refuses its own sphere and accepts another; Earth-only caster refused; Earth/Water tie ->
+    accepted; Pestilence + Death caster refused; razed / enemy / unowned altars refused; own altar underground accepted;
+    node predicate unchanged (power node + Earth caster still accepted).
+    execute: all 6 altars x levels 0/1/2 -> the right target-altar resource (surface / UG variant) at the right level, old
+    altar unregistered + removed, never freed, diag chosen sphere + targeted class; fire altar -> ice altar placed once and
+    re-owned (done = 9); Pestilence/Death, Earth-only, razed, enemy -> untouched; Earth/Water tie -> ice altar with no
+    tie roll; Life/Fire tie -> synced Random(2) -> fire altar; power node -> fire NODE resource (not an altar).
+
+== 5. Open (not seen in game) ==
+  * A new altar starts fresh (its storm/charge state is the constructor's default, like a map-placed altar).
+  * Altars have no underground art variant in Release.hss (vanilla limitation).

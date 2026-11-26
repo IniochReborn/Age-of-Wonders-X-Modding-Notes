@@ -1,0 +1,69 @@
+MIMIC (233) v3 - solid question-mark icon + list as a COMBAT spell (2026-10-18, fork; NOTHING applied live, no shared builder edited)
+
+ROOT CAUSE of "still lists as a unit enchantment": the v2 fix (pokes (0x22,1,0),(0x0C,1,2)) NEVER reached entry 233.
+The integration step looked for an existing `pokes=` line in the 10 lines after `dict(id=233,` - that window reaches
+into the next entry, so it found REVERSAL's identical pokes line (entry 234) and replaced it with itself; no line was
+inserted into 233.  Live entry 233 still has no pokes -> the TDispelMagic base constructor's [spell+0x22] = 1 (unit
+spell) and its map+combat cast context stand.
+The category/listing is driven by the runtime spell object's [spell+0x22] spell-type byte (0 = combat spell, 1 = unit
+spell; Dispel's base ctor 0x5577AC34 writes 1) plus the +0x0C cast-context bits (bit1 map, bit2 combat; 2 = combat
+only).  Same established recipe every combat-only unit-class spell in the pipeline uses (Suspend 214, Reversal 234,
+Martyr, Borrow Time, Second Wind, Inspiration) - those list as combat spells.  No pfs field / engine change needed; the
+Dispel redirect hooks (patch_tc_mimic_v1.py v2) do not read +0x22.
+
+== 1. patch_dual_sphere_spells_v1.py (detect CRLF/LF per file), entry 233 - INSERT this line directly after the
+       `donor="TDispelMagic", pfs_donor=18, ...` line of dict(id=233 (find it by position inside the 233 dict - do NOT
+       search a fixed window: the next entry, 234 Reversal, carries the identical line) ==
+---- code ----
+         pokes=[(0x22, 1, 0), (0x0C, 1, 2)],                          # v3 10/18: COMBAT spell type (Dispel's base ctor 0x5577AC34 sets 1 = unit spell) + combat-only cast context
+---- end ----
+   Sanity check after editing: the 233 dict (from `dict(id=233,` up to the next `dict(`) contains exactly one `pokes=`
+   line, and entry 234 still has its own.
+
+== 2. build_dual_sphere_icons_v1.py - add this function right after glyph_mimic2, and in GLYPHS change
+       "mimic": glyph_mimic2   ->   "mimic": glyph_mimic3 ==
+---- code ----
+def glyph_mimic3():
+    """Mimic (233) v3 (2026-10-18, user: "the question mark should be SOLID but is otherwise good - just fill it in"):
+    v2's traced mirror frame and bold question mark, now solid ink in both halves; the dashed mirror axis above and
+    below the mark and the two glints on the glass are kept."""
+    im = _user_mask_glyph("mimic_frame_mask.png")
+    dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    cx, cy = 20.0, 17.6
+    from PIL import ImageFont
+    font = None
+    for fn in ("ariblk.ttf", "arialbd.ttf", "georgiab.ttf", "timesbd.ttf"):
+        try:
+            font = ImageFont.truetype(fn, int(19.5 * S)); break
+        except OSError:
+            pass
+    q = Image.new("L", im.size, 0); qd = ImageDraw.Draw(q)
+    if font is not None:
+        qd.text((cx * S, cy * S), "?", fill=255, font=font, anchor="mm")
+    else:                                                                                  # fallback: drawn ?
+        qd.arc([(cx - 4.2) * S, (cy - 8.2) * S, (cx + 4.2) * S, (cy + 0.2) * S], 200, 90, fill=255, width=int(2.4 * S))
+        qd.line(P([(cx, cy + 0.2), (cx, cy + 3.4)]), fill=255, width=int(2.4 * S))
+        qd.ellipse([(cx - 1.5) * S, (cy + 5.2) * S, (cx + 1.5) * S, (cy + 8.2) * S], fill=255)
+    bb = q.getbbox()
+    if bb:                                                                                 # centre the glyph's ink on (cx, cy)
+        dx = int(cx * S - (bb[0] + bb[2]) / 2); dy = int(cy * S - (bb[1] + bb[3]) / 2)
+        q = ImageChops.offset(q, dx, dy)
+    im.paste(0, mask=q.filter(ImageFilter.MaxFilter(int(1.2 * S) | 1)))                  # clear glass around the mark
+    im.paste(255, mask=q)                                                                  # v3: the whole mark solid
+    bb = q.getbbox()
+    top, bot = (bb[1] / S, bb[3] / S) if bb else (8.0, 27.0)
+    for y0 in (top - 3.4, bot + 1.2):                                                      # the dashed mirror axis, outside the mark
+        if 3.0 < y0 < H - 3.0:
+            dr.line(P([(cx, y0), (cx, y0 + 1.8)]), fill=255, width=int(0.8 * S))
+    for x, y in ((14.4, 11.0), (26.2, 25.6)):                                              # two glints on the glass
+        dr.line(P([(x - 1.2, y), (x + 1.2, y)]), fill=255, width=int(0.6 * S)); dr.line(P([(x, y - 1.2), (x, y + 1.2)]), fill=255, width=int(0.6 * S))
+    return im
+---- end ----
+   v2's frame and the same bold '?' centred at (20, 17.6), now solid ink in both halves; the dashed mirror axis above /
+   below the mark and the two glass glints kept.  Preview: C:\Users\<user>\.claude\jobs\47241cad\tmp\mimic3\icon_v2_vs_v3.png
+   (40x35, v2 left | v3 right).  No art import export\mimic.png exists - no icon-override trap.
+
+== 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply          (SpellIcn 233 v3)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply         (pipeline zone: 233's pokes)
+  VEH startup check.  No engine / TCPCK change; patch_tc_mimic_v1.py v2 stays as is.

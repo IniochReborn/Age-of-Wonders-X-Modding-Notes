@@ -1,0 +1,139 @@
+CITY SPY (spell 229, Cosmos sphere 0, tier 2; global city enchantment, research 80, cost 15, upkeep 2) - 2026-10-17, fork.
+Engine: patch scripts\patch_cityspy_v1.py (AoWEPACK.dll zone 0x5587E000-0x5587E2E0 + AoWx.exe .xedt zone 0x62F800-0x62F9C0;
+backups backup\AoWEPACK.dll.bak_cityspy / backup\AoWx.exe.bak_cityspy).  NOTHING applied live, no shared builder edited.
+New file (already written): patch scripts\cityspy_user_mask.png (traced from art import export\city spy.jpg).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----); detect the newline per builder (pipeline + sfx CRLF,
+fx + icons LF as of 10/17) and ast.parse each edited builder afterwards.
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry (single-sphere Cosmos block, after 228 Magic Missile) ==
+---- code ----
+    dict(id=229, name="City Spy", sphere=0, tier=2, mana=15, research=80, upkeep=2,
+         donor="TGoldRush", pfs_donor=63, tc_type=None, icon=229,                  # city enchantment like Arms Race 375; patch_cityspy_v1.py
+         pokes=[(0x3C, 1, 5), (0x38, 1, 2)],                                        # enchantment TYPE 5 -> [city+0x5C] bit 0x20; targets: cities NOT owned by the caster (as Town Quake / Anarchy)
+         desc="A hidden eye watches over a foreign city: while the enchantment lasts you can open that city's window and see its income, size and upgrades, status and enhancements, and what it is producing. You cannot give it orders.",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(6112, 6128)), -36, -56, f20=2, f18=1),   # cast: violet motes spiral into a scrying eye at the city (PlayDefaultCityEffects)
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(6100, 6112)), -20, -14, f20=2, f18=3)},  # the watching eye over the city - drawn ONLY for the spy (patch_cityspy_v1.py, frame = map tick / 4)
+         sfx=["SFX\ZSP\DUALCO_CITYSPY.WAV"]),
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py ==
+  ICONS: add   229: "cityspy"      CLOUDS: add   "cityspy": 120   (Cosmos cloud, as 228 / 230)      GLYPHS: add   "cityspy": glyph_cityspy
+  function (next to the other _user_mask_glyph users, e.g. after glyph_royalambition):
+---- code ----
+def glyph_cityspy():
+    """City Spy (229, Cosmos L2, 2026-10-17): the user's reference art import export/city spy.jpg (a hooded watcher,
+    white on black) TRACED INVERTED -> cityspy_user_mask.png: inside the hood's silhouette the reference's BLACK is the
+    ink (the shadowed face + the gaps between the hood folds), the white hood / rim stay the Cosmos cloud - the white
+    lines as ink vanished on the dark Cosmos cloud at 40x35 (tmp\cityspy\icon_preview.png: A white-as-ink, B = this)."""
+    return _user_mask_glyph("cityspy_user_mask.png")
+---- end ----
+  (no art import export\cityspy.png exists -> no override trap)
+
+== 3. build_dual_sphere_fx_v1.py - functions before `def build():` + two group rows (e.g. after the (6150, royal_motes(), ...) row) ==
+---- code ----
+def cityspy_eye(n=12):
+    """City Spy (229) slot 1 (2026-10-17; patch_cityspy_v1.py draws it ONLY for the spy's own player, above the
+    enchanted city, frame = map tick / 4): 12 frames 40x28, ALPHA 258/80 - a small watchful cosmic eye: a violet
+    almond outline that half-closes once per cycle, a glowing magenta iris with a dark pupil and a white glint, and
+    three tiny stars twinkling around it.  Hard alpha (no dither), smooth per-frame changes."""
+    frames = []; Wd, Hd = 40, 28; cx, cy = 20.0, 14.0
+    yy, xx = np.mgrid[0:Hd, 0:Wd].astype(np.float32)
+    stars = [(5.0, 6.0, 0.0), (35.0, 8.0, 2.1), (31.0, 24.0, 4.2)]
+    for i in range(n):
+        t = i / float(n)
+        lid = 0.62 + 0.38 * (0.5 + 0.5 * math.cos(2 * math.pi * t)) ** 0.5            # 1 = open, ~0.62 = half-closed (once per cycle)
+        a = 12.0; b = 6.8 * lid
+        u = (xx - cx) / a; v = (yy - cy) / max(b, 1e-3)
+        inside = (np.abs(v) <= (1 - np.clip(np.abs(u), 0, 1) ** 2) ** 1.2) & (np.abs(u) <= 1)
+        edge = np.abs(np.abs(v) - (1 - np.clip(np.abs(u), 0, 1) ** 2) ** 1.2) < 0.22
+        outline = edge & (np.abs(u) <= 1.04)
+        r = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        iris = inside & (r <= 4.2); pupil = inside & (r <= 1.7)
+        glint = ((xx - (cx - 1.6)) ** 2 + (yy - (cy - 1.8)) ** 2) <= 1.1
+        glow = np.exp(-((xx - cx) ** 2 / (2 * 9.0 ** 2) + (yy - cy) ** 2 / (2 * 5.0 ** 2))) * 0.55
+        R = np.zeros((Hd, Wd), np.float32); G = np.zeros_like(R); Bc = np.zeros_like(R); A = np.zeros_like(R)
+        halo = (glow > 0.18) & ~inside
+        R[halo], G[halo], Bc[halo], A[halo] = 90, 40, 150, 1
+        R[inside], G[inside], Bc[inside], A[inside] = 225, 210, 245, 1
+        R[iris], G[iris], Bc[iris] = 200, 60, 220
+        R[pupil], G[pupil], Bc[pupil] = 30, 8, 50
+        R[outline], G[outline], Bc[outline], A[outline] = 120, 50, 190, 1
+        R[glint & inside], G[glint & inside], Bc[glint & inside] = 255, 255, 255
+        for sx, sy, ph in stars:
+            k = max(0.0, math.sin(2 * math.pi * t + ph)) ** 2
+            if k < 0.15: continue
+            st = ((np.abs(xx - sx) <= 0.6) & (np.abs(yy - sy) <= 1.6 * k + 0.4)) | ((np.abs(yy - sy) <= 0.6) & (np.abs(xx - sx) <= 1.6 * k + 0.4))
+            R[st], G[st], Bc[st], A[st] = 230, 200, 255, 1
+        frames.append(Image.fromarray(np.dstack([R, G, Bc, 255 * A]).astype(np.uint8), "RGBA"))
+    return frames
+
+
+def cityspy_cast(n=16):
+    """City Spy (229) slot 0 (played by PlayDefaultCityEffects at the city on the cast): 16 frames 72x72, additive
+    770 - a scrying swirl: violet motes spiral inward to a point, an eye-shaped flash opens there and fades."""
+    frames = []; SZ = 72; cx, cy = 36.0, 40.0; rnd = random.Random(2290)
+    yy, xx = np.mgrid[0:SZ, 0:SZ].astype(np.float32)
+    motes = [(rnd.uniform(0, 6.283), rnd.uniform(0.7, 1.0), rnd.uniform(1.0, 1.6)) for _ in range(18)]
+    for i in range(n):
+        t = i / (n - 1.0); f = np.zeros((SZ, SZ), np.float32); w = np.zeros_like(f)
+        rr = 30.0 * (1 - min(1.0, t / 0.6)) ** 1.2
+        fade = 1.0 if t < 0.7 else max(0.0, 1 - (t - 0.7) / 0.3)
+        for a0, s, sz in motes:
+            ang = a0 + 5.0 * t; x = cx + rr * s * math.cos(ang); y = cy + 0.6 * rr * s * math.sin(ang)
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (sz * sz)) * 0.9 * fade; f += g; w += 0.4 * g
+        if t >= 0.5:
+            k = min(1.0, (t - 0.5) / 0.15) * fade
+            eye = np.exp(-(((xx - cx) / 14.0) ** 2 + ((yy - cy) / (5.5 * k + 0.5)) ** 2) * 2.0) * k
+            core = np.exp(-((xx - cx) ** 2 + (yy - cy) ** 2) / 6.0) * k
+            f += 0.8 * eye + core; w += core + 0.3 * eye
+        f = np.clip(f, 0, 1); w = np.clip(w, 0, 1)
+        frames.append(Image.fromarray(np.dstack([(150 + 105 * w) * f, (60 + 170 * w) * f, 255 * f, 255 * (f > 0.03)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+---- code ----
+              (6100, cityspy_eye(), "COspye%02d.BMP", 258, 80, KEY),             # City Spy (229) slot 1: the watching eye over a spied city (40x28, 12 frames, hard alpha)
+              (6112, cityspy_cast(), "COspyc%02d.BMP", 770, 85, 0x0000),         # City Spy (229) slot 0: scrying swirl at the city on the cast (72x72, 16 frames, additive)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py - MIXES entry (before "DUALEW_OVERGROWTH.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # City Spy (229, Cosmos L2 2026-10-17): a soft arcane scrying shimmer - a reversed magic swell drawing in, a glassy
+    # winding tone, a shimmer, a slowed enchantment chime as the eye opens, two faint high bells, under a low drone.
+    "DUALCO_CITYSPY.WAV":   [("Attack/Magic07.WAV", 0.5, 0.00, 1.1, 0.5, -0.8, 0.3),
+                             ("synth:glasswind:330:520:1.6", 0.35, 0.05, None, 0.6),
+                             ("synth:shimmer:2.0", 0.40, 0.30, None, 0.8),
+                             ("Attack/EnchP02.WAV", 0.35, 0.95, 1.4, 0.7, 0.72),
+                             ("synth:bell:784:1.4", 0.18, 1.05, None, 0.7),
+                             ("synth:bell:1175:1.2", 0.10, 1.30, None, 0.6),
+                             ("synth:drone:110:2.4", 0.25, 0.00, None, 0.9)],
+---- end ----
+  DRIVE dict: add   "DUALCO_CITYSPY.WAV": 1.3,      FADE_OUT dict: add   "DUALCO_CITYSPY.WAV": 0.7,
+  (test render 2.50 s, peak 0.86 before normalise: tmp\cityspy\DUALCO_CITYSPY_test.wav)
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply        (SpellIcn 229)
+  py -3.10 build_dual_sphere_fx_v1.py --apply           (DualDF 6100-6127)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply          (Sfx\Zsp\DUALCO_CITYSPY.WAV - NEW file: ship via --add)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply       (Spells.pfs 229 + registration)
+  py -3.10 patch_cityspy_v1.py                          (dry run: AoWEPACK sites free (prev gn/le/ov = the Arms Race / city-UI caves, mv callee 0x558638b0), exe sites free)
+  py -3.10 patch_cityspy_v1.py --apply
+  VEH startup check.  AoWx.exe changes too (ships anyway).
+
+== 6. Chain / LIFO ==
+  Chained IN FRONT of: patch_forge_arms_v1 hook E (GetName 0x557AE35C), patch_city_enchant_ui_v1 hooks A / B / D
+  (0x557A9C27 / 0x557A920A / 0x557AA908).  To re-run either of those: patch_cityspy_v1.py --revert first, then re-apply.
+  The exe sites (0x4501DE map double-click, 0x43B1EB city-screen refresh, TCityScreen method-table entries) are not
+  used by any other script.  --revert is exact (refuses while a site no longer points at us).
+
+== 7. Behaviour / open ==
+  * Type 5 is new: GetName ("City Spy"), the city's enhancement list ("City Spy Enchantment") and the overlay are all
+    handled; ActivateEnchantment / UpdateActiveEnchantments / ValidTargetCity are bitset-generic (types <= 7).
+  * Allied cities CAN be targeted (target flag 2 = 'not own'); the AI may cast it on foreign cities (Gold Rush's AI
+    logic, harmless: only mana); vanilla has no AI-priority field on city spells.
+  * A spied city's window is read-only: the 8 action handlers (CityBtn1/2/3, Activity/Production double-click, loop
+    box, prev/next city) do nothing for a foreign city; selection-only handlers stay live.  Untested in game: whether
+    any city-screen panel assumes the viewer owns the city (e.g. gold-dependent button states) - the fill code only
+    reads the city.  The window closes on its next refresh when the spy is dispelled.
+  * The eye is drawn only for the caster, above the city (anchor by city size, EYE_ANCH in the script); untested
+    in game: anchor height and eye size (40x28; shrink in cityspy_eye).
+  * Caster byte = TCityEnchantment +0x19 (player index, same space as [city+0x30] / [map+0xA5]) - as Blessed Dew.

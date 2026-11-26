@@ -1,0 +1,2 @@
+21:25:15 attached pid=14404, write-watch on 0x0A4A67DC for 600s
+21:28:45 detached; 0 writes logged

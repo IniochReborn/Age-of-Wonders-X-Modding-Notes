@@ -1,0 +1,1 @@
+{ "name": "aowx-bot-presence", "private": true, "devDependencies": { "wrangler": "4.40.0" } }

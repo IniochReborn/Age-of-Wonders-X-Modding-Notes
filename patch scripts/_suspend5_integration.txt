@@ -1,0 +1,22 @@
+SUSPEND (214) - preview-panel ATK 7 (2026-10-16, fork; NOT applied live)
+
+PANEL: AoWx.exe 0x433D30.. (combat preview panel refresh): spell = GetSpell([[0x45A420]+0xC4]+0x38) via 0x4025A4,
+  call [VMT+0x7C] GetCombatInfo(eax spell, edx = caster unit [[sel+0x1C]+0x4C], ecx = &info @ebp-0xE) @0x433D9C;
+  info+0 (ATK) > 0 -> IntToStr -> label [panel+0xB0], else the '-' string 0x434708; info+1 (DMG) -> label [panel+0xC0]
+  the same way; then the damage-type bits (info+2..3) drive the icons.
+ENTANGLE: TEntangle (VMT 0x557F4FF0) is a TCombatSpell -> GetCombatInfo 0x557F7258 copies [spell+0x34..0x3B] (ATK 7,
+  DMG 0, types, shots/range/targets/side) into info -> ATK 7 shows.  TRemedy (VMT 0x557E5B4C) uses TUnitSpell.
+  GetCombatInfo 0x5577AC78 whose filler 0x5577945C zeroes info+0..1 -> '-'.
+CHANGE: patch_suspend_fix_v1.py v3 - the GCI cave writes info+0 = 7 for spell 214 (plus v2's side 3 / range 12),
+  30 B in the existing 32-B slot (RL cave address unchanged).  No pipeline change.
+MECHANICS: unchanged.  TCPCK readers of info+0: 0x41041C..0x410788 and 0x432CDF.. call GetSpell(0x75) (hard-coded
+  spell 117) - not 214; cursor 0x41F54A/0x41F85E, click 0x41DD1F, AI 0x4187F4/0x41968F, shots 0x40B5EF, 0x4232BC do not
+  read info+0 (checked).  TRemedy's AI valuers are empty (never cast by AI).  The hit roll stays the RL cave's fixed
+  ATK 7 vs RES on enemy targets only; friendly targets fall straight through -> never miss.
+APPLY (game + editor closed): py -3.10 patch_suspend_fix_v1.py --apply  (live dry-run: "v2 build found -> upgrading
+  to v3 ... 30 bytes change"), then the VEH startup check.
+SCRATCH (tmp/susp5, copies of the LIVE AoWEPACK.dll): upgrade written; re-apply 'already applied'; v3 --revert ==
+  the v2 script's own --revert (byte-identical); fresh apply after revert == the upgrade; diff vs live = 30 bytes
+  0x5586D820..0x5586D83E only; --dis checked.
+IN-GAME: select Suspend in combat -> the preview panel shows ATK 7 (damage '-'), like Entangle; enemies can still
+  resist, friendly casts always land; range still 12, both sides still targetable.

@@ -1,0 +1,152 @@
+CITY SPY (229) eye v6 - lids x gaze overlap (2026-10-18, fork; NOTHING applied live, no shared builder edited).
+User: "have the iris start moving left right BEFORE the eye has fully opened, and have the eye start to shut as soon as
+the eye reaches centre (from the right)."
+ * Combined frames: _cspy6_eye(o, g) = v5 eyelid model + v4 sphere iris at gaze g.  Asserted: o=1 == v4 gaze frame,
+   g=0 == v5 aperture frame, so only the 9 (aperture < 1, iris off centre) pairs are new images: DualDF 6420-6428
+   (6419 / 6429-6499 stay free; live max 6418).
+ * Timeline (35 ms entries, 184 = 6.44 s): faint lid line 0.21 s / lids open 0.77 s with the look-left starting at the
+   halfway point (aperture 9/15) / rest of the look-left / hold left 0.6 / sweep right 0.8 / hold right 0.6 / return
+   8 entries, then the lids start closing while the iris finishes centring (centre reached at aperture 13/15; no
+   centre hold) / lids close 0.77 s / lid line fades 0.21 s / hidden 2.0 s.
+ * No engine change: patch_cityspy_v1.py (v4 engine) picks real time mod the list length.
+Builders are LF at the time of writing (detect the newline per file); ast.parse after editing.
+Previews (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\cityspy6\): eye6.gif (full loop, opacity simulated), open_strip.png, close_strip.png.
+
+== 1. build_dual_sphere_fx_v1.py - add this block before `def build():` (the v4/v5 eye functions stay; v6 uses them) ==
+---- code ----
+# ---- City Spy v6 eye (2026-10-18; user: "have the iris start moving left right BEFORE the eye has fully opened, and
+# have the eye start to shut as soon as the eye reaches centre (from the right)").  Lids and gaze now OVERLAP, so the
+# frames are combined (aperture o x gaze g): _cspy6_eye(o, g) = the v5 eyelid model with the v4 sphere iris at gaze g
+# (o = 1 is pixel-identical to the v4 gaze frame, g = 0 to the v5 aperture frame - both asserted).  Timeline: the
+# look-left begins halfway through the opening; the return from the right runs straight into the closing (no centre
+# hold).  Only the (o < 1, g != 0) combinations are new images (DualDF 6420+); o = 1 reuses the v4 gaze ids and
+# (o < 1, g = 0) the v5 apertures.
+CSPY6_NO = 22                     # entries for a full open / close (35 ms each = 0.77 s)
+CSPY6_LEFT_AT = 11                # opening entry at which the iris starts sliding left (halfway open)
+CSPY6_CLOSE_AT = 8                # return-to-centre entry (of 14) at which the lids start to close
+_CSPY6 = None
+
+
+def _cspy6_eye(o, gaze):
+    Wd, Hd, S = 40, 28, 4; cx, cy = 20.0, 14.0
+    yy, xx = np.mgrid[0:Hd, 0:Wd].astype(np.float32)
+    a, b = 12.0, 6.8
+    u = (xx - cx) / a; v = (yy - cy) / b
+    lid = (1 - np.clip(np.abs(u), 0, 1) ** 2) ** 1.2
+    if o >= 1.0:
+        inside = (np.abs(v) <= lid) & (np.abs(u) <= 1)
+        outline = (np.abs(np.abs(v) - lid) < 0.22) & (np.abs(u) <= 1.04)
+    else:
+        mid = 0.2 * lid * (1 - o)
+        vu, vl = -lid * o + mid, lid * o + mid
+        inside = (v >= vu) & (v <= vl) & (np.abs(u) <= 1)
+        tol = 0.11 + 0.11 * o
+        outline = ((np.abs(v - vu) < tol) | (np.abs(v - vl) < tol)) & (np.abs(u) <= 1.04) & (lid > 0.02)
+    glow = np.exp(-((xx - cx) ** 2 / (2 * 9.0 ** 2) + (yy - cy) ** 2 / (2 * 5.0 ** 2))) * 0.55
+    halo = (glow > 0.22 + 0.33 * (1 - o)) & ~inside & ~outline if o > 0.15 else np.zeros_like(inside)
+    stars = [(5.0, 6.0), (35.0, 8.0), (31.0, 24.0)]
+    st = np.zeros_like(inside)
+    if o >= 0.6:
+        for sx, sy in stars:
+            st |= ((np.abs(xx - sx) <= 0.6) & (np.abs(yy - sy) <= 1.4)) | ((np.abs(yy - sy) <= 0.6) & (np.abs(xx - sx) <= 1.4))
+    Y, X = np.mgrid[0:Hd * S, 0:Wd * S].astype(np.float32); X = (X + 0.5) / S; Y = (Y + 0.5) / S
+    th = math.asin(max(-0.98, min(0.98, gaze / CSPY4_BALL))); c = math.cos(th)
+    gx = cx + gaze
+    ri, rp = 4.2, 1.7
+    re = np.sqrt(((X - gx) / c) ** 2 + (Y - cy) ** 2)
+    iris = np.clip(ri - re + 0.5, 0, 1); pupil = np.clip(rp - re + 0.5, 0, 1)
+    hx = gx - 1.6 * c + 0.6 * math.sin(th); hy = cy - 1.8
+    gl = np.clip(1.6 - np.sqrt(((X - hx) / max(c, 0.55)) ** 2 + (Y - hy) ** 2) * 1.5, 0, 1)
+    rim = np.clip(1.0 - np.abs(re - ri) * 1.6, 0, 1) * 0.35
+    R = 225 * (1 - iris) + 200 * iris; G = 210 * (1 - iris) + 60 * iris; B = 245 * (1 - iris) + 220 * iris
+    R = R * (1 - rim) + 110 * rim; G = G * (1 - rim) + 30 * rim; B = B * (1 - rim) + 150 * rim
+    R = R * (1 - pupil) + 30 * pupil; G = G * (1 - pupil) + 8 * pupil; B = B * (1 - pupil) + 50 * pupil
+    R = R * (1 - gl) + 255 * gl; G = G * (1 - gl) + 255 * gl; B = B * (1 - gl) + 255 * gl
+    rgb = Image.fromarray(np.dstack([R, G, B]).clip(0, 255).astype(np.uint8), "RGB").resize((Wd, Hd), Image.BOX)
+    arr = np.asarray(rgb).astype(np.float32)
+    out = np.zeros((Hd, Wd, 4), np.float32)
+    out[..., :3][halo] = (70, 34, 120); out[..., 3][halo] = 255
+    out[..., :3][inside] = arr[inside]; out[..., 3][inside] = 255
+    out[..., :3][outline] = (110, 50, 175); out[..., 3][outline] = 255
+    out[..., :3][st] = (215, 190, 245); out[..., 3][st] = 255
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
+
+
+def _cspy6_plan():
+    """The v6 slot-1 timeline as (kind, a, g): ('L', row, 0) faint lid-line row 0..2 / ('B', 0, 0) blank /
+    ('E', k, gi) eye at aperture index k (0..15, 15 = open) and gaze index gi (0..32, 16 = centre)."""
+    def ap(t): return max(0, min(CSPY5_NOPEN - 1, int(round(_ease4(min(1.0, max(0.0, t))) * (CSPY5_NOPEN - 1)))))
+    def gi(px): return int(round((px + 4.0) / 0.25))
+    NO, NL = CSPY6_NO, 17
+    seq = []
+    seq += [('L', 0, 0)] * 2 + [('L', 1, 0)] * 2 + [('L', 2, 0)] * 2           # faint lid line appears
+    left = [-4.0 * _ease4((i + 1) / NL) for i in range(NL)]                   # the look-left curve
+    for i in range(NO):                                                       # lids part; the iris starts left halfway
+        g = left[i - CSPY6_LEFT_AT] if i >= CSPY6_LEFT_AT else 0.0
+        seq.append(('E', ap(i / (NO - 1)), gi(g)))
+    seq += [('E', 15, gi(px)) for px in left[NO - CSPY6_LEFT_AT:]]             # rest of the look-left, fully open
+    seq += [('E', 15, gi(-4.0))] * 17                                         # hold left
+    seq += [('E', 15, gi(-4.0 + 8.0 * _ease4((i + 1) / 23))) for i in range(23)]   # sweep right
+    seq += [('E', 15, gi(4.0))] * 17                                          # hold right
+    back = [4.0 - 4.0 * _ease4((i + 1) / 14) for i in range(14)]               # back towards centre ...
+    seq += [('E', 15, gi(px)) for px in back[:CSPY6_CLOSE_AT]]
+    rest = back[CSPY6_CLOSE_AT:]                                              # ... while the lids already close
+    for i in range(NO):
+        g = rest[i] if i < len(rest) else 0.0
+        seq.append(('E', ap(1 - (i + 1) / NO), gi(g)))
+    seq += [('L', 2, 0)] * 2 + [('L', 1, 0)] * 2 + [('L', 0, 0)] * 2           # lid line fades away
+    seq += [('B', 0, 0)] * 57                                                 # 2 s hidden
+    return seq
+
+
+def _cspy6_combos():
+    """The (aperture k < 15, gaze gi != 16) pairs the timeline needs, in first-use order (= the new images)."""
+    out = []
+    for kind, k, g in _cspy6_plan():
+        if kind == 'E' and k < CSPY5_NOPEN - 1 and g != 16 and (k, g) not in out:
+            out.append((k, g))
+    return out
+
+
+def cityspy_eye6_mixed():
+    """City Spy (229) v6: the new lid x gaze frames (aperture < 1 with the iris off centre), DualDF 6420+."""
+    global _CSPY6
+    if _CSPY6 is None:
+        assert np.array_equal(np.asarray(_cspy6_eye(1.0, -2.5)), np.asarray(_cspy4_frames()[6])), "o=1 != v4 gaze"
+        assert np.array_equal(np.asarray(_cspy6_eye(0.4, 0.0)), np.asarray(_cspy5_eye(0.4))), "g=0 != v5 aperture"
+        _CSPY6 = [_cspy6_eye(k / (CSPY5_NOPEN - 1.0), -4.0 + 0.25 * g) for k, g in _cspy6_combos()]
+    return list(_CSPY6)
+
+
+def cityspy_eye6_timeline(base, v5base, v4base):
+    """City Spy (229) v6 slot-1 list (35 ms per entry, real time mod len; patch_cityspy_v1.py unchanged).
+    base = v6 first id (mixed frames), v5base = v5 apertures (+0..+15) / lid-line rows (+16..+18),
+    v4base = v4 blank (+0) / gaze (+1..+33)."""
+    combos = _cspy6_combos(); ids = []
+    for kind, k, g in _cspy6_plan():
+        if kind == 'L': ids.append(v5base + 16 + k)
+        elif kind == 'B': ids.append(v4base)
+        elif k == CSPY5_NOPEN - 1: ids.append(v4base + 1 + g)
+        elif g == 16: ids.append(v5base + k)
+        else: ids.append(base + combos.index((k, g)))
+    return ids
+---- end ----
+
+== 1b. build_dual_sphere_fx_v1.py - group row: add right AFTER the (6418, cityspy_eye5_line(), ...) row ==
+---- code ----
+              (6420, cityspy_eye6_mixed(), "COspy6m%02d.BMP", 258, 52, KEY),     # City Spy (229) v6: lid x gaze combined frames (aperture < 1 with the iris off centre; 9 frames 6420-6428)
+---- end ----
+
+== 2. patch_dual_sphere_spells_v1.py, entry 229 - REPLACE the slot-1 line (it keeps the dict's closing `},`) ==
+---- code ----
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [6416] * 2 + [6417] * 2 + [6418] * 2 + [6400] * 3 + [6401] * 2 + [6402, 6403, 6404, 6405, 6406, 6407, 6408, 6420, 6421, 6422, 6423, 6424, 6425, 6426, 6351, 6350, 6349, 6347, 6346] + [6345] * 2 + [6344] * 20 + [6345] * 2 + [6347, 6348, 6349, 6351, 6353, 6355, 6357, 6359, 6361, 6363, 6365, 6367, 6369, 6371, 6372, 6373] + [6375] * 2 + [6376] * 20 + [6375, 6374, 6373, 6371, 6370, 6368, 6366, 6365, 6363, 6427, 6428, 6413, 6412, 6411] + [6410] * 2 + [6409, 6408, 6406] + [6405] * 2 + [6404, 6403, 6402] + [6401] * 2 + [6400] * 3 + [6418] * 2 + [6417] * 2 + [6416] * 2 + [6343] * 57, -20, -14, f20=2, f18=3)},   # v6 10/18: lids x gaze overlap (iris starts left halfway through the opening; the return from the right runs into the closing) - 35 ms per entry, real time mod 184 = 6.44 s (patch_cityspy_v1.py unchanged)
+---- end ----
+
+== 3. Apply order (game + editor closed: tasklist count of aowx.exe / aowdevx = 0) ==
+  py -3.10 build_dual_sphere_fx_v1.py --apply          (DualDF += 6420-6428)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply      (Spells.pfs 229 slot 1 = the 184-entry v6 list)
+  VEH startup check.  No engine script change.
+
+== 4. Tests (scratch) ==
+  test6.py: 9 new frames render, both asserts pass, timeline 184 entries ids 6343..6428, every id resolves;
+  trial insert into in-memory copies of both builders parses; the slot-1 literal evaluates to the generated timeline.

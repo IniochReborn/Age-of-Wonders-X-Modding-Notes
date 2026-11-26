@@ -1,0 +1,161 @@
+TECTONIC SHIFT (spell 219, Earth tier 4, Spells.pfs key 229) - integration snippets for the SHARED files
+(2026-10-17; the worker did not edit any shared file - paste these in, then run the apply order at the bottom).
+
+Engine half: patch scripts\patch_tectonic_v1.py (AoWEPACK.dll, zone 0x55870000..0x55870800, backup .bak_tectonic).
+Glyph mask (NEW file, already written): patch scripts\tectonic_user_mask.png  (traced from
+art import export\tectonic shift.jpg - the cracked boulder; cracks widened inside the disc so they survive 40x35,
+the debris kept).
+
+------------------------------------------------------------------------------------------------------------------
+1) patch_dual_sphere_spells_v1.py - SPELLS entry (after 218 Steadfast, in the same single-sphere Earth block)
+------------------------------------------------------------------------------------------------------------------
+    dict(id=219, name="Tectonic Shift", sphere=3, tier=4, mana=75, research=250, upkeep=15,
+         donor="TAirMastery", pfs_donor=70, tc_type=None, icon=219,          # patch_tectonic_v1.py: marker 219 chained in front of Overgrowth's Air Mastery caves; NewTurn raises hills/mountains, digs/buries tunnels (permanent)
+         pokes=[(0x34, 4, 0xFFFFFFFF)],                                      # AI priority -1 (never cast by the AI, as Ice Age)
+         desc="The ground heaves and shifts across the whole world: each turn hills rise from the plains and old hills grow into mountains, while underground new tunnels are dug and old ones collapse - more so the deeper you go. Cities, structures, units, roads, forests and water are never touched, and no passage is ever cut off. The land stays changed when the spell ends.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [4300], -100, -58, f20=0),
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [4301], -98, -54, f20=0),
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", [4302], -96, -58, f20=0)},
+         sfx=["SFX\\ZSP\\DUALER_TECTONIC.WAV"]),
+
+  (Donor "TAirMastery" is already in DONORS (Overgrowth / World Healer / Ice Age).  Slots 0..2 = the donor's
+   map-wide cast animation, which draws Random(3) of them, exactly as Ice Age.  No slot 3: no hex glow - the changes
+   are permanent terrain, there are no markers.)
+
+------------------------------------------------------------------------------------------------------------------
+2) build_dual_sphere_icons_v1.py - glyph 'tectonic' (Earth cloud = 40, like Mend Walls)
+------------------------------------------------------------------------------------------------------------------
+  ICONS:   219: "tectonic"
+  CLOUDS:  "tectonic": 40
+  GLYPHS:  "tectonic": glyph_tectonic
+  function (next to glyph_callofdead / the other _user_mask_glyph users):
+
+def glyph_tectonic():
+    """Tectonic Shift (219, Earth tier 4, 2026-10-17): the user's reference art import export/tectonic shift.jpg - a
+    round boulder split by a branching crack, chips and grit flying off it - TRACED -> tectonic_user_mask.png
+    (ink < 128; inside the disc the ink is eroded 11 px at full size so the white cracks widen enough to survive
+    40x35; the flying debris outside the disc is kept and dilated 4 px; fitted to 320x280 at 97 %, centred)."""
+    return _user_mask_glyph("tectonic_user_mask.png")
+
+  ⚠ do NOT drop a file named "tectonic.png" into art import export\ (icon override trap: it would silently replace
+  the glyph).  The reference is "tectonic shift.jpg" (space) - not a key match.
+
+------------------------------------------------------------------------------------------------------------------
+3) build_dual_sphere_fx_v1.py - map-wide drift frames (DualDF ids 4300-4302 of the reserved 4300-4349)
+------------------------------------------------------------------------------------------------------------------
+  build() groups row (next to Ice Age's 2150 snow_drift row):
+              (4300, tectonic_dust(), "ERtect%d.BMP", 770, 40, 0x0000),            # Tectonic Shift (219) slots 0-2: Air Mastery map-wide drift = ochre dust, glowing fissure, grit (200x116)
+
+  function (before def build():) - test-rendered 10/17 (3 frames 200x116; additive, invisible on black, ochre haze
+  + amber crack + tan grit over a map):
+
+def tectonic_dust(n=3):
+    """Tectonic Shift (219) slots 0-2 (2026-10-17): three single frames for Air Mastery's map-wide drift (200x116,
+    additive at low blend, as Ice Age's snow_drift): a faint ochre dust haze along a wide S-curve, a jagged amber
+    fissure (forked crack line with a soft glow) running through it, and tan grit / pebble specks thrown up beside the
+    crack."""
+    W, H = 200, 116; out = []; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    for v in range(n):
+        rnd = random.Random(2190 + v); ph = v * 2.1
+        acc = np.zeros((H, W, 3), np.float32)
+        for k in range(12):                                                      # dust haze puffs
+            t = rnd.random(); x = 10 + 180 * t; y = 60 + 26 * math.sin(t * 2 * math.pi * 0.9 + ph) + rnd.uniform(-6, 6)
+            g = 0.16 * np.exp(-((xx - x) ** 2 + ((yy - y) / 0.55) ** 2) / 260.0)
+            for c, cv in enumerate((200, 150, 90)): acc[..., c] += g * cv
+        pts = []; x = 14.0; y = 60 + 26 * math.sin(ph) + rnd.uniform(-4, 4)       # the fissure: a jagged walk along the curve
+        while x < 186:
+            pts.append((x, y)); x += rnd.uniform(6, 11)
+            y = 60 + 26 * math.sin((x - 10) / 180.0 * 2 * math.pi * 0.9 + ph) + rnd.uniform(-5, 5)
+        glow = Image.new("L", (W, H), 0); gd = ImageDraw.Draw(glow)
+        gd.line(pts, fill=255, width=5)
+        for k in range(4):                                                       # side forks
+            i = rnd.randrange(1, len(pts) - 1); fx, fy = pts[i]; ang = rnd.uniform(-2.6, -0.5) if k % 2 else rnd.uniform(0.5, 2.6)
+            fork = [(fx, fy)]
+            for s in range(3):
+                fx += 7 * math.cos(ang) + rnd.uniform(-2, 2); fy += 7 * math.sin(ang) * 0.6 + rnd.uniform(-2, 2); fork.append((fx, fy))
+            gd.line(fork, fill=170, width=3)
+        g = np.asarray(glow.filter(ImageFilter.GaussianBlur(3.0)), np.float32) / 255.0 * 0.55
+        for c, cv in enumerate((255, 150, 50)): acc[..., c] += g * cv
+        im = Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"); dr = ImageDraw.Draw(im)
+        dr.line(pts, fill=(255, 190, 90, 255), width=1)                         # the bright crack core
+        for k in range(40):                                                      # grit and pebbles thrown up
+            t = rnd.random(); x = 10 + 180 * t; y = 60 + 26 * math.sin(t * 2 * math.pi * 0.9 + ph) + rnd.uniform(-22, 22)
+            c = int(rnd.uniform(150, 230)); col = (c, int(c * 0.8), int(c * 0.55), 255)
+            r = rnd.choice((0.6, 1.0, 1.4))
+            if r < 1: dr.point((x, y), fill=col)
+            else: dr.polygon([(x - r, y), (x, y - r), (x + r, y + 0.4), (x + 0.3, y + r)], fill=col)
+        out.append(im)
+    return out
+
+------------------------------------------------------------------------------------------------------------------
+4) build_dual_sphere_sfx_v1.py - MIXES entry (test-mixed 10/17 in scratch: 2.9 s, mixes cleanly)
+------------------------------------------------------------------------------------------------------------------
+    # Tectonic Shift (219, Earth tier 4, 2026-10-17): the earth groaning - Tremors' rumble slowed under a sub-bass
+    # swell, the Earth sphere's cast, and two heavy rock-crunch shifts as the plates give way.
+    "DUALER_TECTONIC.WAV":  [("Attack/Earth.WAV", 1.0, 0.00, 2.8, 0.9, 0.7),                    # deep slowed rumble
+                             ("synth:subswell:48:26:2.8", 0.7, 0.00, None, 0.7),               # the ground's sub-bass groan
+                             ("Attack/A_Force1.WAV", 0.75, 0.55, None, 0.3, 0.75),             # first plate shift (crunch, low)
+                             ("Attack/m_Earth.wav", 0.5, 0.20, 2.4, 0.8, 0.85),                # the Earth sphere's own cast
+                             ("Attack/A_Force2.WAV", 0.5, 1.25, None, 0.4, 0.7),               # second, deeper shift
+                             ("Attack/Earth.WAV", 0.5, 1.10, 1.8, 0.7, 0.9)],                  # aftershock rumble
+
+------------------------------------------------------------------------------------------------------------------
+5) APPLY ORDER (live)
+------------------------------------------------------------------------------------------------------------------
+  0. (Overgrowth must already be applied - it is; Tectonic chains in front of its CE/MM/NT/VMT hooks.  If Overgrowth
+     ever needs re-running: py -3.10 patch_tectonic_v1.py --revert FIRST, then overgrowth, then tectonic again.
+     If Depths of Plenty / Steadfast or anything else chains onto the SAME Air Mastery sites later, revert in
+     reverse apply order.)
+  1. py -3.10 build_dual_sphere_sfx_v1.py --apply            (writes Sfx\Zsp\DUALER_TECTONIC.WAV)
+  2. py -3.10 build_dual_sphere_fx_v1.py --apply             (DualDF.ILB gains 4300-4302)
+  3. py -3.10 build_dual_sphere_icons_v1.py --apply          (SpellIcn.ILB gains icon 219; render-check it - the
+                                                                icon-override trap)
+  4. py -3.10 patch_dual_sphere_spells_v1.py --apply         (Spells.pfs record key 229 + registration of 219)
+  5. py -3.10 patch_tectonic_v1.py            (dry run: expect "zone zero ... chained to: CE->0x558240a0, MM->0x558240f0,
+                                                NT->0x55824d90, AC->0x55824120, DE->0x55824150, CHK->0x55824180")
+     py -3.10 patch_tectonic_v1.py --apply
+  Ship: AoWEPACK.dll, Spells.pfs, SpellIcn.ILB, Images\Effects\DualDF.ILB, + ADD by hand to the release zip:
+  Sfx\Zsp\DUALER_TECTONIC.WAV.
+
+------------------------------------------------------------------------------------------------------------------
+6) TERRAIN / DECORATION CHANGES (what the player will see)
+------------------------------------------------------------------------------------------------------------------
+  Surface (level 0), terrain ids unchanged:
+    Grass 1 / Desert 2 / Snow 3 / Steppe 4 / Wasteland 5 with overlay 0xFF (bare)  -> overlay 2 HILL
+       (ClearTerrain drops any rocks/bones decoration first; PlaceTerrain picks a random single-hex hill resource
+        of that terrain - MOUNTAIN.ILB hills, 2 per terrain)
+    same terrains with overlay 2 (hill) -> overlay 0 MOUNTAIN (single-hex mountain resource of that terrain),
+       only at a "simple point"; if no mountain resource fits that terrain the hill is put back.
+    Never: Water 0, Ice 6, Lava 9, Dirt 0xC, forest 1, vegetation 3, road 4, bridge 5, existing mountains.
+  Underground + depths (levels 1, 2, ...):
+    EarthWall 7 -> Dirt 0xC (dig; must touch an open hex; never the outer ring)  - plain cave floor, no decoration
+    Dirt 0xC (overlay 0xFF) -> EarthWall 7 (bury; only at a simple point)       - rocks/bones on it are cleared
+    Never: Rock 8, Lava 9, CaveWater 0xA, CaveIce 0xD, rubble/vegetation overlays.
+  Rates per caster turn: changes = area x 2/1000 x (level+1) (min 1, odd-rounded), picks = 12 x that:
+    64x64 map -> 9 surface / 17 underground / 25 depths;  96x96 -> 19 / 37 / 55.  (TS_PM / PICK_MULT in the script.)
+  Refresh: PlaceTerrain/ClearTerrain create/free the terrain objects (art + overlay); ChangeTerrain (map VMT+0xD0)
+    rewrites [field+0x14] and rebuilds the hexagons; movement costs are read live from the fields; LOS/fog for dug /
+    buried Earth walls is rebuilt the same turn by build_los_terrain.py's InvalidateMap trigger in
+    TTurnPlayerControl.NewTurn (which runs after our NewTurn hook).
+
+------------------------------------------------------------------------------------------------------------------
+7) TESTS DONE (scratch copies in C:\Users\<user>\.claude\jobs\47241cad\tmp\tecto\ only - nothing live was touched)
+------------------------------------------------------------------------------------------------------------------
+  * dry run on a copy of the live AoWEPACK.dll: zone zero + reloc-free, all six sites decoded to Overgrowth's caves.
+  * --apply -> --apply again = "already applied"; --revert = BYTE-IDENTICAL to the original copy; --revert again =
+    "already vanilla".
+  * vanilla-site copy (Overgrowth hooks undone by hand): applies with CE -> ce_plain, reverts byte-identical.
+  * a site taken over by someone else after us -> --revert refuses ("revert that first").
+  * stale code body (simulated upgrade) -> --apply rewrites keeping the stored originals; revert byte-identical.
+  * unicorn emulation of the PATCHED bytes (tmp\tecto\emu.py) with engine calls stubbed against a Python map model
+    (40x30, 3 levels, random terrain/overlays, caves, 25 structures, 25 armies, 15 markers; desert given no mountain
+    art): routing of CE/MM/AC/DE/CHK for 219 vs others, NT gating (other player / inactive -> prev only), stack
+    balance and callee-saved registers, then 60 turns x 4 map seeds: only the allowed changes happen, no guarded
+    hex is ever touched, no out-of-range GetField/GetMapLevel, and the number of open regions on every level never
+    rises (no region ever split by a mountain or a burial).  Typical 60 turns: ~145 hills, ~35 mountains,
+    ~430 digs, ~240 burials, a handful of hill put-backs.
+  NOT tested: in game.  Open questions for the in-game test: single-hex hill/mountain resources exist for every
+    surface terrain (if one is missing that terrain simply never gets hills/mountains); a large multi-hex mountain's
+    secondary sub-hexes might not report overlay 0 (then the simple-point test sees them as open - small risk of a
+    mountain closing a gap next to such a range); MP/LAN OOS check (all decisions use map.Random in the synced
+    NewTurn message, like Ice Age / World Healer).

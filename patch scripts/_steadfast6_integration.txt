@@ -1,0 +1,38 @@
+STEADFAST (218) v6 - "the shield clang plays twice per shield, change the second one to sound a little different"
+(2026-10-17, fork; NOTHING applied live, no shared builder edited).
+
+ROOT CAUSE (measured): NOT the engine.  The land site 0x40C609 runs once per strike and Steadfast's 7 strikes hit the
+7 hexes exactly once (rotaway HailPattern), so patch_tc_steadfast_clang_v1.py plays cue 2 once per shielded unit.
+The double is INSIDE DUALER_STEADCLANG.WAV: its "Attack/A_Force1.WAV" layer (speed 0.55) has a delayed impact -
+its peak lands ~0.2 s after the layer start (0.94 s in the file), AFTER the parry + 73 Hz ring + stone step at 0.74 s,
+and it was LOUDER than the first hit (20 ms RMS bins: first hit ~20, second ~34) -> every shield = "clang ... CLANG".
+(The cast WAV DUALER_STEADFAST.WAV has the same layer pairing at 0.62/0.83 s - left untouched, user likes the cast.)
+
+FIX (sfx only, no engine / pipeline / Spells.pfs change): v6 keeps two hits per shield but makes the second distinct:
+  hit 1 @0.74 s = the old clang (step + parry 0.5x + 73 Hz bronze ring) + the A_Force1 crunch pulled forward onto it
+          (source offset 0.08 s, cut to 0.16 s so its own later transient is gone) -> one solid, heavier first clang;
+  hit 2 @0.95 s = a lighter answering ring: bronze ring a fifth up (110 Hz, 1.1 s), a brighter parry (0.68x) and a
+          stone tap (SFStep3 0.72x), softer than hit 1 (bins: hit 1 ~34, hit 2 ~18).
+Scratch renders (C:\Users\<user>\.claude\jobs\47241cad\tmp\stead6\): DUALER_STEADCLANG_old.wav, DUALER_STEADCLANG_v6.wav,
+stack7_v6.wav (7 shields 5 ticks apart).  Length 2.35 s unchanged; 7-stack peak 0.92 vs old 0.87 (same normalisation).
+
+== 1. build_dual_sphere_sfx_v1.py (CRLF file - detect the newline): REPLACE the "DUALER_STEADCLANG.WAV" entry AND its
+       4 v5 comment lines above it ("# Steadfast v5 cue 2 ...") with ==
+---- code ----
+    # Steadfast v6 cue 2 (2026-10-17, user: "clang plays twice per shield - change the second one to sound a little
+    # different"): the double was A_Force1's DELAYED impact (peak ~0.2 s after the clang, louder than it).  Hit 1 @0.74 s
+    # = step + low crunch (A_Force1 pulled onto the clang: offset 0.08 s, cut 0.16 s) + 73 Hz bronze ring + slowed parry;
+    # hit 2 @0.95 s = a lighter answering ring a fifth up (110 Hz) + brighter parry + stone tap, softer than hit 1.
+    "DUALER_STEADCLANG.WAV": [("Moves/SFStep1.WAV", 0.65, 0.74, None, 0.3, 0.5),
+                             ("Attack/A_Force1.WAV", 0.39, 0.70, 0.16, 0.1, 0.55, 0.0, 0.08),
+                             ("synth:bronzering:73:1.6", 0.4875, 0.75, None, 0.8, 1.0, 0.0, 0.0, 1.6),
+                             ("Attack/Parry.WAV", 0.325, 0.75, 0.7, 0.5, 0.5),
+                             ("synth:bronzering:110:1.1", 0.30, 0.95, None, 0.6, 1.0, 0.0, 0.0, 1.6),
+                             ("Attack/Parry.WAV", 0.22, 0.95, 0.6, 0.4, 0.68),
+                             ("Moves/SFStep3.WAV", 0.35, 0.95, None, 0.2, 0.72)],
+---- end ----
+  FADE_OUT keeps "DUALER_STEADCLANG.WAV": 0.5; no DRIVE entry.
+
+== 2. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_sfx_v1.py --apply      (rewrites Sfx\Zsp\DUALER_STEADCLANG.WAV only in effect)
+  No engine / pipeline / Spells.pfs change; patch_tc_steadfast_clang_v1.py stays as is (no upgrade needed).

@@ -1,0 +1,164 @@
+HURL SKULL v7 (2026-10-19) - art-only polish of v6.  User: "good but excessive: the projectile looks massive with
+all the effects; the tail looks bad (should be more of a trailing glow); the explosion gfx is good but the death ring
+is excessive."
+
+Changes (same function NAMES, same frame counts / canvases / anchors / DualDF ids 7612-7709, same drawModes ->
+no pfs and no engine change; only build_dual_sphere_fx_v1.py --apply is needed):
+  * skull_death_aura  : tight black aura - ~85 % dark hugging the skull (r <= 6.5 px), soft fall-off to 0 by ~10 px,
+                        two short wisps.  Footprint ~1.7x the skull (v6 ~3.5x: 42 px wide -> ~21 px).
+  * skull_fire_aura   : thin vanilla-colour fire rim at ~8 px + 10 short soft tongues (~4 px); total reach ~11 px.
+  * deathfire_puff_smoke / deathfire_puff_fire : the trail is now a smooth trailing GLOW - each per-tick puff is a
+                        plain soft Gaussian (no smoke blob, no sparks, no rings): fire 40 % at birth, r 5 -> 2.5 px,
+                        cooling orange -> deep red, gone by frame 8; dark dab 38 %, r 4.5 -> 3 px, gone by frame 11.
+                        Consecutive puffs (~6 px apart) melt into one continuous streak: hot glow right behind the
+                        skull, tapering to a faint dark wisp.
+  * skull_death_burst : the dark SHOCK RING is removed; pall 80 % -> 60 %, ~55 shards (was 70, smaller), two thin
+                        late smoke wisps (was three heavy columns).  Vanilla EXPLBIG on top is untouched.
+
+Previews (scratch tmpxlabil7\): flight_v6_vs_v7_2x.png / _1x.png (lob composite, v6 left, v7 right, grass/sand/grey),
+head_v6_vs_v7_4x.png, explosion_v6_vs_v7.png (frames 4/10/18/26, v6 | v7 pairs).
+
+APPLY (game + editor closed): replace the five functions below in build_dual_sphere_fx_v1.py (each def up to the next
+top-level def), keep the rows as they are, then  py -3.10 build_dual_sphere_fx_v1.py --apply  and the VEH check.
+Ship DualDF.ILB.  Revert = put the v6 bodies back (tmpxlabil6rt6.py) and rebuild.
+---- code: build_dual_sphere_fx_v1.py - REPLACE these five functions (same names) ----
+def skull_death_aura(n=12):
+    """Hurl Skull slot 0 layer 1 of 3 (under the bone) - v7 (2026-10-19 user: 'excessive, the projectile looks
+    massive'): a TIGHT smooth black death aura, MULTIPLY (1026): ~85 % dark hugging the skull (r <= 6.5 px), a soft
+    Gaussian fall-off to nothing by ~10 px, a gentle breathing pulse and two short dark wisps.  Footprint ~1.7x the
+    skull (was ~3.5x).  64x64, centre 31/33, 12 frames in step with the skull."""
+    W = H = 64; cx, cy = 31.0, 33.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    out = []
+    for i in range(n):
+        ph = 2 * math.pi * i / n
+        R = 2.6 + 0.3 * math.sin(ph)
+        r = np.sqrt((xx - cx) ** 2 + ((yy - cy) * 1.05) ** 2)
+        core = 0.85 * np.exp(-(np.maximum(r - 6.5, 0) / R) ** 2)
+        wisp = np.zeros_like(r)
+        for k, (ox, sp) in enumerate(((-2.5, 1.0), (2.5, 1.3))):
+            t = ((i / n) * sp + k / 2.0) % 1.0
+            wx = cx + ox + 1.0 * math.sin(ph + k * 2.1); wy = cy - 6 - 5 * t; wr = 1.8 + 1.4 * t
+            wisp = np.maximum(wisp, 0.40 * (1 - t) * np.exp(-((xx - wx) ** 2 + (yy - wy) ** 2) / (wr * wr)))
+        out.append(_sk5_mul(np.maximum(core, wisp)))
+    return out
+
+
+def skull_fire_aura(n=12):
+    """Hurl Skull slot 0 layer 3 of 3 (over the bone) - v7: a THIN flickering fire rim just outside the black aura,
+    ADDITIVE (770), vanilla fire colours: a ring at ~8 px (width ~1.4 px) and 10 short soft tongues (~4 px) licking
+    upward, hollow inside r < 6.5 so the bone stays white in its black shroud.  Total reach ~11 px (was ~22).
+    64x64, centre 31/33, 12 frames."""
+    W = H = 64; cx, cy = 31.0, 33.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rnd = random.Random(5712)
+    tongues = [(rnd.uniform(0, 2 * math.pi), rnd.uniform(0.7, 1.3), rnd.uniform(0, 6.28)) for _ in range(10)]
+    stops = np.array([s[0] for s in SK5_FIRE], np.float32)
+    out = []
+    for i in range(n):
+        ph = 2 * math.pi * i / n
+        ang = np.arctan2(yy - cy, xx - cx); r = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        ring = np.exp(-((r - 8.0) / 1.4) ** 2) * (0.5 + 0.5 * np.sin(ang * 3 + ph * 2) ** 2)
+        heat = 0.5 * ring
+        for (a0, ln, p0) in tongues:
+            fl = 0.65 + 0.35 * math.sin(ph * 2 + p0)
+            bx, by = cx + 7.5 * math.cos(a0), cy + 7.2 * math.sin(a0)
+            for s in np.linspace(0, 1, 8):
+                L = 4.2 * ln * fl * s
+                px_ = bx + math.cos(a0) * L * 0.3 + 0.4 * math.sin(ph + p0 + 3 * s); py_ = by + math.sin(a0) * L * 0.15 - L
+                w = 1.3 * (1 - s) ** 0.7 + 0.35
+                heat = np.maximum(heat, (1 - s) ** 1.2 * 0.7 * np.exp(-((xx - px_) ** 2 + (yy - py_) ** 2) / (w * w)))
+        heat = heat * np.clip((r - 6.3) / 1.6, 0, 1)
+        t = 1.0 - np.clip(heat, 0, 1)
+        rgb = np.zeros((H, W, 3), np.float32)
+        for c in range(3):
+            vals = np.array([s[1][c] for s in SK5_FIRE], np.float32)
+            rgb[:, :, c] = np.interp(t, stops, vals) * np.clip(heat * 1.2, 0, 1)
+        out.append(_sk5_add(rgb))
+    return out
+
+
+def deathfire_puff_smoke(n=16):
+    """Hurl Skull slot 3 layer 1 (the TRAIL) - v7 (user: 'the tail should be more of a trailing GLOW'): a faint soft
+    dark-glow dab, MULTIPLY (1026) - ~38 % dark at the centre (r 4.5 px at birth, SHRINKING to ~2 px as it ages) and
+    gone by frame 11 of 16.  One is dropped per tick (~6 px apart), so they melt into one smooth dark streak that
+    narrows and fades behind the skull.  48x48, centre 23/23 (unchanged canvas/anchor)."""
+    W = H = 48; cx, cy = 23.0, 23.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rr2 = (xx - cx) ** 2 + (yy - cy) ** 2
+    out = []
+    for i in range(n):
+        life = max(0.0, 1.0 - i / 11.0)
+        R = 3.0 + 1.5 * life
+        amt = 0.38 * life ** 1.2 * np.exp(-rr2 / (R * R))
+        out.append(_sk5_mul(amt))
+    return out
+
+
+def deathfire_puff_fire(n=16):
+    """Hurl Skull slot 3 layer 2 (the TRAIL) - v7: a dim, soft ember glow, ADDITIVE (770): a plain smooth Gaussian
+    (r 5 px at birth shrinking to ~2.5) in the vanilla fire ramp cooling orange -> deep red, ~40 % at birth and gone by
+    frame 8 - the hot leading part of the streak, the dark dab outlasts it so the tail ends in a smoky dark wisp.
+    No sparks, no rings (they read as beads).  48x48."""
+    W = H = 48; cx, cy = 23.0, 23.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rr2 = (xx - cx) ** 2 + (yy - cy) ** 2
+    out = []
+    for i in range(n):
+        life = max(0.0, 1.0 - i / 8.0)
+        rgb = np.zeros((H, W, 3), np.float32)
+        if life > 0:
+            R = 2.5 + 2.5 * life
+            heat = 0.40 * life ** 1.2 * np.exp(-rr2 / (R * R))
+            col = np.array(_sk5_firecol(0.40 + 0.55 * (1 - life)), np.float32)
+            rgb = heat[:, :, None] * col[None, None, :]
+        out.append(_sk5_add(rgb))
+    return out
+
+
+def skull_death_burst(n=30):
+    """Hurl Skull slot 2 layer 1 (drawn BEFORE Self Destruct's vanilla EXPLBIG 0-29) - v7 (user: 'the death ring is
+    excessive'): NO shock ring; a lighter violet-black pall under the blast (60 % max, r 26 -> 100 px), ~55 black
+    shards with soot streaks on low arcs and two thin smoke wisps rising late - all subtle, the vanilla fireball stays the star.
+    MULTIPLY (1026), vanilla 274x258 canvas / anchor (impact at 131/142), 30 frames (sets the helper lifetime)."""
+    W, H = 274, 258; cx, cy = 131.0, 142.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    rr = np.sqrt((xx - cx) ** 2 + ((yy - cy) * 1.3) ** 2)
+    rnd = random.Random(5740)
+    parts = []
+    for _ in range(55):
+        a = rnd.uniform(0, 2 * math.pi); v = rnd.uniform(2.4, 5.4); up = rnd.uniform(0.8, 2.8)
+        parts.append((math.cos(a) * v, math.sin(a) * v * 0.55 - up, rnd.uniform(1.4, 2.8), rnd.uniform(0, 3)))
+    cols = [(rnd.uniform(-18, 18), rnd.uniform(0, 4), rnd.uniform(7, 10)) for _ in range(2)]
+    noise = np.array(Image.fromarray((np.random.RandomState(5741).rand(26, 28) * 255).astype(np.uint8)).resize((W, H), Image.BICUBIC)).astype(np.float32) / 255
+    out = []
+    for i in range(n):
+        t = i / (n - 1.0)
+        R = 26 + 74 * t ** 0.6
+        dark = (0.60 * (1 - t) ** 1.3) * np.exp(-(rr / R) ** 2 * 1.5) * (0.85 + 0.3 * noise) * min(1.0, (i + 1) / 3.0)
+        for (vx, vy, sz, d0) in parts:
+            f = i - d0
+            if f < 0: continue
+            x = cx + vx * f; y = cy + vy * f + 0.11 * f * f
+            fade = max(0.0, 1.0 - f / 26.0) ** 0.8
+            if fade <= 0: continue
+            x0, x1 = int(max(0, x - 20)), int(min(W, x + 20)); y0, y1 = int(max(0, y - 20)), int(min(H, y + 20))
+            if x0 >= x1 or y0 >= y1: continue
+            sub = dark[y0:y1, x0:x1]; sx_ = xx[y0:y1, x0:x1]; sy_ = yy[y0:y1, x0:x1]
+            for k in range(3):
+                hx = x - vx * k * 0.8; hy = y - (vy + 0.22 * f) * k * 0.8
+                w = sz * (1 - 0.2 * k)
+                sub = np.maximum(sub, (0.9 * fade * (1 - 0.2 * k)) * np.exp(-((sx_ - hx) ** 2 + (sy_ - hy) ** 2) / (w * w)))
+            dark[y0:y1, x0:x1] = sub
+        if i >= 14:
+            u = (i - 14) / 15.0
+            for (ox, d0, wd) in cols:
+                for k in range(5):
+                    v = u - k * 0.06
+                    if v <= 0: continue
+                    px_ = cx + ox + 3 * math.sin(k + i * 0.3); py_ = cy - 8 - 55 * v
+                    w = wd * (0.7 + 0.6 * v)
+                    dark = np.maximum(dark, 0.45 * (1 - u) ** 0.9 * (1 - 0.12 * k) * np.exp(-((xx - px_) ** 2 + (yy - py_) ** 2) / (w * w)))
+        out.append(_sk5_mul(dark))
+    return out
+---- end ----

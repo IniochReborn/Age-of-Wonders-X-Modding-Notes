@@ -1,0 +1,91 @@
+CROSSWIND (213) v5 - integration notes (2026-10-16, fork; nothing below is applied live)
+=====================================================================================
+
+WHAT CHANGED
+  (1) Wash (patch_tc_crosswind_fx_v1.py v5, AoWTCPCK): way more + way faster Winds of Fury particles (14 every 2 ticks,
+      ticks 0..96, 24 px/tick at full speed, 36-tick paths written point by point) and the Air Mastery clouds (3 every
+      4 ticks up to tick 52, 9 at tick 0, 10 px/tick) now share ONE displacement profile: full speed right/down until
+      tick 50, a half-cosine velocity ease through ZERO at tick 68 (slow stop), back to full speed leftward/up by tick
+      86, then full speed the other way.  Zone 3 0x446000..0x446400 = two int16 tables (DP particles, DC clouds) +
+      pwave; BSS GT 0x46C6F0 = the global cast tick.  Swirls / debuff carriers / slot picks unchanged from v4.
+      Tuning constants at the top of the script: M_REV/HW (turn moment/width), VP/VC (speeds), NP/PEVERY/PLAST/PN
+      (particle density/life), CEVERY/CLAST/N_CW/FIRST_CLOUDS (clouds).
+  (2) 0xC2 'Crosswind' aura: a persistent status overlay (Suspended-style, shorter): overlay table + Ability.pfs record
+      204 tag 8 + new art xwind_status (DualDF 3550-3597).
+
+TIMING FOR THE SFX (estimate at ~30 ticks/s, the same assumption as the other notes)
+  t 0         cast: wash starts (particles + clouds at once)
+  t ~1.67 s   (tick 50) the wind starts to slow
+  t ~2.27 s   (tick 68) DEAD STOP / direction change   <- pitch change here
+  t ~2.87 s   (tick 86) full speed the other way
+  t ~4.4 s    last particles fade (tick ~132); t ~4.7 s last clouds fade (tick ~142)  -> total ~4.7 s
+  (the per-enemy swirls end / the debuff lands at ~4 s, unchanged)
+
+---- 1. build_dual_sphere_fx_v1.py: function (before def build()) + group-table row ----
+              (3550, xwind_status(), "AIxwst%02d.BMP", 770, 90, 0x0000),      # Crosswind (213) 0xC2 status overlay: short white mote spiral (48x80, loop, Ability.pfs 204 tag 8)
+
+def xwind_status(n=48):
+    """Crosswind (213) 0xC2 'Crosswind' STATUS OVERLAY (2026-10-16, user: an enchantment aura on units with Crosswind,
+    like Suspended's spinning particles but SHORTER).  Ability.pfs record 204 tag 8 (patch_crosswind_ability_pfs_v1.py
+    v2) -> drawn by TTacticalCombatUnitHS.Show's overlay loop (patch_tc_suspend_overlay_v1.py v3 table) at xs -23 /
+    ys -56 (overlay origin = canvas (23, 56); the feet ~ origin + 21 = y 77, Suspend's rule).  48x80, ADDITIVE 770
+    (GFXE Intensity: out = d + 1.75*f*s^2/(s+d), black = invisible), seamless loop of n frames: no beam - only a very
+    faint pale-cyan air tint round the lower body, and 5 small white motes (each with a 3-dot fading trail) on a
+    flattened helix of radius 9 that rise from the feet to about HALF the unit's height while turning 1.25 turns -
+    brighter in front, dimmer behind, fading in at the bottom and out at the top."""
+    W, H = 48, 80; cx = 24.0; y_bot, y_top = 74.0, 40.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    tint = np.exp(-((xx - cx) / 11.0) ** 2 - ((yy - 62.0) / 13.0) ** 2) * 22.0
+    for i in range(n):
+        t = i / float(n)
+        acc = tint * (0.85 + 0.15 * math.cos(2 * math.pi * t))
+        for k in range(5):
+            for g, gl in ((0.0, 1.0), (0.018, 0.55), (0.036, 0.3), (0.054, 0.15)):   # the mote + its trail
+                u = (t + k / 5.0 - g) % 1.0
+                a = 2 * math.pi * (u * 1.25 + k / 5.0)
+                x = cx + 9.0 * math.cos(a); y = y_bot - u * (y_bot - y_top) + 2.2 * math.sin(a); z = math.sin(a)
+                fade = min(1.0, u / 0.18) * min(1.0, (1 - u) / 0.25)
+                lvl = (0.5 + 0.5 * z) * fade * gl
+                if lvl > 0.01: acc = acc + np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 1.1) * 200.0 * lvl
+        v = np.clip(acc, 0, 255)
+        out.append(Image.fromarray(np.dstack([np.clip(v * 0.92, 0, 255), np.clip(v * 0.98, 0, 255), v]).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+---- 2. pipeline: NO change (213's gfx slots are unchanged; the overlay is an Ability.pfs sequence, not a spell slot).
+
+---- 3. data / engine scripts (all scratch-tested; dry-run clean against the live files) ----
+  patch_crosswind_ability_pfs_v1.py v2   record 204 gains tag 8 (DualDF 3550-3597, xs -23 / ys -56, f20 4 = 4 ticks per
+                                         frame, 48 frames = a 192-tick loop) - REPLACED IN PLACE (205 / 206 untouched;
+                                         verified: every other record byte-identical, keys unchanged).  Backup .bak_crosswind.
+  patch_tc_suspend_overlay_v1.py v3       ADD = (0xC3, 0xC4, 0xC2): table 18 ids (bound 0,17 / loop 18); 3 bytes change.
+  patch_tc_crosswind_fx_v1.py v5          'v4 build found -> upgrading to v5'; zones 1/2/3 = 1839 B.
+
+---- APPLY ORDER (game + editor closed) ----
+  1. build_dual_sphere_fx_v1.py --apply                (row 3550 - the art must exist before the record points at it)
+  2. py -3.10 patch_crosswind_ability_pfs_v1.py --apply
+  3. py -3.10 patch_tc_suspend_overlay_v1.py --apply
+  4. py -3.10 patch_tc_crosswind_fx_v1.py --apply
+  5. VEH startup check
+  Revert: 4 then 3 (each byte-identical to the previous version's own revert - verified).  The pfs script's --revert
+  removes record 204 entirely (it can then only be re-appended after 205/206 are reverted) - to go back to the v1
+  record use the scratch v1 script tmp/xwind6/patch_crosswind_ability_pfs_v1_v1.py on a copy, or keep a copy of the pfs.
+
+---- CHAIN CONSEQUENCES ----
+  unchanged (Bloodbath aura TK OTHER; oil gush / Ashes NF/SHOW foreign; patch_rot_overlay_v1 sites OTHER while the
+  overlay table is moved).  Zone 3 0x446000..0x446400 now claimed (Gust's zone 5 ends at 0x446000).
+
+---- SCRATCH TESTS (tmp/xwind6, copies of the LIVE AoWTCPCK.dll / Ability.pfs) ----
+  crosswind fx: upgrade written; re-apply 'already applied'; revert / 'already reverted'; v5 revert == v4 script's own
+    revert of the live DLL (byte-identical); fresh apply on the reverted copy == the upgrade (byte-identical); tk /
+    pwave / nf disassembly read by hand.
+  overlay v3: upgrade 3 bytes; re-apply 'already applied'; v3 revert == v2's own revert (identical); fresh == upgrade.
+  pfs v2: in-place replace; re-run 'already applied'; keys identical; records 205/206 (and all others) byte-identical;
+    204's tag-8 sequence parses back (EFFECTS\DUALDF.ILB 3550..3597, f18 0, f20 4, -23/-56).
+  Both TCPCK scripts applied together on one scratch copy: both report 'already applied'.
+
+---- IN-GAME TESTS ----
+  1. Cast: dense, fast WoF streams + Air Mastery clouds sweep right/down, slow to a stop together at ~2.3 s, then
+     accelerate back left/up and fade by ~4.7 s.  Frame rate on a big field (up to ~250 particles alive; lower NP if needed).
+  2. Every enemy that gets Crosswind shows a short spiral of white motes round its lower body for the 3 rounds; it goes
+     when the debuff ends.  If it sits too high / low, tune ys (-56) in patch_crosswind_ability_pfs_v1.py.
+  3. Suspended / Static Shield auras + the vanilla overlays still draw.

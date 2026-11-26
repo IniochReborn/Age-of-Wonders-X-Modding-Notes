@@ -1,0 +1,85 @@
+DEPTHS OF PLENTY (217, Earth L2 global) - integration snippets for the shared builders (2026-10-17, fork).
+Engine patch: patch scripts\patch_depthsofplenty_v1.py (AoWEPACK.dll, zone 0x5586F000-0x5586F246, backup .bak_depths).
+Insert ONLY the code lines below (no prose) and ast.parse each edited builder afterwards.
+
+== 1. patch_dual_sphere_spells_v1.py - append to the Earth single-sphere SPELLS block (after id=216 Mend Walls) ==
+    dict(id=217, name="Depths of Plenty", sphere=3, tier=2, mana=50, research=90, upkeep=10,
+         donor="TEarthMastery", pfs_donor=74, tc_type=None, icon=217,          # patch_depthsofplenty_v1.py: marker 217 chained in front of Golden Age's Earth Mastery caves; TMine.GetIncome +1/+2/+3 by level
+         pokes=[(0x34, 4, 0xFFFFFFFF)],                                       # AI priority -1 (as Golden Age / Nimue's Favour)
+         desc="Rich veins open beneath your realm: each of your mines produces 1 extra gold on the surface, 2 underground and 3 in the depths.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [4200, 4201, 4202, 4203, 4202, 4201], -10, -10, f20=0)},   # map-wide amber ore glints (Earth Mastery particle)
+         sfx=["SFX\\ZSP\\DUALER_DEPTHS.WAV"]),
+(DONOR "TEarthMastery" already exists - Golden Age.  pfs key 227.)
+
+== 2. build_dual_sphere_icons_v1.py - ICONS dict: add  217: "depthsofplenty"  ; add this function before glyph_mendwalls ==
+(art import export\ has no depths/plenty/mine/gold reference and no override png - checked.)
+def glyph_depthsofplenty():
+    """Depths of Plenty (217, Earth L2, 2026-10-17; no user reference art): a timbered mine mouth (two posts + a lintel
+    over a dark adit) set in a hillside, three stepped rock strata descending beneath it (surface / underground /
+    depths), and a heap of gold nuggets spilling out of the adit with three sparkles above it."""
+    im = canvas(); dr = ImageDraw.Draw(im); P = lambda pts: [(x * S, y * S) for x, y in pts]
+    dr.polygon(P([(0.0, 22.0), (6.0, 12.0), (13.0, 7.0), (20.0, 5.6), (27.0, 7.0), (34.0, 12.0), (40.0, 22.0)]), fill=255)   # the hill
+    dr.rectangle([10.6 * S, 10.4 * S, 29.4 * S, 13.0 * S], fill=0)                                           # lintel gap
+    dr.rectangle([11.4 * S, 10.8 * S, 28.6 * S, 12.6 * S], fill=255)                                         # the lintel beam
+    for x in (12.0, 25.2):                                                                                   # the posts
+        dr.rectangle([(x - 0.8) * S, 12.6 * S, (x + 3.6) * S, 22.0 * S], fill=0)
+        dr.rectangle([x * S, 12.6 * S, (x + 2.8) * S, 22.0 * S], fill=255)
+    dr.rectangle([15.6 * S, 13.4 * S, 24.4 * S, 22.0 * S], fill=0)                                           # the dark adit
+    for k, (y, inset) in enumerate(((24.0, 2.0), (28.0, 6.0), (32.0, 10.0))):                                # strata stepping down
+        dr.rectangle([inset * S, y * S, (40.0 - inset) * S, (y + 2.6) * S], fill=255)
+        for xx in range(int(inset + 3), int(40 - inset - 1), 5):                                             # cracks in each band
+            dr.line(P([(xx, y), (xx + 1.2, y + 2.6)]), fill=0, width=max(1, int(0.6 * S)))
+    for cx, cy, r in ((17.4, 20.6, 1.6), (20.2, 20.0, 1.9), (23.0, 20.8, 1.5), (18.8, 18.0, 1.4), (21.6, 17.8, 1.5), (20.2, 15.6, 1.3)):
+        dr.ellipse([(cx - r - 0.5) * S, (cy - r - 0.5) * S, (cx + r + 0.5) * S, (cy + r + 0.5) * S], fill=0)
+        dr.ellipse([(cx - r) * S, (cy - r) * S, (cx + r) * S, (cy + r) * S], fill=255)                        # gold nuggets in the adit
+    for x, y, r in ((6.0, 3.6, 2.4), (33.6, 4.4, 2.0), (20.0, 1.4, 1.4)):                                    # sparkles
+        dr.line(P([(x - r, y), (x + r, y)]), fill=255, width=max(1, int(0.7 * S)))
+        dr.line(P([(x, y - r), (x, y + r)]), fill=255, width=max(1, int(0.7 * S)))
+    return im
+
+
+== 3. build_dual_sphere_fx_v1.py - function before `def build():` + group row after the gold_motes row (1670) ==
+def ore_glints():
+    """Depths of Plenty (217) slot 0: Earth Mastery's map-wide particle (as Golden Age's gold_motes, 20x20 additive,
+    played [4200, 4201, 4202, 4203, 4202, 4201]): a deep-amber gold-ore glint - a warm nugget-coloured core under a
+    diagonal X-flare (Golden Age's twinkle is a +), an earthy bronze halo and two specks of dust drifting down."""
+    frames = []; yy, xx = np.mgrid[0:20, 0:20].astype(np.float32)
+    for k, (g, rl, dy) in enumerate(((0.6, 3.5, 0.0), (0.9, 5.5, 1.0), (1.15, 7.0, 2.0), (0.7, 4.5, 3.0))):
+        d2 = (xx - 9.5) ** 2 + (yy - 9.5) ** 2
+        u, v_ = (xx - 9.5 + yy - 9.5) / 1.4142, (xx - 9.5 - (yy - 9.5)) / 1.4142
+        core = np.exp(-d2 / (2 * 1.5 ** 2)) * g
+        rays = (np.exp(-(u ** 2) / 0.45 - (v_ ** 2) / (2 * rl ** 2)) + np.exp(-(v_ ** 2) / 0.45 - (u ** 2) / (2 * rl ** 2))) * 0.55 * g
+        halo = np.exp(-d2 / (2 * 4.0 ** 2)) * 0.30 * g
+        dust = sum(np.exp(-((xx - x0) ** 2 + (yy - (y0 + dy)) ** 2) / 0.6) * 0.5 * g for x0, y0 in ((6.0, 12.0), (13.5, 11.0)))
+        v = np.clip(np.maximum(np.maximum(core, rays), np.maximum(halo, dust)), 0, 1); w = np.clip(core * 1.2 - 0.35, 0, 1)
+        rgb = np.dstack([255 * v, (140 + 100 * w) * v, (30 + 150 * w) * v])
+        frames.append(Image.fromarray(np.dstack([np.clip(rgb, 0, 255), 255 * (v > 0.04)]).astype(np.uint8), "RGBA"))
+    return frames
+
+
+              (4200, ore_glints(), "ERdepth%d.BMP", 770, 50, KEY),                   # Depths of Plenty (217) slot 0: Earth Mastery map-wide particle = amber ore glints (20x20, 4 frames)
+
+== 4. build_dual_sphere_sfx_v1.py - add before "DUALEW_OVERGROWTH.WAV": ==
+    # Depths of Plenty (217, Earth L2 2026-10-17): picks ringing deep in a mine, the Earth sphere's cast slowed, a low
+    # earth drone, and coins clinking out at the end.
+    "DUALER_DEPTHS.WAV":    [("Places/Mine.WAV", 0.8, 0.00, 2.2, 0.8, 0.85),
+                             ("Attack/m_Earth.wav", 0.6, 0.05, 2.4, 0.8, 0.8),
+                             ("synth:drone:65:2.4", 0.35, 0.00, None, 0.8),
+                             ("Events/Gold.WAV", 0.8, 0.90, 1.4, 0.5, 0.9),
+                             ("Events/Gold.WAV", 0.45, 1.35, 1.0, 0.5, 1.1)],
+
+== 5. Apply order (live) ==
+  a. builders: icons (SpellIcn.ILB id 217), fx (DUALDF.ILB 4200-4203), sfx (Sfx\Zsp\DUALER_DEPTHS.WAV)
+  b. patch_dual_sphere_spells_v1.py --apply   (Spells.pfs record 227 + registration of 217)
+  c. patch_depthsofplenty_v1.py            (dry-run: expects CE/MM/EV/PS/ID/emAct/emDeact/emChk = chain->0x5585xxxx (Golden Age), mine = vanilla)
+     patch_depthsofplenty_v1.py --apply
+  Order between b and c doesn't matter for the DLL (different bytes); c must run AFTER Golden Age (already live).
+
+== 6. Chain consequences ==
+  * While applied, patch_goldenage_v1.py dry-run/--apply reports its CE/MM/EV/PS/ID sites + emAct/emDeact/emChk slots
+    as OTHER and ABORTS.  To re-run Golden Age: depths --revert, goldenage --apply, depths --apply (LIFO).
+  * Tectonic Shift (219) may also chain on the same Earth Mastery sites: apply sequentially; whichever goes on last
+    must be reverted first.  This script's --revert refuses (ABORT) when something sits in front of it.
+  * The TMine slot 0x557B4214 is otherwise untouched by any patch (only VMT referencing GetIncome 0x557B43E4).
+  * FX mark byte 0xD9 (Golden Age 2/3/4, Drought 1) - pick another value for Tectonic Shift.
+  * Ship: AoWEPACK.dll, Spells.pfs, SpellIcn.ILB, Images\Effects\DualDF.ILB, Sfx\Zsp\DUALER_DEPTHS.WAV (--add).

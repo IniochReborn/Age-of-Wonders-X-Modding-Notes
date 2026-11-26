@@ -1,0 +1,137 @@
+MAGIC MISSILE (228, Cosmos L1) - integration (2026-10-17, fork; NOTHING applied live, no shared builder edited).
+Line endings now: fx / icons / pipeline builders = LF, sfx builder = CRLF -> detect the newline per file, insert ONLY the
+code blocks, ast.parse each edited builder.  NO ENGINE SCRIPT NEEDED (the allocated TCPCK 0x44D000-0x44D800 and
+AoWEPACK 0x5587D800-0x5587E000 are unused).
+
+DESIGN (RE'd):
+  * Cosmos = sphere 0 (TMagicSphere 0 Cosmos .. 6 Water).  Magic damage-type bit = 0x08 (Fire 1, Cold 2, Lightning 4,
+    Magic 8, ..., Physical 0x80).
+  * tc_type 6 = vanilla Flaming Arrow's class (SpellTypes[123] = 6, also Solar Flare 100).  NextStrike 0x40CD20 class
+    switch: class 6 -> default case 0x40ED2D = MakeRangedPath caster -> target, then the projectile walk (classes
+    1,2,3,5,6,0xB,0xD,0x1C) stops at the first unit / wall / gate / obstacle on the path (like an arrow).
+    Id 228 is outside the id table @0x40F0E3 (ids 100..130) -> default entry = keeps the struck unit (same as Flaming
+    Arrow's PROC0000), so NO alias is needed.  3 strikes = the `shots` poke (0x38) -> three bolts one after another.
+  * Kind-6 effect DRAW (0x42FB2A): slot 0 via 0x42E5FC = the bolt HEAD looped at the current path point (frame =
+    map clock + self>>2); slot 1 via 0x42E85C = the TRAIL: frame j drawn at path point pos-4+(7-j)/2, frame 0 right
+    behind the head, frame 7 the oldest (vanilla Flaming Arrow: slot 0 TWINKGR 231-236, slot 1 BOLTS.ILB 70-77 f20 2,
+    anchors -31/-34 and -32/-33).  (The existing cave 0x43CB70 on that path only special-cases spell 0xCE.)
+  * Kind-6 NewFrame (0x429FBB): at the path end it plays cue 1 of the spell's sound list (0x42A0A2, spellcasting
+    branch) and raises the hit flag; cue 0 = once per cast at the caster's cast-anim (strike 0).  Damage = the
+    donor's CreateCA (TVaporize -> TDamageCA with the poked ATK/DMG/types; same chassis as Flashfreeze 397).
+  * The struck unit also gets the engine's magic damage-type hit GFX (MakeDEHSList) = the impact burst per bolt.
+
+== 0. patch_dual_sphere_spells_v1.py (LF) - RELAX the sphere assert in build_zone (Cosmos is sphere 0; the cave writes
+       [spell+0x20] unconditionally, pfs tag 0x10 = the byte as is; nothing else treats 0 specially) ==
+  replace   assert 0 < s["sphere"] < 256 and
+  with      assert 0 <= s["sphere"] < 256 and
+  (also needed by the other Cosmos spells 229-231.)
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry (single-sphere block, e.g. right before dict(id=225 Smokescreen) ==
+---- code ----
+    dict(id=228, name="Magic Missile", sphere=0, tier=1, mana=4, research=50,
+         donor="TVaporize", pfs_donor=131, tc_type=6, icon=228,      # 2026-10-17 Cosmos L1: class 6 = Flaming Arrow's PROJECTILE class (NextStrike default case 0x40ED2D: MakeRangedPath, stops at the first unit/wall), 3 strikes = 3 bolts one after another
+         pokes=[(0x34, 1, 7), (0x35, 1, 1), (0x36, 2, 0x08), (0x38, 1, 3), (0x39, 1, 0x0C), (0x3C, 1, 0)],   # ATK 7 / DMG 1 / Magic (8) / 3 strikes / range 12 / roll vs DEF (as Flashfreeze)
+         desc="Hurls three bolts of pure arcane force at a distant enemy, one after another: attack 7, damage 1, magic, each bolt rolled separately. Like an arrow, a bolt can be stopped by walls and units in its path.",
+         gfx={0: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(6000, 6008)), -32, -33, f20=0),      # kind-6 HEAD, drawn looped at the path point (0x42E5FC; frame = map clock + self>>2)
+              1: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(6008, 6016)), -32, -33, f20=2)},     # kind-6 TRAIL (0x42E85C): frame 0 right behind the head .. 7 oldest (vanilla Flaming Arrow: BOLTS.ILB 70-77, f20 2)
+         sfx=["SFX\ZSP\DUALCO_MMISSILE.WAV", ["SFX\ZSP\DUALCO_MMHIT.WAV"]]),                   # cue 0 = cast (strike 0 anim), cue 1 = each landing (kind-6 NewFrame 0x42A0A2)
+---- end ----
+  (In-memory dry run with this entry + the relaxed assert: "rebuilding 78 owned records (... 190 records) - Dry run OK".)
+
+== 2. build_dual_sphere_icons_v1.py (LF) ==
+  ICONS: add   228: "magicmissile"      CLOUDS: add   "magicmissile": 120   (Cosmos cloud = image 120)
+  GLYPHS: add  "magicmissile": glyph_magicmissile
+  New file (already written): patch scripts\magicmissile_user_mask.png = art import export\magic missile.jpg traced
+  (trace_ref.py fill 0.97, thicken 2).  No art import export\magicmissile.png exists (override trap clear).
+---- code ----
+def glyph_magicmissile():
+    """Magic Missile (228, Cosmos L1, 2026-10-17): the user's reference art import export/magic missile.jpg (three
+    streaking arcane bolts, the middle one largest) TRACED -> magicmissile_user_mask.png (trace_ref.py 0.97 / 2)."""
+    return _user_mask_glyph("magicmissile_user_mask.png")
+---- end ----
+
+== 3. build_dual_sphere_fx_v1.py (LF) - functions before `def build():` + two group rows (DualDF 6000-6015; live max 5981) ==
+---- code ----
+def mmissile_head(n=8):
+    """Magic Missile (228) slot 0: the flying bolt HEAD (class-6 projectile; TCPCK 0x42e5fc draws slot 0 looped at the
+    current path point, frame = map frame counter + self>>2).  64x64, centre (32, 33) = vanilla BOLTS/TWINKGR anchor
+    -32/-33; additive (770): a white-hot arcane core in a violet glow with four flickering star rays turning a little
+    each frame (8-frame seamless loop)."""
+    W = H = 64; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []
+    for k in range(n):
+        a0 = k * (math.pi / 2) / n; fl = 0.85 + 0.15 * math.cos(2 * math.pi * k / n)
+        d2 = (xx - cx) ** 2 + (yy - cy) ** 2
+        core = np.exp(-d2 / (2 * 2.2 ** 2)) * 1.25
+        glow = np.exp(-d2 / (2 * 7.0 ** 2)) * 0.55 * fl
+        rays = np.zeros_like(xx)
+        for j in range(4):
+            a = a0 + j * math.pi / 2; ux, uy = math.cos(a), math.sin(a)
+            u = (xx - cx) * ux + (yy - cy) * uy; v = -(xx - cx) * uy + (yy - cy) * ux
+            L = (11.0 if j % 2 == 0 else 7.5) * fl
+            rays = np.maximum(rays, np.exp(-(v ** 2) / 0.9) * np.clip(1 - np.abs(u) / L, 0, 1) * 0.8)
+        hot = np.clip(core + 0.6 * rays, 0, 1.4); v_ = np.clip(glow + rays * 0.5 + core, 0, 1.6)
+        r = 150 * v_ + 110 * hot; g = 80 * v_ + 150 * hot; b = 255 * np.clip(v_, 0, 1) + 40 * hot
+        a = np.clip(v_, 0, 1)
+        out.append(Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(g, 0, 255), np.clip(b, 0, 255), 255 * (a > 0.03)]).astype(np.uint8), "RGBA"))
+    return out
+
+
+def mmissile_trail(n=8):
+    """Magic Missile (228) slot 1: the TRAIL (TCPCK 0x42e85c draws slot-1 frame j at path point pos-4+(7-j)/2: frame 0 =
+    right behind the head, frame 7 = the oldest).  64x64, centre (32, 33); additive: a violet arcane puff shrinking and
+    cooling to indigo with age, plus two drifting white sparks that wink out."""
+    W = H = 64; cx, cy = 32.0, 33.0; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32); out = []; rnd = random.Random(2280)
+    sp = [(rnd.uniform(-5, 5), rnd.uniform(-5, 5)) for _ in range(2)]
+    for k in range(n):
+        u = k / (n - 1.0); rad = 6.5 * (1 - 0.7 * u) + 1.0; br = (1 - u) ** 1.3
+        d2 = (xx - cx) ** 2 + (yy - cy) ** 2
+        puff = np.exp(-d2 / (2 * rad ** 2)) * 0.75 * br
+        acc = np.zeros((H, W, 3), np.float32)
+        col = (170 * (1 - u) + 70 * u, 90 * (1 - u) + 40 * u, 255 * (1 - u) + 170 * u)
+        for c in range(3): acc[..., c] += puff * col[c]
+        for (sx, sy) in sp:
+            x, y = cx + sx * (1 + u), cy + sy * (1 + u) - 2 * u
+            s = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 0.8) * max(0.0, 1 - 1.4 * u)
+            for c, cv in enumerate((255, 245, 255)): acc[..., c] += s * cv
+        v = acc.max(axis=2) / 255.0
+        out.append(Image.fromarray(np.dstack([np.clip(acc, 0, 255), 255 * (v > 0.03)]).astype(np.uint8), "RGBA"))
+    return out
+---- end ----
+---- code ----
+              (6000, mmissile_head(), "COmmh%d.BMP", 770, 85, 0x0000),           # Magic Missile (228) slot 0: kind-6 bolt HEAD (64x64, 8-frame loop, additive)
+              (6008, mmissile_trail(), "COmmt%d.BMP", 770, 80, 0x0000),          # Magic Missile (228) slot 1: kind-6 TRAIL (frame 0 newest .. 7 oldest)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py (CRLF) - MIXES entries (before "DUALEW_OVERGROWTH.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # Magic Missile (228, Cosmos L1 2026-10-17): cue 0 = once at the caster's cast-anim (strike 0) - an arcane charge
+    # (reversed, rising shimmer of the Cosmos cast + a glassy pitch climb) snapping into a sharp launch whoosh;
+    # cue 1 = at EVERY missile's landing (kind-6 NewFrame @0x42A0A2 plays cue 1 at the path end) - a bright
+    # crystalline zing, a tiny arcane crack and a short high chime, kept quiet because it repeats 3x.
+    "DUALCO_MMISSILE.WAV":  [("Attack/Magic01.WAV", 0.45, 0.00, 0.55, 0.10, -1.35, 0.15),
+                             ("synth:glide:Attack/EnchP01.WAV:0.7:1.6:0.55:0.6", 0.40, 0.00, None, 0.10),
+                             ("synth:shimmer:0.7", 0.30, 0.00, None, 0.25),
+                             ("Attack/Wind.WAV", 0.55, 0.50, 0.45, 0.30, 1.9, 0.02),
+                             ("Attack/MagicA02.WAV", 0.40, 0.52, 0.50, 0.30, 1.45)],
+    "DUALCO_MMHIT.WAV":     [("Attack/MagicA01.wav", 0.35, 0.00, 0.35, 0.20, 1.7),
+                             ("Attack/A_Force1.WAV", 0.22, 0.00, 0.18, 0.10, 1.6),
+                             ("synth:bell:1568:0.6", 0.16, 0.01, None, 0.40),
+                             ("synth:bell:2349:0.45", 0.10, 0.03, None, 0.30)],
+---- end ----
+  DRIVE dict: add  "DUALCO_MMISSILE.WAV": 1.4,     FADE_OUT dict: add  "DUALCO_MMISSILE.WAV": 0.25, "DUALCO_MMHIT.WAV": 0.15,
+  (no DRIVE for MMHIT - it repeats per bolt and must stay quiet: peak 0.46).  Test renders in
+  C:\Users\<user>\.claude\jobs\47241cad\tmp\mmissile\: DUALCO_MMISSILE.WAV (1.02 s), DUALCO_MMHIT.WAV (0.61 s).
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply        (SpellIcn 228)
+  py -3.10 build_dual_sphere_fx_v1.py --apply           (DualDF 6000-6015)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply          (Sfx\Zsp\DUALCO_MMISSILE.WAV + DUALCO_MMHIT.WAV - NEW files, ship via --add)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply       (Spells.pfs 228 + registration + SpellTypes[228] = 6)
+  VEH startup check.
+
+== 6. Open / not seen in game ==
+  * Head/trail anchor -32/-33 copies vanilla BOLTS; the bolt's flight speed / height are the engine's class-6 values.
+  * Bolts can be stopped by walls/units on the path (arrow-like, as Flaming Arrow) - say so if the user wants them to
+    always reach the target (then a class-7 direct strike + a kind-0x26 travelling driver would be needed).
+  * Range 12 (0x0C) = "long" (as Blood Boil / Scald); fast combat uses the donor's default.
+  * Previews: tmp\mmissile\fx_sheet.png (head loop, trail ages, a mock flight), icon_preview.png (left = chosen).

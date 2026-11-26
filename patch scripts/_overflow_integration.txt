@@ -1,0 +1,26 @@
+patch_overflow_army_v1.py - post-combat overflow placement (2026-10-18), NOT applied to the live DLL.
+
+Problem: units that join you in combat (Dominate/Charm/side change, also combat-summoned units without a strategic
+party) are placed in TCombatUnit.Finalize pass 2 via TAbstractUnit.Place(flags 1 = spiral) starting AT THE COMBAT
+TARGET hex -> a new army there.  ArmyCombatMoveTE.ExecuteCombat then PlacePrivate's the moving party (units with
+[unit+0x25]&4) onto that same hex without a merge check -> two armies on one hex when the party is full.
+
+Fix: pass-2 call sites 0x55724EA9 / 0x55724ED1 / 0x55724F0E -> cave 0x55882820 (zone 0x55882800-0x55882C00).
+If (moving units on the attacker hex + own units already on the target + 1) > TArmy.MaxSize and the owners match,
+the spiral starts at radius 1 (same Place/CanPlace rules as summons, one hex per call); nothing fits -> vanilla.
+Otherwise vanilla Place, untouched.
+
+Apply:   py -3.10 "patch scripts\patch_overflow_army_v1.py" --apply     (backup\AoWEPACK.dll.bak_overflow)
+Revert:  py -3.10 "patch scripts\patch_overflow_army_v1.py" --revert    (exact; LIFO: nothing chains on these sites)
+Ship:    AoWEPACK.dll
+
+Tests done: Unicorn emulation of the cave with real HSEngine InitHNWalk/WalkToNextHN at preferred base AND rebased
+(+0x01000000, .reloc applied): 10 scenarios (full 8-stack, 7+1 on target, 6 moving, other player, enemy on target,
+flags without spiral, no moving units, nothing fits -> vanilla fallback after the 2610-hex walk); stack balanced,
+ebx/esi/edi/ebp preserved.  Apply -> already applied -> revert = byte-identical to the live DLL.
+
+In-game test: full 8-stack attacks a single enemy and Dominates/Charms it -> the joined unit should appear on a hex
+next to the target (not under the party).  Also check 7-stack + 1 joined unit (should still merge as before), and
+a defender Dominating an attacker unit (unchanged).
+Open risk: if dead attackers are still in the strategic army at pass 2 the count is high -> a joiner can go next to
+the party even though a slot was free (harmless).

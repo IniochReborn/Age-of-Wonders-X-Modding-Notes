@@ -1,0 +1,40 @@
+SMOKESCREEN (225) v3.2 - soft half-smoke edge + underground pillars / earth walls (2026-10-17, fork; NOTHING applied live)
+
+Engine only: patch scripts\patch_tc_smokescreen_v1.py upgraded IN PLACE v3.1 -> v3.2 (zone 2 rewritten; no hook site
+changes).  NO builder / pipeline / Spells.pfs / DualDF change - nothing to paste into the shared builders.
+
+What changed (details in the script's v3.2 docstring):
+  * soft edge = a true per-pixel blend: the 16 rows above each column's smoke line are saved from the locked surface,
+    the structure is drawn, then the band is blended back 565-wise with a smoothstep weight (clear at the top ->
+    exactly the bank's smoked value at the line).  Only the structure's own pixels change (no halo / no dither).
+    Save buffer: AoWEPACK .idata slack 0x5590BB80..0x5590BC80 (free; after W 0x5590B600..0x5590BB60).
+  * pillars: TCombatObstacle (dungeon/ruin 'Wall' + 'Pillar' pieces) + their TCombatObstacleOverlay tops, and every
+    TCombatILTerrain base-hex tile taller than 44 px (the underground H_EARTH earth-wall columns) are re-shown above the
+    bank like walls/houses and get the half-smoke.  Rocks / stones / trees / bones stay covered.
+  * zone 2 = 0x449400..0x449E00 (was ..0x449C00; 0x449C00..0x449E00 verified zero + reloc-free; 0x449E00 = the Oil
+    Spring cue0 cave, untouched).
+
+Apply (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0):
+  py -3.10 patch_tc_smokescreen_v1.py            (dry run: "zone2 ours(old) (2129 B ...)" -> "v3.2 upgrade")
+  py -3.10 patch_tc_smokescreen_v1.py --apply    (backup backup\AoWTCPCK.dll.bak_smokescreen32 = the v3.1 state)
+  VEH startup check.
+  Wall of Flames (above tc_smokescreen in the LIFO stack) does NOT need reverting: no hook site moves.
+Revert: --revert (exact; byte-identical to the v3.1 script's own revert).
+
+Tests (scratch, C:\Users\<user>\.claude\jobs\47241cad\tmp\smoke5\):
+  * script: live copy -> upgrade -> "already applied (v3.2)"; --revert md5 == v3.1 script's --revert (4dbbf03d);
+    fresh v3.2 apply == upgrade (fba4b61f).
+  * emu32_cshow.py (Unicorn, real upgraded DLL at 0x400000 and rebased 0xA00000, a real 800x600 16-bpp surface):
+    5 ticks x every pixel of a 40x68 'structure' + margin: above band = drawn, band = exact 565 blend with FWT, at/below
+    line = smoked, outside the sprite = untouched (0 mismatches); 8-bpp target -> hard cut only; AoWEPACK rebased
+    (buffer through the SetUnit slot delta); overlay -> parent obstacle's hex; clip respected/clamped; regs + stack
+    kept.  iltall: heights 32/44/45/56/68 -> 0/0/1/1/1, sequence-list or missing library -> not tall, regs kept.
+  * emu32_dds.py (Unicorn dds post pass, all v3 scenarios + new): obstacle + its overlay + tall earth tile re-shown
+    after the bank in list order; short tile, far tall tile, sequence-list tile and a rock not re-shown.  23/23 PASS.
+  * mock_v31_vs_v32.png (3x bilinear like the DPI upscale): hard cut vs blended edge on an earth column / pillar.
+
+Open (not seen in game):
+  * how the 16-row band reads on real wall / earth art (FEATHER / FWT are two constants at the top of the script).
+  * earth columns are many on cave maps: each smoked tall tile costs ~26 clipped draws + a 16x8 blend per column,
+    only for tiles within 5 hexes of a bank; tiles near but outside the smoke get one plain draw.
+  * as with walls in v3, a re-shown tall tile can draw over the head of a smoked unit standing just south of it.

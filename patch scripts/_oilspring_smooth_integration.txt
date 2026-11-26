@@ -1,0 +1,80 @@
+OIL SPRING (372) GUSH - SMOOTH (2026-10-17, fork; nothing applied live)
+=========================================================================
+User: "Oil Spring gfx are a bit janky - smoothen them, probably need more frames."
+
+TWO causes, two fixes:
+ 1. ART: rise / loop / collapse were 10 / 10 / 8 frames at 3 ticks each.  Now rendered by the SAME particle fountain
+    at 3x time resolution (frame j = fountain time j/3 in the old frame units, so physics, rising ceiling, pool and all
+    hand-overs are unchanged): rise 30, loop 30, collapse 24 frames at 1 tick each = identical real-time lengths.
+    The END's 27 blank ticks reuse ONE blank image.  New images: 30 + 30 + 1 + 24 = 85 (160x160, same row params).
+ 2. DRIVER (patch_tc_oilgush_smooth_v1.py): the loop was kept alive by RESETTING its tick to 0 on every gate pass ->
+    the fountain snapped back to frame 0 mid-cycle.  Now: the loop slot holds two identical cycles (60 entries), a
+    pass WRAPS the tick by 30 (phase kept); the loop spawns at the rise's own phase (tick 24); on the last strike pass
+    the loop dies at the end of its current cycle and the END starts with tick max(0, ph - 3) so the collapse begins
+    exactly when the cycle ends (collapse frame 0 == loop frame 0; checked: mean abs diff 0.01).
+Checks: loop wrap 29 -> 0 differs no more than a normal step (11.5 vs 10.8 mean abs) = seamless.
+
+---- 1. build_dual_sphere_fx_v1.py: add these functions (before def build()) + 3 group rows ----
+def oil_gush_smooth(K=3, P=10):
+    """Oil Spring gush RISE v2 (2026-10-17, user: janky - smoothen, more frames): the same particle fountain rendered at
+    K x the time resolution (1 frame per tick instead of 1 per 3): frame j = fountain time j/K (in the old frame units,
+    so the physics, the rising ceiling and the pool growth are unchanged), K*P = 30 frames, slot 4 at f18 = 0."""
+    parts = _oil_fountain_parts(P); out = []
+    for j in range(K * P):
+        t = j / float(K); u = min(1.0, (j + 1) / float(K * P))
+        out.append(_oil_fountain_frame(parts, t, P, rise=True, pool_R=4 + 2.6 * t, ceil=4 + 140 * (u * u * (3 - 2 * u))))
+    return out
+
+
+def oil_gush_loop_smooth(K=3, P=10):
+    """Oil Spring gush LOOP v2: the steady-state fountain at K x time resolution (30 frames = one seamless cycle).  The
+    slot plays the cycle TWICE (60 entries) - patch_tc_oilgush_smooth_v1 keeps it alive by wrapping its tick by 30."""
+    parts = _oil_fountain_parts(P)
+    return [_oil_fountain_frame(parts, j / float(K), P) for j in range(K * P)]
+
+
+def oil_gush_end_smooth(K=3, P=10, n_end=8):
+    """Oil Spring gush END v2: ONE blank image (the slot lists it 27 times = the old 9 blank frames x 3 ticks) + the
+    collapse at K x resolution (24 frames): fountain time P + c (c = j/K) continues from loop phase 0, the cutoff grows
+    smoothly from 0 (2.4 per old frame) and the pool shrinks as before."""
+    parts = _oil_fountain_parts(P); out = [Image.new("RGBA", (4, 4), (0, 0, 0, 0))]
+    for j in range(K * n_end):
+        c = j / float(K)
+        out.append(_oil_fountain_frame(parts, P + c, P, cutoff=2.4 * c + 0.3,
+                                       pool_R=30.0 * max(0.0, 1.0 - max(0.0, c - 1) / (n_end - 1.5)) ** 1.1))
+    return out
+
+  rows (next to the old 1080 / 1170 / 1180 rows, which become unused):
+              (4000, oil_gush_smooth(), "EFgsr%02d.BMP", 258, 90, KEY),        # Oil Spring gush RISE v2: 30 frames x 1 tick
+              (4030, oil_gush_loop_smooth(), "EFgsl%02d.BMP", 258, 90, KEY),   # Oil Spring gush LOOP v2: 30 frames (slot plays it twice)
+              (4060, oil_gush_end_smooth(), "EFgse%02d.BMP", 258, 90, KEY),    # Oil Spring gush END v2: 1 blank + 24 collapse frames
+
+---- 2. patch_dual_sphere_spells_v1.py: entry 372 - REPLACE slots 4, 5, 6 ----
+              4: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(4000, 4030)), -80, -136, f20=1, f18=0),            # v2 RISE: 30 x 1 tick
+              5: G.seq_entry("EFFECTS\DUALDF.ILB", list(range(4030, 4060)) * 2, -80, -136, f20=1, f18=0),        # v2 LOOP: one cycle x2 (life 60; the gate wraps it by 30)
+              6: G.seq_entry("EFFECTS\DUALDF.ILB", [4060] * 27 + list(range(4061, 4085)), -80, -136, f20=1, f18=0)},   # v2 END: 27 blank ticks + 24-frame collapse
+
+---- 3. engine: patch_tc_oilgush_smooth_v1.py (NEW, AoWTCPCK) ----
+  Old gate 0x43DA00 (patch_tc_oilgush_v1, reached via 0x43E068) keeps its bytes except the first 5 = `jmp 0x447810`;
+  new gate at 0x447810 (zone 0x447800-0x447C00, was zero + reloc-free; 471 B) chains to the same 0x43D020.  Phase latch
+  DATA slack 0x46BF4C (unclaimed).  Backup .bak_oilsmooth.
+
+---- APPLY ORDER (game + editor closed; 1-3 together) ----
+  1. fx builder --apply   2. pipeline --apply   3. py -3.10 patch_tc_oilgush_smooth_v1.py --apply   4. VEH startup check.
+  REVERT: patch_tc_oilgush_smooth_v1.py --revert (restores the 5 gate bytes, zeroes the zone; byte-identical) and put
+  slots 4-6 back.  NB: with only the engine part applied, the OLD 10-frame loop slot (life 30) would be wrapped
+  correctly too, but the old art's 3-tick frames stay coarse - apply all three.
+
+---- CHAIN CONSEQUENCES ----
+  patch_tc_oilgush_v1.py's dry-run already asserts on the live DLL (its gate sites are chained by later scripts); while
+  this is applied its gate's first 5 bytes also differ - revert this first before touching patch_tc_oilgush_v1.
+
+---- SCRATCH TESTS (tmp\oil2, copy of the LIVE AoWTCPCK.dll) ----
+  dry-run OK (chain 0x43d020); --apply written + verified, site 0x43DA00 = e9 -> 0x447810; re-run 'already applied';
+  --revert byte-identical to live; second revert 'already reverted'; re-apply written.  Live dry-run OK.
+  Art rendered + previewed (tmp\oil2ise.png / end.png).
+
+---- IN-GAME TESTS ----
+  1. The gush rises out of the ground smoothly (30 distinct frames), the fountain then plays continuously without
+     snapping back while the 7 globs fall, and collapses into the pool without a jump.
+  2. Oil hexes / Fire Weakness behaviour unchanged.  3. Ashes / Hellfire / Implosion / sand swirl unchanged.

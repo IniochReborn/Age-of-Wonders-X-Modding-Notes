@@ -1,0 +1,155 @@
+PYROCLASM (227, Fire L4 global; Spells.pfs key 237) - integration snippets (2026-10-17, fork; NOTHING applied live).
+Engine: patch scripts\patch_pyroclasm_v1.py (AoWEPACK zone 0x5587B800..0x5587D800, 4.1 KB used; backup .bak_pyroclasm).
+Icon mask (NEW file, already written): patch scripts\pyroclasm_user_mask.png (traced from art import export\pyroclasm.jpg:
+the cone kept (cracks widened), the plume redrawn as clean round puffs with five crescent cuts so it reads at 40x35).
+Insert ONLY the code blocks (between ---- code ---- / ---- end ----); detect CRLF per builder (the pipeline and the sfx
+builder are CRLF, the fx / icons builders LF) and ast.parse each edited builder afterwards.
+
+== 1. patch_dual_sphere_spells_v1.py - SPELLS entry: the single-sphere block (e.g. right after dict(id=223 Flash Flood) ==
+---- code ----
+    dict(id=227, name="Pyroclasm", sphere=5, tier=4, mana=75, research=200, upkeep=10,
+         donor="TAirMastery", pfs_donor=70, tc_type=None, icon=227,          # patch_pyroclasm_v1.py: marker 227 chained in front of Tectonic's Air Mastery caves; NewTurn: mountains -> volcanoes, lava (permanent)
+         pokes=[(0x34, 4, 0xFFFFFFFF)],                                      # AI priority -1 (never cast by the AI, as Tectonic / Ice Age)
+         desc="The earth's fire wakes: each turn medium and large mountains across the land slowly become volcanoes. Each volcano has an even chance every turn to spill lava into a neighbouring hex, and each lava flow has an even chance to creep one hex further. Lava never flows onto cities, structures, roads, bridges, armies, water, ice, hills or mountains. The volcanoes and lava remain after the spell ends.",
+         gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [5850], -100, -58, f20=0),                 # Air Mastery map-wide drift: ember-and-ash rain
+              1: G.seq_entry("EFFECTS\\DUALDF.ILB", [5851], -98, -54, f20=0),
+              2: G.seq_entry("EFFECTS\\DUALDF.ILB", [5852], -96, -58, f20=0),
+              3: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(5853, 5901)), -16, -31, f20=0)},   # per-hex glow on our volcano / lava hexes (patch_pyroclasm_v1.py glow cave, 48 frames x 2 ticks)
+         sfx=["SFX\\ZSP\\DUALFR_PYROCLASM.WAV"]),
+---- end ----
+
+== 2. build_dual_sphere_icons_v1.py ==
+  ICONS:   add   227: "pyroclasm",
+  CLOUDS:  add   "pyroclasm": 60,          (Fire cloud = image 60)
+  GLYPHS:  add   "pyroclasm": glyph_pyroclasm,
+  function (next to the other _user_mask_glyph users, e.g. right after glyph_tectonic):
+---- code ----
+def glyph_pyroclasm():
+    """Pyroclasm (227, Fire tier 4, 2026-10-17): the user's reference art import export/pyroclasm.jpg - an erupting
+    volcano under a billowing ash plume - TRACED (trace_ref.py fill 0.97) -> pyroclasm_user_mask.png; the cone's white
+    cracks widened (ink eroded 2 px) and the plume REDRAWN as eleven clean round puffs + stem with five crescent cuts on
+    the top row (a 1:1 trace of the plume's tiny crescents was noise at 40x35)."""
+    return _user_mask_glyph("pyroclasm_user_mask.png")
+---- end ----
+  (no art import export\pyroclasm.png exists - the reference is .jpg, so the icon-override trap does not apply.)
+
+== 3. build_dual_sphere_fx_v1.py - functions before `def build():` + two group rows (e.g. after the (5750, walloflames_ignite(), ...) row) ==
+---- code ----
+def pyro_ash_drift(n=3):
+    """Pyroclasm (227) slots 0-2 (2026-10-17): three single frames for Air Mastery's map-wide drift (200x116, additive at
+    low blend, as Ice Age's snow_drift): an EMBER-AND-ASH rain along a wide S-curve - glowing embers (hot yellow-white
+    cores in orange-red halos, each with a short fading trail slanting down-left), cooler red sparks, pale ash flecks and
+    a faint smoky red haze."""
+    W, H = 200, 116; out = []; yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    for v in range(n):
+        rnd = random.Random(5850 + v); ph = v * 2.1
+        acc = np.zeros((H, W, 3), np.float32)
+        for k in range(9):                                                   # faint smoky red haze
+            t = rnd.random(); x = 10 + 180 * t; y = 58 + 28 * math.sin(t * 2 * math.pi * 1.1 + ph)
+            g = 0.16 * np.exp(-((xx - x) ** 2 + ((yy - y) / 0.6) ** 2) / 320.0)
+            for c, cv in enumerate((170, 60, 25)): acc[..., c] += g * cv
+        for k in range(26):                                                  # embers with trails
+            t = rnd.random(); x = 10 + 180 * t; y = 58 + 28 * math.sin(t * 2 * math.pi * 1.1 + ph) + rnd.uniform(-22, 22)
+            s = rnd.uniform(0.6, 1.1); L = rnd.uniform(4.0, 8.0)
+            for j in range(6):                                               # the trail: up-right of the ember, fading
+                f = j / 5.0; tx, ty = x + 0.7 * L * f, y - L * f
+                g = np.exp(-((xx - tx) ** 2 + (yy - ty) ** 2) / (2 * (0.55 * s) ** 2)) * (1 - f) * 0.35
+                for c, cv in enumerate((255, 110, 30)): acc[..., c] += g * cv
+            core = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * (0.6 * s) ** 2))
+            halo = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * (1.6 * s) ** 2)) * 0.45
+            for c, cv in enumerate((255, 235, 150)): acc[..., c] += core * cv * 0.95
+            for c, cv in enumerate((255, 95, 20)): acc[..., c] += halo * cv
+        for k in range(18):                                                  # cooler red sparks
+            t = rnd.random(); x = 10 + 180 * t; y = 58 + 28 * math.sin(t * 2 * math.pi * 1.1 + ph) + rnd.uniform(-26, 26)
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 0.9) * 0.8
+            for c, cv in enumerate((220, 60, 20)): acc[..., c] += g * cv
+        for k in range(22):                                                  # pale ash flecks
+            t = rnd.random(); x = 10 + 180 * t; y = 58 + 28 * math.sin(t * 2 * math.pi * 1.1 + ph) + rnd.uniform(-26, 26)
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 0.6) * 0.35
+            for c, cv in enumerate((150, 140, 130)): acc[..., c] += g * cv
+        out.append(Image.fromarray(np.clip(acc, 0, 255).astype(np.uint8), "RGB").convert("RGBA"))
+    return out
+
+
+def pyro_glow(n=48):
+    """Pyroclasm (227) slot 3 (2026-10-17): the per-hex glow on every volcano anchor / lava hex Pyroclasm made - the
+    Tectonic glow4 recipe in fire colours (32x40, anchor (-16, -31), 48 frames x 2 ticks = 2.8 s seamless loop,
+    additive): a very soft round ember-red ground wash breathing once per loop under four small embers rising out of
+    the hex, easing out and fading at their peak (yellow-white cores in orange halos).  Subtle by design (blend 65)."""
+    W, H = 32, 40; cx, cy = 16.0, 30.0
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    wash = np.exp(-(((xx - cx) / 8.5) ** 2 + ((yy - cy) / 4.6) ** 2) * 1.6)
+    #        x0     y0    rise  sway  sway-ph  sigma  phase
+    motes = [(11.5, 32.5, 14.0, 0.9, 0.10, 0.85, 0.00),
+             (20.0, 29.5, 12.5, 0.7, 0.55, 0.80, 0.25),
+             (15.5, 34.0, 15.5, 1.0, 0.30, 0.90, 0.50),
+             (21.5, 33.0, 12.0, 0.6, 0.80, 0.75, 0.75)]
+    peak = (0.82 ** 1.6)
+    frames = []
+    for i in range(n):
+        t = i / float(n); b = 0.5 + 0.5 * math.cos(2 * math.pi * t)
+        a = wash * (0.09 + 0.03 * b); hot = np.zeros_like(a)
+        for x0, y0, rise, sway, sph, sig, ph in motes:
+            u = (t + ph) % 1.0
+            y = y0 - rise * (1.0 - (1.0 - u) ** 2)
+            x = x0 + sway * math.sin(2 * math.pi * (u + sph))
+            br = min(1.0, u / 0.15) ** 1.5 * (1.0 - u) ** 1.7 / peak
+            g = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * sig * sig)) * br * 0.85
+            a = a + g; hot = hot + g * 0.7
+        a = np.clip(a, 0, 1); hot = np.clip(hot, 0, 1)
+        r = 215 * a + 40 * hot; g_ = 70 * a + 150 * hot; bl = 20 * a + 60 * hot
+        frames.append(Image.fromarray(np.dstack([np.clip(r, 0, 255), np.clip(g_, 0, 255), np.clip(bl, 0, 255),
+                                                 255 * (a > 0.012)]).astype(np.uint8), "RGBA"))
+    return frames
+---- end ----
+---- code ----
+              (5850, pyro_ash_drift(), "FRpyroD%d.BMP", 770, 40, 0x0000),          # Pyroclasm (227) slots 0-2: Air Mastery map-wide drift = embers + ash (200x116)
+              (5853, pyro_glow(), "FRpyroG%02d.BMP", 770, 65, 0x0000),             # Pyroclasm (227) slot 3: per-hex volcano / lava glow, rising embers (32x40, 48 frames; 5853-5900)
+---- end ----
+
+== 4. build_dual_sphere_sfx_v1.py - MIXES entry (e.g. before "DUALEW_OVERGROWTH.WAV") + DRIVE / FADE_OUT keys ==
+---- code ----
+    # Pyroclasm (227, Fire tier 4, 2026-10-17): a volcano waking - the earth's slowed rumble over a sub-bass groan and the
+    # Fire sphere's cast slowed, a REVERSED flame whoosh drawing in to a slowed eruption boom at ~1.1 s, a slowed fire
+    # roar of the lava under a second deeper rumble, falling scree (rattle) and a low drone; fades out over 0.9 s.
+    "DUALFR_PYROCLASM.WAV": [("Attack/Earth.WAV", 0.85, 0.00, 3.4, 1.0, 0.55),
+                             ("synth:subswell:28:50:3.6", 0.6, 0.00, None, 0.9),
+                             ("Attack/FlameA.WAV", 0.45, 0.35, 0.8, 0.3, -0.8, 0.3),
+                             ("Attack/Explod1.wav", 0.75, 1.05, None, 0.6, 0.55),
+                             ("Attack/Fireloop.WAV", 0.5, 0.90, 2.8, 1.0, 0.62, 0.5),
+                             ("Attack/m_Fire.wav", 0.35, 0.15, 2.4, 0.8, 0.72),
+                             ("synth:rattle:24:14:2.2", 0.3, 1.25, None, 0.9),
+                             ("Attack/Earth.WAV", 0.45, 1.50, 2.2, 0.9, 0.8, 0.2),
+                             ("synth:drone:55:3.8", 0.28, 0.00, None, 1.0)],
+---- end ----
+  DRIVE dict: add   "DUALFR_PYROCLASM.WAV": 1.4,      FADE_OUT dict: add   "DUALFR_PYROCLASM.WAV": 0.9,
+  (test mix 4.09 s, peak 0.89 before normalise; RMS builds 0-1.4 s, eruption plateau 1.5-2.7 s, silent by ~3.8 s ->
+   C:\Users\<user>\.claude\jobs\47241cad\tmp\pyro\DUALFR_PYROCLASM_test.wav)
+
+== 5. Apply order (game + editor closed: tasklist | grep -ci 'aowx.exe\|aowdevx' = 0) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 227)
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF 5850-5900)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (Sfx\Zsp\DUALFR_PYROCLASM.WAV)
+  py -3.10 patch_dual_sphere_spells_v1.py --apply     (Spells.pfs record 237 + the 227 registration)
+  py -3.10 patch_pyroclasm_v1.py                      (dry run: zone zero, sites free, chained to Tectonic's caves
+                                                       CE->0x558700d0 MM->0x55870120 NT->0x558701f0 AC->0x55870130
+                                                       DE->0x55870150 CHK->0x55870170, glow prev = Tectonic's glow call)
+  py -3.10 patch_pyroclasm_v1.py --apply              (backup backup\AoWEPACK.dll.bak_pyroclasm)
+  VEH startup check.  Ship: Sfx\Zsp\DUALFR_PYROCLASM.WAV via build_release_zip.py --add.
+
+== 6. Chain / LIFO ==
+  Pyroclasm sits IN FRONT of Tectonic Shift on all six Air Mastery sites and on the TFrozenWaterHS.Show glow site
+  (chain: site -> Pyroclasm -> Tectonic -> Overgrowth / Drought glow -> vanilla).  While it is applied,
+  patch_tectonic_v1.py (and behind it patch_overgrowth_v1.py / patch_drought_glow_v1.py) see their sites as OTHER and
+  ABORT (verified on a scratch copy): revert Pyroclasm first, re-run them, re-apply Pyroclasm.
+  patch_tectonic_shake_v1.py uses other sites (draw callback / sound redirect / exe) and is independent (verified:
+  "already applied (v3.2)" on the patched copy).
+
+== 7. Rates (constants at the top of patch_pyroclasm_v1.py) ==
+  conversions / caster turn  = area/4000 + 1   (44x34 -> 1, 64x64 -> 2, 96x96 -> 3)   CONV_DIV
+  conversion picks           = 48 x that                                           PICK_MULT
+  new lava hexes / turn      <= area/300 + 2   (44x34 -> 6, 96x96 -> 32)            LAVA_DIV / LAVA_ADD
+  eruption: 1 in 2 per volcano, up to 8 random tries for a valid hex touching it    VTRIES
+  spread:   1 in 2 per lava hex (ready = made before this turn), one random direction
+  Emulated 44x34 map, 40 turns, 9 seeds: 26-40 conversions (all mediums/larges that fit), 192-210 lava hexes (budget-
+  bound from turn ~15), 0 CanPlace failures.

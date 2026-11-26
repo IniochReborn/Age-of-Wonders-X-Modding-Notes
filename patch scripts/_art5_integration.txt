@@ -1,0 +1,58 @@
+ART5 (2026-10-17, fork) - Steadfast icon v4 / Depths of Plenty glint colour / Overgrowth + World Healer sfx v2.
+NOTHING applied live, no shared builder edited.  Builders may be CRLF - detect the newline per file before editing.
+Previews (scratch C:\Users\<user>\.claude\jobs\47241cad\tmp\art5\):
+  icon_preview.png      40x35 composites: v3 | v4 hole-grow 0 | v4 hole-grow 3 (CHOSEN) | v4 hole-grow 5
+  m4_g3_src.png         the edited SOURCE (crest/tail/plume erased, plain round dome on the Corinthian face)
+  mask_heads.png        mask head close-ups
+  depths_cmp.png        glints on grass/dirt/dark/snow (Intensity 770 @ blend 50): row 1 old (orange), row 2 NEW, row 3 Golden Age
+  old_/new_DUALEW_OVERGROWTH.WAV, old_/new_DUALLW_WORLDHEALER.WAV
+New file (already written): patch scripts\steadfast4_user_mask.png (made by tmp\art5\mk_mask4.py <out> 16 3).
+
+== 1. build_dual_sphere_icons_v1.py - glyph_steadfast: replace the return line with ==
+---- code ----
+    return _user_mask_glyph("steadfast4_user_mask.png")    # v4 10/17: v3 minus the 'mini head' - the source's Corinthian helmet (face openings re-cut) with the crest/tail/plume removed and a plain round dome; raised 16 px, shield rims extended (tmp\art5\mk_mask4.py)
+---- end ----
+
+== 2. build_dual_sphere_fx_v1.py - ore_glints (Depths of Plenty, DualDF 4220-4223, same ids/row): replace the rgb line ==
+  old:  rgb = np.dstack([255 * v, (140 + 100 * w) * v, (30 + 150 * w) * v])
+---- code ----
+        rgb = np.dstack([(212 + 28 * w) * v, (166 + 44 * w) * v, (20 + 66 * w) * v])   # v2 10/17 (user: more golden / dark yellow, less orange, not holy-bright): hue ~46 deg, core only to (240,210,86)
+---- end ----
+
+== 3. build_dual_sphere_sfx_v1.py ==
+3a. REPLACE the "DUALEW_OVERGROWTH.WAV" entry (no comment above it) with
+---- code ----
+    # Overgrowth v2 (2026-10-17, user: too recognizable - keep similar, modify): the grove no longer opens the sound -
+    # it swells in REVERSED and slowed under a slowed Earth cast, then plays forward deeper (0.82x, sliced past its
+    # familiar opening birds) as a bed; the Water cast pitched up a touch; EnchP02 swapped for a soft rising string
+    # chord + shimmer; a faint leafy wind rustle on top - the forest creeping outward.
+    "DUALEW_OVERGROWTH.WAV": [("Places/SGrove.WAV", 0.55, 0.00, 1.1, 0.25, -0.9, 0.5),
+                             ("Attack/m_Earth.wav", 0.55, 0.05, 2.6, 0.8, 0.86),
+                             ("Places/SGrove.WAV", 0.75, 0.75, 2.4, 1.0, 0.82, 0.35, 1.2),
+                             ("Attack/m_Water.WAV", 0.38, 0.45, 2.2, 0.8, 1.12, 0.1),
+                             ("synth:strings:174.6:2.4", 0.22, 0.55, None, 0.9, 1.0, 0.5),
+                             ("synth:shimmer:2.0", 0.18, 0.90, None, 0.8),
+                             ("synth:wind:3.0", 0.22, 0.20, None, 0.9)],
+---- end ----
+3b. REPLACE the "DUALLW_WORLDHEALER.WAV" entry AND its two comment lines above ("# World Healer (327, Life/Water 2026-10-15) ...") with
+---- code ----
+    # World Healer v2 (2026-10-17, user: too recognizable): the Shrine of Life slowed (0.86x, offset past its opening
+    # chime) under a reversed swell of itself; Resurrection only as a faint reversed breath INTO a sung major choir
+    # chord (replacing its familiar forward swell); the Water cast slowed; a soft shimmer + low bell - the land
+    # breathing again.
+    "DUALLW_WORLDHEALER.WAV": [("Places/SoLife.WAV", 0.45, 0.00, 1.0, 0.2, -0.95, 0.4),
+                             ("Places/SoLife.WAV", 0.7, 0.70, 2.4, 1.0, 0.86, 0.3, 0.6),
+                             ("Attack/Ressur.WAV", 0.35, 0.10, 1.2, 0.15, -1.1, 0.6),
+                             ("synth:choir:196:2.4", 0.38, 1.05, None, 1.0),
+                             ("Attack/m_Water.WAV", 0.42, 0.25, 2.6, 0.9, 0.9),
+                             ("synth:shimmer:2.2", 0.2, 0.9, None, 0.9),
+                             ("synth:bell:392:2.0", 0.16, 1.1, None, 0.9)],
+---- end ----
+3c. FADE_OUT dict: add   "DUALEW_OVERGROWTH.WAV": 0.8, "DUALLW_WORLDHEALER.WAV": 0.9,
+    (no DRIVE entries.  Scratch: Overgrowth 3.20 s, World Healer 3.45 s; both fade smoothly to silence.)
+
+== 4. Apply order (game + editor closed) ==
+  py -3.10 build_dual_sphere_icons_v1.py --apply      (SpellIcn 218 v4)
+  py -3.10 build_dual_sphere_fx_v1.py --apply         (DualDF 4220-4223 re-rendered gold)
+  py -3.10 build_dual_sphere_sfx_v1.py --apply        (DUALEW_OVERGROWTH / DUALLW_WORLDHEALER v2)
+  No pipeline / Spells.pfs / DLL change.  VEH check optional (data only).
