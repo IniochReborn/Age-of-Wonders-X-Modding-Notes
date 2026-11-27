@@ -1,5 +1,8 @@
 """
 THOUSAND THREADS (Earth/Death tier 4, spell id 335) - the WEB effect (2026-10-14).  AoWEPACK.dll only.
+v2 2026-11-26 (user: make it like Entangle): the web attempt is ONE roll, Chance(STRENGTH 4 - target Resistance) = the Web ability's strength, the
+same single-roll shape as TEntangle.CreateCA 0x557F8B20 (strength vs CU VMT+0x74); the to-hit roll vs Defense described below
+is gone.  Only the `cr` cave changed; written in place (see CAVE_OFF).
 
 335 is a GREAT HAIL clone (hail class 0x0A, 7 strikes = one per pattern hex; the strike count / landing / alias /
 preview plumbing is NOT here - the Rot Away fork's scripts own it).  A strike landing on a unit hex makes a direct CA:
@@ -49,6 +52,8 @@ ZONE, ZONE_END = 0x5584D000, 0x5584D200
 SPELL_ID = 335
 AOWHSSET, GETABILITY, CANTOUCH, CHANCE, UNIT_BY_ID = 0x558FA044, 0x557501C0, 0x5576A254, 0x55725D98, 0x55728C68
 WEB_ID, WEBBED_ID = 0x1B, 0x61
+STRENGTH = 4          # v2 2026-11-26 (user: web strength 4 like the Web ability, but ONE roll): Chance(4 - target Resistance); no to-hit roll vs Defense, the spell's ATK byte and the web ability's strength 4 are no longer used
+CAVE_OFF = {"cr": 0x00, "ep": 0x90, "ex": 0xC0}   # v2: fixed cave layout (ep/ex stay where v1 put them - EX's site is chained by a later patch, so the zone is edited in place)
 EX_RESUME = 0x557F6A26
 SITES = {   # name: (va, original bytes, 'call' | 'jmp')
     "CR": (0x557F72F7, bytes.fromhex("8b55fc8bc6"), "call"),        # v1.1: after `mov ecx,edi` @0x557F72F5 (patch_rotaway_v1.py jmp-hooks 0x557F72F0..F6)
@@ -71,7 +76,7 @@ def asm_delta(src, va):
 
 def build():
     v = {"id": SPELL_ID, "hs": AOWHSSET, "ga": GETABILITY, "ct": CANTOUCH, "ch": CHANCE, "ub": UNIT_BY_ID,
-         "web": WEB_ID, "webbed": WEBBED_ID, "res": EX_RESUME}
+         "web": WEB_ID, "webbed": WEBBED_ID, "res": EX_RESUME, "strength": STRENGTH}
     srcs = {
         "cr": """
             cmp dword ptr [ebx+0x10], %(id)d
@@ -94,23 +99,9 @@ def build():
             jz cr_pop
             mov eax, edi
             mov edx, [eax]
-            call dword ptr [edx+0x70]
-            movsx edx, al
-            movsx eax, byte ptr [ebx+0x34]
-            sub eax, edx
-            call %(ch)#x
-            test al, al
-            jz cr_pop
-            mov eax, [esp]
-            mov edx, [eax]
-            call dword ptr [edx+0x10c]
-            movsx eax, al
-            push eax
-            mov eax, edi
-            mov edx, [eax]
             call dword ptr [edx+0x74]
             movsx edx, al
-            pop eax
+            mov eax, %(strength)d
             sub eax, edx
             call %(ch)#x
             test al, al
@@ -180,11 +171,12 @@ def build():
     }
     out, caves = bytearray(), {}
     for name in ("cr", "ep", "ex"):
-        va = ZONE + len(out)
+        va = ZONE + CAVE_OFF[name]
+        assert len(out) <= CAVE_OFF[name], name
+        out += bytes(CAVE_OFF[name] - len(out))
         src = srcs[name] % v
         code = asm_delta(src, va) if "$D" in src else bytes(ks.asm(src, va)[0])
         out += code; caves[name] = va
-        while len(out) % 16: out.append(0)
     zone = bytes(out).rstrip(b"\x00")
     assert ZONE + len(zone) <= ZONE_END, hex(ZONE + len(zone))
     target = {"CR": caves["cr"], "EP": caves["ep"], "EX": caves["ex"]}

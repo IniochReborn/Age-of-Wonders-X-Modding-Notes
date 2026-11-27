@@ -1,3 +1,14 @@
+November 26th 2026
+Version 1.37.438 released:
+
+:dum_fuk: Bug Fixes: :dum_fuk:
+.          - Fixed bugged interaction between cancelled spell AOE previews and ranged attacks
+.          - Fixed bugged interaction between global terrain spells and new terrains/map levels
+.          - Thousand Threads unintentionally rolled against both DEF/RES. It now only rolls against RES, similarly to other status effect combat spells
+
+:start_the_damn_game: Map Playlist: :start_the_damn_game:
+.          - Shattered Peaks added (new original map by Markucjo)
+
 November 22nd 2026
 Version 1.37.437 released:
 

@@ -601,7 +601,7 @@ SPELLS += [
     dict(id=335, name="Thousand Threads", sphere=13, tier=4, mana=6, research=250,
          donor="TGreatHail", pfs_donor=126, tc_type=0x0A, icon=335,                    # patch_rotaway_v1.py (7 strikes) + patch_threads_v1.py (web attempt per hit, as a Giant Spider web; no damage)
          pokes=[(0x34, 1, 4), (0x35, 1, 0), (0x36, 2, 0x80), (0x39, 1, 0x0C)],                    # v2 ATK 4 (user) = web to-hit, DMG 0 (must stay 0: the web flag rides in the dmg-types high byte), range 12
-         desc="A storm of sticky threads rains on the target hex and every hex around it: every unit caught in it may be Webbed, exactly as by a Giant Spider's web (attack 4 against defense to hit, then web strength 4 against resistance). Deals no damage.",
+         desc="A storm of sticky threads rains on the target hex and every hex around it: every unit caught in it may be Webbed, exactly as by a Giant Spider's web (one roll, web strength 4 against resistance). Deals no damage.",
          gfx={0: G.seq_entry("EFFECTS\\DUALDF.ILB", [340], -2, -2, f20=0),                                 # v2: nothing visibly falls
               1: G.seq_entry("EFFECTS\\DUALDF.ILB", [340], -2, -2, f20=0),
               2: G.seq_entry("EFFECTS\\DUALDF.ILB", list(range(1630, 1644)), -48, -40, f20=2, f18=1)},   # v2: silk spinning fast round each hex of the area

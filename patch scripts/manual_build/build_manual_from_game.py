@@ -2047,6 +2047,8 @@ try:
 except Exception as _e:
     import traceback; traceback.print_exc()
     print('1.37.437 general distribution failed:', _e)
+# ---- 1.37.438 (2026-11-26): Bug Fixes (stale spell id on ranged attacks, terrain spells vs Sky/Chasm, Thousand
+# Threads single roll) + Map Playlist (Shattered Peaks) -> changelog-only (435/436 and 420 Map Playlist precedents). ----
 print('general categories:', [(c['name'], len(c['items'])) for c in generalcats])
 
 # ---- per-race terrain morale modifiers + synopsis (doc: 12 tables in race order) ----
@@ -2368,7 +2370,7 @@ data = dict(units=units, races=present, stat=STAT, icons=icons, overview=overvie
             overviewitems=overviewitems,
             spells=spells_out, spheres=SPHERE_LIST, sphicons=sphicons, raceicons=raceicons,
             title=titlep[0] if titlep else 'Age of Wonders X',
-            version='Version 1.37.437', lastupdated='Last updated November 22nd 2026', homeicons=homeicons, gcicons=gcicons,
+            version='Version 1.37.438', lastupdated='Last updated November 26th 2026', homeicons=homeicons, gcicons=gcicons,
             nunits=len(units), source='game')
 
 PAGE = open(os.path.join(HERE,'template.html'), encoding='utf-8').read()
